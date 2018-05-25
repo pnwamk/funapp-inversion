@@ -6,6 +6,9 @@
          racket/list
          "base-lang.rkt")
 
+(provide (all-defined-out)
+         (all-from-out "base-lang.rkt"))
+
 (define-extended-language syntactic base
   [btype ::= True False (Or True False) (Or False True)]
   [type ::= ntype btype]
