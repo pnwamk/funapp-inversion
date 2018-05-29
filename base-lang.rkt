@@ -8,6 +8,7 @@
 
 
 (define-language base
+  ;; numeric type primitives
   [nbase ::=
          Zero
          One
@@ -35,22 +36,36 @@
          Single-Float-Imaginary
          Float-Complex
          Single-Float-Complex]
-  [ntype ::= nbase (Or nbase ...)]
+  ;; values, primitive numeric ops, numeric expressions
   [val ::= number]
   [uop ::= add1]
   [bop ::= +]
   [comp ::= <]
   [pred ::= number? positive?]
   [nexp ::= val (uop nexp) (bop nexp nexp)]
-  [bexp ::= (pred nexp) (comp nexp nexp)])
+  [bexp ::= (pred nexp) (comp nexp nexp)]
+  ;; syntactic types
+  [ntype ::= nbase (U nbase ...)]
+  [btype ::= True False (U True False) (U False True)]
+  [type ::= ntype btype]
+  [prop ::= tt (∈ 0 type) (∉ 0 type) (∈ 1 type) (∉ 1 type) (∧ (∈ 0 type) (∈ 1 type))]
+  [domain ::= (type ...)]
+  [range ::= (type) (type prop prop)]
+  [arrow ::= (-> domain range)]
+  [funtype ::= (case-> arrow ...)]
+  ;; semantic types
+  [ι ::= nbase True False]
+  [τ ::= ι (Prod τ τ) (Fun τ τ)
+     (Or τ τ) (And τ τ) (Not τ)
+     Any Empty])
 
 (define-metafunction base
   union : ntype ... -> ntype
   [(union nbase ...)
    ,(match (remove-duplicates (term (nbase ...)))
       [(list t) t]
-      [ts (cons 'Or ts)])]
-  [(union any_0 ... (Or nbase ...) any_1 ...)
+      [ts (cons 'U ts)])]
+  [(union any_0 ... (U nbase ...) any_1 ...)
    (union any_0 ... nbase ... any_1 ...)])
 
 (define ntype? (redex-match? base ntype))
