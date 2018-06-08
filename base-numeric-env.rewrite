@@ -1,0 +1,2126 @@
+#lang s-exp "env-lang.rkt"
+
+(begin
+  (require
+   (for-syntax racket/base racket/syntax syntax/parse)
+   (only-in (rep type-rep values-rep) Type? make-Values)
+   racket/list racket/math racket/flonum racket/extflonum racket/unsafe/ops racket/sequence racket/match
+   (for-template racket/flonum racket/extflonum racket/fixnum racket/math racket/unsafe/ops racket/base
+                 (only-in "../types/numeric-predicates.rkt" index?))
+   (only-in (types abbrev numeric-tower) [-Number N] [-Boolean B] [-Symbol Sym] [-Real R] [-PosInt -Pos]))
+
+  ;; TODO having definitions only at the top is really inconvenient.
+
+  (define all-int-types
+    (list Zero One Positive-Byte Byte Positive-Index Index
+          Positive-Fixnum Nonnegative-Fixnum Negative-Fixnum Nonpositive-Fixnum Fixnum
+          Positive-Integer Nonnegative-Integer Negative-Integer Nonpositive-Integer Integer))
+  (define rat-types (list Positive-Rational Nonnegative-Rational Negative-Rational Nonpositive-Rational Rational))
+
+  (define all-rat-types (append all-int-types rat-types))
+  (define all-flonum-types
+    (list Float-Positive-Zero Float-Negative-Zero Float-Zero Float-NaN
+          Positive-Float Nonnegative-Float Negative-Float Nonpositive-Float Float))
+  (define single-flonum-types
+    (list Single-Float-Positive-Zero Single-Float-Negative-Zero Single-Float-Zero Single-Flonum-NaN
+          Positive-Single-Float Nonnegative-Single-Float Negative-Single-Float Nonpositive-Single-Float Single-Float))
+  (define inexact-real-types
+    (list Inexact-Real-Positive-Zero Inexact-Real-Negative-Zero Inexact-Real-Zero Inexact-Real-NaN
+          Positive-Inexact-Real Nonnegative-Inexact-Real Negative-Inexact-Real Nonpositive-Inexact-Real Inexact-Real))
+  (define all-float-types (append all-flonum-types single-flonum-types inexact-real-types))
+  (define real-types (list Real-Zero Positive-Real Nonnegative-Real Negative-Real Nonpositive-Real Real))
+  (define all-real-types (append all-rat-types all-float-types real-types))
+  (define number-types
+    (list Exact-Number Float-Complex Single-Float-Complex Inexact-Complex Number))
+  (define all-number-types (append all-real-types number-types))
+
+
+  ;; convenient to build large case-lambda types
+  (define (from-cases . cases)
+    (apply cl->* (flatten cases)))
+  ;; for fixnum-specific operations. if they return at all, we know
+  ;; their args were fixnums. otherwise, an error would have been thrown
+  ;; for the moment, this is only useful if the result is used as a test
+  ;; once we have a set of props that are true/false based on reaching
+  ;; a certain point, this will be more useful
+  (define (fx-from-cases . cases)
+    (apply from-cases (map (lambda (x)
+                             (add-unconditional-prop-all-args
+                              x Fixnum))
+                           (flatten cases))))
+
+  (define (binop t [r t])
+    (t t . -> . r))
+  (define (varop t [r t])
+    (->* (list) t r))
+  (define (varop-1+ t [r t])
+    (->* (list t) t r))
+
+  (define (unop t) (-> t t))
+
+  (define (commutative-binop a1 a2 [r a2])
+    (list (-> a1 a2 r) (-> a2 a1 r)))
+  ;; when having at least one of a given type matters (e.g. adding one+ Pos and Nats)
+  (define (commutative-case t1 t2 [r t1])
+    (list (->* (list t1 t2) t2 r)
+          (->* (list t2 t1) t2 r)
+          (->* (list t2 t2 t1) t2 r)))
+
+  (define (comp t1 [t2 t1])
+    (-> t1 t2 B))
+  ;; simple case useful with equality predicates.
+  ;; if the equality is true, we know that general arg is in fact of specific type.
+  (define (commutative-equality/prop general specific)
+    (list (-> general specific B : (-PS (-is-type 0 specific) -tt))
+          (-> specific general B : (-PS (-is-type 1 specific) -tt))))
+
+  ;; if in addition if the equality is false, we know that general arg is not of the specific type.
+  (define (commutative-equality/strict-prop general specific)
+    (list (-> general specific B : (-PS (-is-type 0 specific) (-not-type 0 specific)))
+          (-> specific general B : (-PS (-is-type 1 specific) (-not-type 1 specific)))))
+
+
+  (define round-type ; also used for truncate
+    (lambda ()
+      (from-cases
+       (map unop all-int-types)
+       (-> NonnegativeRationalional NonnegativeInteger)
+       (-> NonpositiveRationalional NonpositiveInteger)
+       (-> Rational Integer)
+       (map unop (list Float-Positive-Zero Float-Negative-Zero Float-Zero
+                       Nonnegative-Float Nonpositive-Float Float
+                       Single-Float-Positive-Zero Single-Float-Negative-Zero Single-Float-Zero
+                       Nonnegative-Single-Float Nonpositive-Single-Float Single-Float
+                       InexactReal-Positive-Zero InexactReal-Negative-Zero InexactReal-Zero
+                       Nonnegative-InexactReal Nonpositive-InexactReal InexactReal
+                       Real-Zero NonnegativeReal NonpositiveReal Real)))))
+  
+  (define (inexact-zero->exact-zero-type)
+    (for/list ([t (in-list
+                    (list Float-Positive-Zero Float-Negative-Zero Float-Zero
+                          Single-Float-Positive-Zero Single-Float-Negative-Zero Single-Float-Zero
+                          InexactReal-Positive-Zero InexactReal-Negative-Zero InexactReal-Zero
+                          Real-Zero))])
+      (-> t Zero)))
+  
+  (define (exact-round-type) ; also used for exact-truncate
+    (from-cases
+     (map unop all-int-types)
+     (inexact-zero->exact-zero-type)
+     (-> (Un NonnegativeRationalional Nonnegative-Float Nonnegative-Single-Float Nonnegative-InexactReal NonnegativeReal) NonnegativeInteger)
+     (-> (Un NonpositiveRationalional Nonpositive-Float Nonpositive-Single-Float Nonpositive-InexactReal NonpositiveReal) NonpositiveInteger)
+     (-> (Un Rational Float Single-Float InexactReal Real) Integer)))
+  
+  (define fl-unop (lambda () (unop Float)))
+  (define extfl-unop (lambda () (unop -ExtFlonum)))
+
+  ;; types for specific operations, to avoid repetition between safe and unsafe versions
+  (define fx+-type
+    (lambda ()
+      (fx-from-cases
+       (-> Zero Integer Fixnum : -true-propset : (-arg-path 1))
+       (-> Integer Zero Fixnum : -true-propset : (-arg-path 0))
+       (commutative-binop Positive-Byte Byte Positive-Index)
+       (binop Byte Index)
+       ;; in other cases, either we stay within fixnum range, or we error
+       (commutative-binop -Pos NonnegativeInteger PositiveFixnum)
+       (NonnegativeInteger NonnegativeInteger . -> . Nonnegative-Fixnum)
+       (commutative-binop NegativeInteger One Nonpositive-Fixnum)
+       (commutative-binop NegativeInteger NonpositiveInteger Negative-Fixnum)
+       (NonpositiveInteger NonpositiveInteger . -> . Nonpositive-Fixnum)
+       (Integer Integer . -> . Fixnum))))
+  (define fx--type
+    (lambda ()
+      (fx-from-cases
+       (-> Integer Zero Fixnum : -true-propset : (-arg-path 0))
+       (One One . -> . Zero)
+       (Positive-Byte One . -> . Byte)
+       (Positive-Index One . -> . Index)
+       (PositiveInteger One . -> . Nonnegative-Fixnum)
+       (NegativeInteger NonnegativeInteger . -> . Negative-Fixnum)
+       (NonpositiveInteger PositiveInteger . -> . Negative-Fixnum)
+       (NonpositiveInteger NonnegativeInteger . -> . Nonpositive-Fixnum)
+       (PositiveInteger NonpositiveInteger . -> . PositiveFixnum)
+       (NonnegativeInteger NegativeInteger . -> . PositiveFixnum)
+       (NonnegativeInteger NonpositiveInteger . -> . Nonnegative-Fixnum)
+       (Integer Integer . -> . Fixnum))))
+  (define fx*-type
+    (lambda ()
+      (fx-from-cases
+       (-> One Integer Fixnum : -true-propset : (-arg-path 1))
+       (-> Integer One Fixnum : -true-propset : (-arg-path 0))
+       (commutative-binop Integer Zero)
+       (Positive-Byte Positive-Byte . -> . Positive-Index)
+       (Byte Byte . -> . Index)
+       (PositiveInteger PositiveInteger . -> . PositiveFixnum)
+       (commutative-binop PositiveInteger NegativeInteger Negative-Fixnum)
+       (NegativeInteger NegativeInteger . -> . PositiveFixnum)
+       (NonnegativeInteger NonnegativeInteger . -> . Nonnegative-Fixnum)
+       (commutative-binop NonnegativeInteger NonpositiveInteger Nonpositive-Fixnum)
+       (Nonpositive-Fixnum Nonpositive-Fixnum . -> . Nonnegative-Fixnum)
+       (Integer Integer . -> . Fixnum))))
+  (define fxquotient-type
+    (lambda ()
+      (fx-from-cases
+       (Zero Integer . -> . Zero)
+       (-> Integer One Fixnum : -true-propset : (-arg-path 0))
+       (Byte NonnegativeInteger . -> . Byte)
+       (Index NonnegativeInteger . -> . Index)
+       (NonnegativeInteger NonnegativeInteger . -> . Nonnegative-Fixnum)
+       (commutative-binop NonnegativeInteger NonpositiveInteger Nonpositive-Fixnum)
+       (NonpositiveInteger NonpositiveInteger . -> . Nonnegative-Fixnum)
+       (Integer Integer . -> . Fixnum))))
+  (define fxremainder-type ; result has same sign as first arg
+    (lambda ()
+      (fx-from-cases
+       (One One . -> . Zero)
+       (map (lambda (t) (list (-> NonnegativeInteger t t)
+                              (-> t Integer t)))
+            (list Byte Index))
+       (NonnegativeInteger Integer . -> . Nonnegative-Fixnum)
+       (NonpositiveInteger Integer . -> . Nonpositive-Fixnum)
+       (Integer Integer . -> . Fixnum))))
+  (define fxmodulo-type ; result has same sign as second arg
+    (lambda ()
+      (fx-from-cases
+       (One One . -> . Zero)
+       (map (lambda (t) (list (-> Integer t t)
+                              (-> t NonnegativeInteger t)))
+            (list Byte Index))
+       (Integer NonnegativeInteger . -> . Nonnegative-Fixnum)
+       (Integer NonpositiveInteger . -> . Nonpositive-Fixnum)
+       (Integer Integer . -> . Fixnum))))
+  (define fxabs-type
+    (lambda ()
+      (fx-from-cases
+       (-> NonnegativeInteger Nonnegative-Fixnum : -true-propset : (-arg-path 0))
+       ((Un PositiveInteger NegativeInteger) . -> . PositiveFixnum)
+       (Integer . -> . Nonnegative-Fixnum))))
+  (define fx=-type
+    (lambda ()
+      (fx-from-cases
+       ;; we could rule out cases like (= Pos Neg), but we currently don't
+       (commutative-equality/strict-prop Integer Zero)
+       (map (lambda (t) (commutative-equality/prop Integer t))
+            (list One Positive-Byte Byte Positive-Index Index PositiveFixnum Nonnegative-Fixnum Negative-Fixnum Nonpositive-Fixnum))
+       (comp Integer))))
+  (define fx<-type
+    (lambda ()
+      (fx-from-cases
+       (-> Integer One B : (-PS (-is-type 0 Nonpositive-Fixnum) (-is-type 0 PositiveFixnum)))
+       (-> Integer Zero B : (-PS (-is-type 0 Negative-Fixnum) (-is-type 0 Nonnegative-Fixnum)))
+       (-> Zero Integer B : (-PS (-is-type 1 PositiveFixnum) (-is-type 1 Nonpositive-Fixnum)))
+
+       (-> Byte Positive-Byte B : (-PS -tt (-is-type 0 Positive-Byte)))
+       (-> Byte Byte B : (-PS (-is-type 1 Positive-Byte) -tt))
+       (-> -Pos Byte B : (-PS (-and (-is-type 0 Positive-Byte) (-is-type 1 Positive-Byte)) -tt))
+       (-> Byte -Pos B : (-PS -tt (-and (-is-type 0 Positive-Byte) (-is-type 1 Positive-Byte))))
+       (-> Byte NonnegativeInteger B : (-PS -tt (-is-type 1 Byte)))
+       (-> Index Positive-Index B : (-PS -tt (-is-type 0 Positive-Index)))
+       (-> Index Index B : (-PS (-is-type 1 Positive-Index) -tt))
+       (-> -Pos Index B : (-PS (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index)) -tt))
+       (-> Index -Pos B : (-PS -tt (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index))))
+       (-> NonnegativeInteger Byte B : (-PS (-and (-is-type 0 Byte) (-is-type 1 Positive-Byte)) -tt))
+       (-> NonnegativeInteger Index B : (-PS (-and (-is-type 0 Index) (-is-type 1 Positive-Index)) -tt))
+       (-> Index NonnegativeInteger B : (-PS -tt (-is-type 1 Index)))
+       ;; general integer cases
+       (-> Integer PositiveInteger B : (-PS -tt (-is-type 0 PositiveFixnum)))
+       (-> Integer NonnegativeInteger B : (-PS -tt (-is-type 0 Nonnegative-Fixnum)))
+       (-> NonnegativeInteger Integer B : (-PS (-is-type 1 PositiveFixnum) -tt))
+       (-> Integer NonpositiveInteger B : (-PS (-is-type 0 Negative-Fixnum) -tt))
+       (-> NegativeInteger Integer B : (-PS -tt (-is-type 1 Negative-Fixnum)))
+       (-> NonpositiveInteger Integer B : (-PS -tt (-is-type 1 Nonpositive-Fixnum)))
+       (comp Integer))))
+  (define fx>-type
+    (lambda ()
+      (fx-from-cases
+       (-> One Integer B : (-PS (-is-type 1 Nonpositive-Fixnum) (-is-type 1 PositiveFixnum)))
+       (-> Zero Integer B : (-PS (-is-type 1 Negative-Fixnum) (-is-type 1 Nonnegative-Fixnum)))
+       (-> Integer Zero  B : (-PS (-is-type 0 PositiveFixnum) (-is-type 0 Nonpositive-Fixnum)))
+
+       (-> Positive-Byte Byte B : (-PS -tt (-is-type 1 Positive-Byte)))
+       (-> Byte Byte B : (-PS (-is-type 0 Positive-Byte) -tt))
+       (-> Byte -Pos B : (-PS (-and (-is-type 0 Positive-Byte) (-is-type 1 Positive-Byte)) -tt))
+       (-> -Pos Byte B : (-PS -tt (-and (-is-type 0 Positive-Byte) (-is-type 1 Positive-Byte))))
+       (-> Byte NonnegativeInteger B : (-PS (-and (-is-type 0 Positive-Byte) (-is-type 1 Byte)) -tt))
+       (-> Positive-Index Index B : (-PS -tt (-is-type 1 Positive-Index)))
+       (-> Index Index B : (-PS (-is-type 0 Positive-Index) -tt))
+       (-> Index -Pos B : (-PS (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index)) -tt))
+       (-> -Pos Index B : (-PS -tt (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index))))
+       (-> Index NonnegativeInteger B : (-PS (-and (-is-type 0 Positive-Index) (-is-type 1 Index)) -tt))
+       (-> NonnegativeInteger Byte B : (-PS -tt (-is-type 0 Byte)))
+       (-> NonnegativeInteger Index B : (-PS -tt (-is-type 0 Index)))
+       ;; general integer cases
+       (-> PositiveInteger Integer B : (-PS -tt (-is-type 1 PositiveFixnum)))
+       (-> NonnegativeInteger Integer B : (-PS -tt (-is-type 1 Nonnegative-Fixnum)))
+       (-> Integer NonnegativeInteger B : (-PS (-is-type 0 PositiveFixnum) -tt))
+       (-> NonpositiveInteger Integer B : (-PS (-is-type 1 Negative-Fixnum) -tt))
+       (-> Integer NegativeInteger B : (-PS -tt (-is-type 0 Negative-Fixnum)))
+       (-> Integer NonpositiveInteger B : (-PS -tt (-is-type 0 Nonpositive-Fixnum)))
+       (comp Integer))))
+  (define fx<=-type
+    (lambda ()
+      (fx-from-cases
+       (-> Integer One B : (-PS (-is-type 0 (Un Nonpositive-Fixnum One)) (-is-type 0 PositiveFixnum)))
+       (-> One Integer B : (-PS (-is-type 1 PositiveFixnum) (-is-type 1 Nonpositive-Fixnum)))
+       (-> Integer Zero B : (-PS (-is-type 0 Nonpositive-Fixnum) (-is-type 0 PositiveFixnum)))
+       (-> Zero Integer B : (-PS (-is-type 1 Nonnegative-Fixnum) (-is-type 1 Negative-Fixnum)))
+
+       (-> Positive-Byte Byte B : (-PS (-is-type 1 Positive-Byte) -tt))
+       (-> Byte Byte B : (-PS -tt (-is-type 0 Positive-Byte)))
+       (-> -Pos Byte B : (-PS (-and (-is-type 0 Positive-Byte) (-is-type 1 Positive-Byte)) -tt))
+       (-> Byte -Pos B : (-PS -tt (-and (-is-type 0 Positive-Byte) (-is-type 1 Positive-Byte))))
+       (-> Byte NonnegativeInteger B : (-PS -tt (-and (-is-type 0 Positive-Byte) (-is-type 1 Byte))))
+       (-> Positive-Index Index B : (-PS (-is-type 1 Positive-Index) -tt))
+       (-> Index Index B : (-PS -tt (-is-type 0 Positive-Index)))
+       (-> -Pos Index B : (-PS (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index)) -tt))
+       (-> Index -Pos B : (-PS -tt (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index))))
+       (-> NonnegativeInteger Byte B : (-PS (-is-type 0 Byte) -tt))
+       (-> NonnegativeInteger Index B : (-PS (-is-type 0 Index) -tt))
+       (-> Index NonnegativeInteger B : (-PS -tt (-and (-is-type 0 Positive-Index) (-is-type 1 Index))))
+       ;; general integer cases
+       (-> PositiveInteger Integer B : (-PS (-is-type 1 PositiveFixnum) -tt))
+       (-> Integer NonnegativeInteger B : (-PS -tt (-is-type 0 PositiveFixnum)))
+       (-> NonnegativeInteger Integer B : (-PS (-is-type 1 Nonnegative-Fixnum) -tt))
+       (-> Integer NegativeInteger B : (-PS (-is-type 0 Negative-Fixnum) -tt))
+       (-> Integer NonpositiveInteger B : (-PS (-is-type 0 Nonpositive-Fixnum) -tt))
+       (-> NonpositiveInteger Integer B : (-PS -tt (-is-type 1 Negative-Fixnum)))
+       (comp Integer))))
+  (define fx>=-type
+    (lambda ()
+      (fx-from-cases
+       (-> One Integer B : (-PS (-is-type 1 (Un One NonpositiveInteger)) (-is-type 1 PositiveFixnum)))
+       (-> Integer One B : (-PS (-is-type 0 PositiveFixnum) (-is-type 0 Nonpositive-Fixnum)))
+       (-> Zero Integer B : (-PS (-is-type 1 Nonpositive-Fixnum) (-is-type 1 PositiveFixnum)))
+       (-> Integer Zero B : (-PS (-is-type 0 Nonnegative-Fixnum) (-is-type 0 Negative-Fixnum)))
+
+       (-> Byte Positive-Byte B : (-PS (-is-type 0 Positive-Byte) -tt))
+       (-> Byte Byte B : (-PS -tt (-is-type 1 Positive-Byte)))
+       (-> Byte -Pos B : (-PS (-and (-is-type 1 Positive-Byte) (-is-type 0 Positive-Byte)) -tt))
+       (-> -Pos Byte B : (-PS -tt (-and (-is-type 1 Positive-Byte) (-is-type 0 Positive-Byte))))
+       (-> Byte NonnegativeInteger B : (-PS (-is-type 1 Byte) -tt))
+       (-> Zero Index B : (-PS (-is-type 1 Zero) (-is-type 1 Positive-Index)))
+       (-> Index Positive-Index B : (-PS (-is-type 0 Positive-Index) -tt))
+       (-> Index Index B : (-PS -tt (-is-type 1 Positive-Index)))
+       (-> Index -Pos B : (-PS (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index)) -tt))
+       (-> -Pos Index B : (-PS -tt (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index))))
+       (-> Index NonnegativeInteger B : (-PS (-is-type 1 Index) -tt))
+       (-> NonnegativeInteger Byte B : (-PS -tt (-and (-is-type 0 Byte) (-is-type 1 Positive-Byte))))
+       (-> NonnegativeInteger Index B : (-PS -tt (-and (-is-type 0 Index) (-is-type 1 Positive-Index))))
+       ;; general integer cases
+       (-> Integer PositiveInteger B : (-PS (-is-type 0 PositiveFixnum) -tt))
+       (-> NonnegativeInteger Integer B : (-PS -tt (-is-type 1 PositiveFixnum)))
+       (-> Integer NonnegativeInteger B : (-PS (-is-type 0 Nonnegative-Fixnum) -tt))
+       (-> NegativeInteger Integer B : (-PS (-is-type 1 Negative-Fixnum) -tt))
+       (-> NonpositiveInteger Integer B : (-PS (-is-type 1 Nonpositive-Fixnum) -tt))
+       (-> Integer NonpositiveInteger B : (-PS -tt (-is-type 0 Negative-Fixnum)))
+       (comp Integer))))
+  (define fxmin-type
+    (lambda ()
+      (fx-from-cases
+       (-> NonnegativeInteger NonpositiveInteger Nonpositive-Fixnum : -true-propset : (-arg-path 1))
+       (-> NonpositiveInteger NonnegativeInteger Nonpositive-Fixnum : -true-propset : (-arg-path 0))
+       (-> Zero Integer Nonpositive-Fixnum)
+       (-> Integer Zero Nonpositive-Fixnum)
+
+       (commutative-binop Positive-Byte PositiveInteger Positive-Byte)
+       (commutative-binop Byte NonnegativeInteger Byte)
+       (commutative-binop Positive-Index PositiveInteger Positive-Index)
+       (commutative-binop Index NonnegativeInteger Index)
+       (-> -Pos -Pos PositiveFixnum)
+       (-> NonnegativeInteger NonnegativeInteger Nonnegative-Fixnum)
+       (commutative-binop NegativeInteger Integer Negative-Fixnum)
+       (commutative-binop NonpositiveInteger Integer NonpositiveInteger)
+       (-> Integer Integer Fixnum))))
+  (define fxmax-type
+    (lambda ()
+      (fx-from-cases
+       (-> NonpositiveInteger NonnegativeInteger Nonnegative-Fixnum : -true-propset : (-arg-path 1))
+       (-> NonnegativeInteger NonpositiveInteger Nonnegative-Fixnum : -true-propset : (-arg-path 0))
+       (-> Zero Integer Nonnegative-Fixnum)
+       (-> Integer Zero Nonnegative-Fixnum)
+
+       (commutative-binop Positive-Byte Byte Positive-Byte)
+       (binop Byte)
+       (commutative-binop Positive-Index Index Positive-Index)
+       (map binop (list Index Negative-Fixnum Nonpositive-Fixnum))
+       (commutative-binop PositiveInteger Integer PositiveFixnum)
+       (commutative-binop NonnegativeInteger Integer Nonnegative-Fixnum)
+       (-> Integer Integer Fixnum))))
+  (define fxand-type
+    (lambda ()
+      (fx-from-cases
+       (commutative-binop Zero Integer Zero)
+       (commutative-binop Byte Integer Byte)
+       (commutative-binop Index Integer Index)
+       (binop NonnegativeInteger Nonnegative-Fixnum)
+       (binop NegativeInteger Negative-Fixnum)
+       (binop NonpositiveInteger Nonpositive-Fixnum)
+       (binop Integer Fixnum))))
+  (define fxior-type
+    (lambda ()
+      (fx-from-cases
+       (-> Zero Integer Fixnum : -true-propset : (-arg-path 1))
+       (-> Integer Zero Fixnum : -true-propset : (-arg-path 0))
+
+       (commutative-binop Positive-Byte Byte Positive-Byte)
+       (binop Byte)
+       (commutative-binop Positive-Index Index Positive-Index)
+       (binop Index)
+       (commutative-binop PositiveInteger NonnegativeInteger PositiveFixnum)
+       (binop NonnegativeInteger Nonnegative-Fixnum)
+       (commutative-binop NegativeInteger Integer Negative-Fixnum) ; as long as there's one negative, the result is negative
+       (binop Integer Fixnum))))
+  (define fxxor-type
+    (lambda ()
+      (fx-from-cases
+       (-> Zero Integer Fixnum : -true-propset : (-arg-path 1))
+       (-> Integer Zero Fixnum : -true-propset : (-arg-path 0))
+
+       (binop One Zero)
+       (binop Byte)
+       (binop Index)
+       (binop NonnegativeInteger Nonnegative-Fixnum)
+       (binop NonpositiveInteger Nonnegative-Fixnum)
+       (commutative-binop NegativeInteger NonnegativeInteger Negative-Fixnum)
+       (commutative-binop NonpositiveInteger NonnegativeInteger Nonpositive-Fixnum)
+       (binop Integer Fixnum))))
+  (define fxnot-type
+    (lambda ()
+      (fx-from-cases
+       (NonnegativeInteger . -> . Negative-Fixnum)
+       (NegativeInteger . -> . Nonnegative-Fixnum)
+       (Integer . -> . Fixnum))))
+  (define fxlshift-type
+    (lambda ()
+      (fx-from-cases
+       (-> Integer Zero Fixnum : -true-propset : (-arg-path 0))
+       (-> PositiveInteger Integer PositiveFixnum) ; negative 2nd arg errors, so we can't reach 0
+       (-> NonnegativeInteger Integer Nonnegative-Fixnum)
+       (-> NegativeInteger Integer Negative-Fixnum)
+       (-> NonpositiveInteger Integer Nonpositive-Fixnum)
+       (binop Integer Fixnum))))
+  (define fxrshift-type
+    (lambda ()
+      (fx-from-cases
+       (-> Integer Zero Fixnum : -true-propset : (-arg-path 0))
+       (-> NonnegativeInteger Integer Nonnegative-Fixnum) ; can reach 0
+       (-> NegativeInteger Integer Negative-Fixnum) ; can't reach 0
+       (-> NonpositiveInteger Integer Nonpositive-Fixnum)
+       (binop Integer Fixnum))))
+
+  ;; A bit of machinery to allow floating point operations to be abstracted over double/extended
+  ;; floating point types without repetition. 
+  (define-syntax (define-fl-type-lambda stx)
+    (define-syntax-class fl-parameter
+      (pattern (generic-name:id flonum-name:id extflonum-name:id)
+        #:with get-value (generate-temporary #'generic-name)
+        #:with definitions 
+          #'(begin
+              (define (get-value)
+                (case (fl-type)
+                  [(flonum) flonum-name]
+                  [(ext-flonum) extflonum-name]
+                  [else (error 'generic-name "Cannot use an fl-type outside of fl-type-lambda")]))
+              (define-syntax generic-name 
+                (syntax-id-rules ()
+                 [_ (get-value)])))))
+
+    (syntax-parse stx
+      [(_ name:id (params:fl-parameter ...))
+       (quasisyntax/loc stx
+         (begin
+           (define fl-type (make-parameter #f))
+           params.definitions ...
+           (define-syntax (name stx)
+             (syntax-case stx ()
+               ([_ body]
+                (syntax/loc stx
+                  (lambda (type)
+                    (unless (memq type '(flonum ext-flonum))
+                      (raise-argument-error 'fl-type-lambda "(or/c 'flonum 'ext-flonum)"))
+                    (parameterize ([fl-type type])
+                      body))))))))]))
+
+  (define-fl-type-lambda fl-type-lambda
+    [(-FlZero    Float-Zero    -ExtFlonumZero)
+     (-FlPosZero Float-Positive-Zero -ExtFlonumPosZero)
+     (-FlNegZero Float-Negative-Zero -ExtFlonumNegZero)
+     (-FlNan     Float-NaN     -ExtFlonumNan)
+     (-PosFl     Positive-Float     -PosExtFlonum)
+     (-NegFl     Negative-Float     -NegExtFlonum)
+     (-NonNegFl  Nonnegative-Float  -NonNegExtFlonum)
+     (-NonPosFl  Nonpositive-Float  -NonPosExtFlonum)
+     (-Fl        Float        -ExtFlonum)])
+
+
+  (define flabs-type
+    (fl-type-lambda
+      (cl->* (-> -FlZero -FlZero)
+             (-> (Un -PosFl -NegFl) -PosFl)
+             (-> -Fl -NonNegFl))))
+  (define fl+-type
+    (fl-type-lambda
+      (from-cases (map (lambda (t) (commutative-binop t -FlZero t))
+                       ;; not all float types. singleton types are ruled out, since NaN can arise
+                       (list -FlZero -FlNan -PosFl -NonNegFl
+                             -NegFl -NonPosFl -Fl))
+                  (commutative-binop -NonNegFl -PosFl -PosFl)
+                  (map binop (list -NonNegFl -NegFl -NonPosFl -Fl)))))
+  (define fl--type
+    (fl-type-lambda
+      (from-cases (binop -FlZero)
+                  (-NegFl -NonNegFl . -> . -NegFl)
+                  (-NonPosFl -PosFl . -> . -NegFl)
+                  (-NonPosFl -NonNegFl . -> . -NonPosFl)
+                  (-PosFl -NonPosFl . -> . -PosFl)
+                  (-NonNegFl -NegFl . -> . -PosFl)
+                  (-NonNegFl -NonPosFl . -> . -NonNegFl)
+                  (binop -Fl))))
+  (define fl*-type
+    (fl-type-lambda
+      (from-cases (binop -FlZero)
+                  ;; we don't have Pos Pos -> Pos, possible underflow
+                  (binop -NonNegFl)
+                  (commutative-binop -NegFl -PosFl -NonPosFl)
+                  (binop -NegFl -NonNegFl)
+                  (binop -Fl))))
+  (define fl/-type
+    (fl-type-lambda
+      (from-cases (-FlZero -Fl . -> . -FlZero)
+                  ;; we don't have Pos Pos -> Pos, possible underflow
+                  (-PosFl -PosFl . -> . -NonNegFl)
+                  (commutative-binop -PosFl -NegFl -NonPosFl)
+                  (-NegFl -NegFl . -> . -NonNegFl)
+                  (binop -Fl))))
+  (define fl=-type
+    (fl-type-lambda
+      (from-cases (commutative-equality/strict-prop -Fl (Un -FlPosZero -FlNegZero))
+                  (map (lambda (t) (commutative-equality/prop -Fl t))
+                       (list -FlZero -PosFl -NonNegFl
+                             -NegFl -NonPosFl))
+                  (comp -Fl))))
+  (define fl<-type
+    (fl-type-lambda
+      (from-cases
+       ;; false case, we know nothing, lhs may be NaN. same for all comparison that can involve floats
+       (-> -NonNegFl -Fl B : (-PS (-is-type 1 -PosFl) -tt))
+       (-> -Fl -NonPosFl B : (-PS (-is-type 0 -NegFl) -tt))
+       (comp -Fl))))
+  (define fl>-type
+    (fl-type-lambda
+      (from-cases
+       (-> -NonPosFl -Fl B : (-PS (-is-type 1 -NegFl) -tt))
+       (-> -Fl -NonNegFl B : (-PS (-is-type 0 -PosFl) -tt))
+       (comp -Fl))))
+  (define fl<=-type
+    (fl-type-lambda
+      (from-cases
+       (-> -PosFl -Fl B : (-PS (-is-type 1 -PosFl) -tt))
+       (-> -NonNegFl -Fl B : (-PS (-is-type 1 -NonNegFl) -tt))
+       (-> -Fl -NegFl B : (-PS (-is-type 0 -NegFl) -tt))
+       (-> -Fl -NonPosFl B : (-PS (-is-type 0 -NonPosFl) -tt))
+       (comp -Fl))))
+  (define fl>=-type
+    (fl-type-lambda
+      (from-cases
+       (-> -Fl -PosFl B : (-PS (-is-type 0 -PosFl) -tt))
+       (-> -Fl -NonNegFl B : (-PS (-is-type 0 -NonNegFl) -tt))
+       (-> -NegFl -Fl B : (-PS (-is-type 1 -NegFl) -tt))
+       (-> -NonPosFl -Fl B : (-PS (-is-type 1 -NonPosFl) -tt))
+       (comp -Fl))))
+  (define flmin-type
+    (fl-type-lambda
+      (from-cases (commutative-binop -Fl -NegFl)
+                  (commutative-binop -Fl -NonPosFl)
+                  (map binop (list -PosFl -NonNegFl -Fl)))))
+  (define flmax-type
+    (fl-type-lambda
+      (from-cases (commutative-binop -Fl -PosFl)
+                  (commutative-binop -Fl -NonNegFl)
+                  (map binop (list -NegFl -NonPosFl -Fl)))))
+  (define flround-type ; truncate too
+    (fl-type-lambda
+      (from-cases (map unop (list -FlPosZero -FlNegZero -FlZero
+                                  -NonNegFl -NonPosFl -Fl)))))
+  (define flfloor-type
+    (fl-type-lambda
+      (from-cases (map unop (list -FlPosZero -FlNegZero -FlZero
+                                  -NonNegFl -NegFl -NonPosFl -Fl)))))
+  (define flceiling-type
+    (fl-type-lambda
+      (from-cases (map unop (list -FlPosZero -FlNegZero -FlZero
+                                  -PosFl -NonNegFl -NonPosFl -Fl)))))
+  (define fllog-type
+    (fl-type-lambda
+      (from-cases (-> -FlZero -NegFl) ; -inf
+                  (unop -Fl))))
+  (define flexp-type
+    (fl-type-lambda
+      (from-cases (-NonNegFl . -> . -PosFl)
+                  (-Fl . -> . -NonNegFl))))
+  (define flsqrt-type
+    (fl-type-lambda
+      (from-cases (map unop (list -FlPosZero -FlNegZero -FlZero -PosFl))
+                  (-Fl . -> . -NonNegFl))))
+
+  (define flexpt-type
+    (fl-type-lambda
+      (from-cases (-FlZero -PosFl . -> . -FlZero) ; (flexpt -0.0 0.1) -> 0.0 ; not sign preserving
+                  ((Un -PosFl -NegFl) -FlZero . -> . -PosFl) ; always returns 1.0
+                  ;; can underflow, and -0.0 breaks sign, so 1st arg can't be non-neg
+                  (-PosFl -Fl . -> . -NonNegFl)
+                  (-Fl -Fl . -> . -Fl))))
+
+  (define fx->fl-type
+    (fl-type-lambda
+      (fx-from-cases
+       (PositiveInteger . -> . -PosFl)
+       (NonnegativeInteger . -> . -NonNegFl)
+       (NegativeInteger . -> . -NegFl)
+       (NonpositiveInteger . -> . -NonPosFl)
+       (Integer . -> . -Fl))))
+  (define fl->fx-type
+    (fl-type-lambda
+      (from-cases
+       (-FlZero . -> . Zero)
+       (-PosFl . -> . PositiveFixnum)
+       (-NegFl . -> . Negative-Fixnum)
+       (-NonNegFl . -> . Nonnegative-Fixnum)
+       (-NonPosFl . -> . Nonpositive-Fixnum)
+       (-Fl . -> . Fixnum))))
+  (define make-flrectangular-type (lambda () (Float Float . -> . Float-Complex)))
+  (define flreal-part-type (lambda () (Float-Complex . -> . Float)))
+  (define flimag-part-type (lambda () (Float-Complex . -> . Float)))
+  (define flrandom-type (lambda () (-Pseudo-Random-Generator . -> . Float)))
+
+  ;; There's a repetitive pattern in the types of each comparison operator.
+  ;; As explained below, this is because props don't do intersections.
+  ;; Cases that may include NaN don't learn anything when a comparison returns
+  ;; false, because anything at all compared to NaN is always false.
+  (define (<-type-pattern base pos non-neg neg non-pos [zero Real-Zero]
+                          #:no-false-props? [no-false-props? #f])
+    (define (-PS* t f) (-PS t (if no-false-props? -tt f)))
+    (list (-> base zero B : (-PS* (-is-type 0 neg) (-is-type 0 non-neg)))
+          (-> zero base B : (-PS* (-is-type 1 pos) (-is-type 1 non-pos)))
+          (-> base PositiveReal B : (-PS* -tt (-is-type 0 pos)))
+          (-> base NonnegativeReal B : (-PS* -tt (-is-type 0 non-neg)))
+          (-> NonnegativeReal base B : (-PS* (-is-type 1 pos) -tt))
+          (-> base NonpositiveReal B : (-PS* (-is-type 0 neg) -tt))
+          (-> NegativeReal base B : (-PS* -tt (-is-type 1 neg)))
+          (-> NonpositiveReal base B : (-PS* -tt (-is-type 1 non-pos)))))
+  (define (>-type-pattern base pos non-neg neg non-pos [zero Real-Zero]
+                          #:no-false-props? [no-false-props? #f])
+    (define (-PS* t f) (-PS t (if no-false-props? -tt f)))
+    (list (-> base zero B : (-PS* (-is-type 0 pos) (-is-type 0 non-pos)))
+          (-> zero base B : (-PS* (-is-type 1 neg) (-is-type 1 non-neg)))
+          (-> base NonnegativeReal B : (-PS* (-is-type 0 pos) -tt))
+          (-> PositiveReal base B : (-PS* -tt (-is-type 1 pos)))
+          (-> NonnegativeReal base B : (-PS* -tt (-is-type 1 non-neg)))
+          (-> NonpositiveReal base B : (-PS* (-is-type 1 neg) -tt))
+          (-> base NegativeReal B : (-PS* -tt (-is-type 0 neg)))
+          (-> base NonpositiveReal B : (-PS* -tt (-is-type 0 non-pos)))))
+  ;; this is > with flipped props
+  (define (<=-type-pattern base pos non-neg neg non-pos [zero Real-Zero]
+                           #:no-false-props? [no-false-props? #f])
+    (define (-PS* t f) (-PS t (if no-false-props? -tt f)))
+    (list (-> base zero B : (-PS* (-is-type 0 non-pos) (-is-type 0 pos)))
+          (-> zero base B : (-PS* (-is-type 1 non-neg) (-is-type 1 neg)))
+          (-> base NonnegativeReal B : (-PS* -tt (-is-type 0 pos)))
+          (-> PositiveReal base B : (-PS* (-is-type 1 pos) -tt))
+          (-> NonnegativeReal base B : (-PS* (-is-type 1 non-neg) -tt))
+          (-> NonpositiveReal base B : (-PS* -tt (-is-type 1 neg)))
+          (-> base NegativeReal B : (-PS* (-is-type 0 neg) -tt))
+          (-> base NonpositiveReal B : (-PS* (-is-type 0 non-pos) -tt))))
+  (define (>=-type-pattern base pos non-neg neg non-pos [zero Real-Zero]
+                           #:no-false-props? [no-false-props? #f])
+    (define (-PS* t f) (-PS t (if no-false-props? -tt f)))
+    (list (-> base zero B : (-PS* (-is-type 0 non-neg) (-is-type 0 neg)))
+          (-> zero base B : (-PS* (-is-type 1 non-pos) (-is-type 1 pos)))
+          (-> base PositiveReal B : (-PS* (-is-type 0 pos) -tt))
+          (-> base NonnegativeReal B : (-PS* (-is-type 0 non-neg) -tt))
+          (-> NonnegativeReal base B : (-PS* -tt (-is-type 1 pos)))
+          (-> base NonpositiveReal B : (-PS* -tt (-is-type 0 neg)))
+          (-> NegativeReal base B : (-PS* (-is-type 1 neg) -tt))
+          (-> NonpositiveReal base B : (-PS* (-is-type 1 non-pos) -tt))))
+
+  (define (negation-pattern pos neg non-neg non-pos)
+    (list (-> pos neg)
+          (-> non-neg non-pos)
+          (-> neg pos)
+          (-> non-pos non-neg)
+          (-> Zero pos neg)
+          (-> Zero non-neg non-pos)
+          (-> Zero neg pos)
+          (-> Zero non-pos non-neg)))
+
+  ;; Used because (- min-fixnum) > max-fixnum
+  (define (half-negation-pattern pos neg non-neg non-pos)
+    (list (-> pos neg)
+          (-> non-neg non-pos)
+          (-> Zero pos neg)
+          (-> Zero non-neg non-pos)))
+
+  (define abs-cases ; used both for abs and magnitude
+    (list
+     ;; abs is not the identity on negative zeros.
+     ((Un Zero PositiveReal) . -> . (Un Zero PositiveReal) : -true-propset : (-arg-path 0))
+     ;; but we know that we at least get *some* zero, and that it preserves exactness
+     (map unop (list Float-Zero Single-Float-Zero Real-Zero))
+     ;; abs may not be closed on fixnums. (abs min-fixnum) is not a fixnum
+     ((Un PositiveInteger NegativeInteger) . -> . PositiveInteger)
+     (Integer . -> . NonnegativeInteger)
+     ((Un PositiveRationalional NegativeRationalional) . -> . PositiveRationalional)
+     (Rational . -> . NonnegativeRationalional)
+     ((Un Positive-Float Negative-Float) . -> . Positive-Float)
+     (Float . -> . Nonnegative-Float)
+     ((Un Positive-Single-Float Negative-Single-Float) . -> . Positive-Single-Float)
+     (Single-Float . -> . Nonnegative-Single-Float)
+     ((Un Positive-InexactReal Negative-InexactReal) . -> . Positive-InexactReal)
+     (InexactReal . -> . Nonnegative-InexactReal)
+     ((Un PositiveReal NegativeReal) . -> . PositiveReal)
+     (Real . -> . NonnegativeReal)))
+
+  ;Check to ensure we fail fast if the flonum bindings change
+  (define-namespace-anchor anchor)
+  (let ((flonum-ops #'([unsafe-flround    flround]
+                       [unsafe-flfloor    flfloor]
+                       [unsafe-flceiling  flceiling]
+                       [unsafe-fltruncate fltruncate]
+                       [unsafe-flsin      flsin]
+                       [unsafe-flcos      flcos]
+                       [unsafe-fltan      fltan]
+                       [unsafe-flatan     flatan]
+                       [unsafe-flasin     flasin ]
+                       [unsafe-flacos     flacos]
+                       [unsafe-fllog      fllog]
+                       [unsafe-flexp      flexp]
+                       [unsafe-flexpt     flexpt]
+                       [unsafe-extflround    extflround]
+                       [unsafe-extflfloor    extflfloor]
+                       [unsafe-extflceiling  extflceiling]
+                       [unsafe-extfltruncate extfltruncate]
+                       [unsafe-extflsin      extflsin]
+                       [unsafe-extflcos      extflcos]
+                       [unsafe-extfltan      extfltan]
+                       [unsafe-extflatan     extflatan]
+                       [unsafe-extflasin     extflasin]
+                       [unsafe-extflacos     extflacos]
+                       [unsafe-extfllog      extfllog]
+                       [unsafe-extflexp      extflexp]
+                       [unsafe-extflexpt     extflexpt])))
+    (define phase (namespace-base-phase (namespace-anchor->namespace anchor)))
+
+    (for ([op-pair (in-syntax flonum-ops)])
+      (match op-pair
+       [(app syntax->list (list id1 id2))
+        (unless (free-identifier=? id1 id2 (sub1 phase))
+          (error 'flonum-operations "The assumption that the safe and unsafe flonum-ops are the same binding has been violated. ~a and ~a are diffferent bindings." id1 id2))])))
+
+  )
+
+;; numeric predicates
+;; There are 25 values that answer true to zero?. They are either reals, or inexact complexes.
+;; Note Real-Zero contains NaN and zero? returns #f on it
+[zero?
+  (-> Number B : (-PS (-is-type 0 (Un Real-ZeroNoNan Inexact-Complex -InexactImaginary))
+                 (-not-type 0 Real-ZeroNoNan)))]
+
+[number? (make-pred-ty Number)]
+[integer? (asym-pred Univ B (-PS (-is-type 0 (Un Integer Float Single-Float)) ; inexact-integers exist...
+                                 (-not-type 0 Integer)))]
+[exact-integer? (make-pred-ty Integer)]
+[real? (make-pred-ty Real)]
+[flonum? (make-pred-ty Float)]
+[single-flonum? (make-pred-ty Single-Float)]
+[double-flonum? (make-pred-ty Float)]
+[inexact-real? (make-pred-ty InexactReal)]
+[complex? (make-pred-ty Number)]
+;; `rational?' includes all Reals, except infinities and NaN.
+[rational? (asym-pred Univ B (-PS (-is-type 0 Real) (-not-type 0 Rational)))]
+[exact? (make-pred-ty Exact-Number)]
+[inexact? (make-pred-ty (Un InexactReal -InexactImaginary Inexact-Complex))]
+[fixnum? (make-pred-ty Fixnum)]
+[index? (make-pred-ty Index)]
+[positive? (-> Real B : (-PS (-is-type 0 PositiveReal) (-is-type 0 NonpositiveReal)))]
+[negative? (-> Real B : (-PS (-is-type 0 NegativeReal) (-is-type 0 NonnegativeReal)))]
+[exact-positive-integer? (make-pred-ty -Pos)]
+[exact-nonnegative-integer? (make-pred-ty NonnegativeInteger)]
+
+[odd? (-> Integer B : (-PS (-not-type 0 Zero) (-not-type 0 One)))]
+[even? (-> Integer B : (-PS (-not-type 0 One) (-not-type 0 Zero)))]
+
+[=
+ (from-cases
+   (-> Real Real-Zero B : (-PS (-is-type 0 Real-ZeroNoNan) (-not-type 0 Real-ZeroNoNan)))
+   (-> Real-Zero Real B : (-PS (-is-type 1 Real-ZeroNoNan) (-not-type 1 Real-ZeroNoNan)))
+  (map (lambda (t) (commutative-equality/prop Exact-Number t))
+       (list One Positive-Byte Byte Positive-Index Index
+             PositiveFixnum Nonnegative-Fixnum Negative-Fixnum Nonpositive-Fixnum Fixnum
+             PositiveInteger NonnegativeInteger NegativeInteger NonpositiveInteger Integer
+             PositiveRationalional NonnegativeRationalional NegativeRationalional NonpositiveRationalional Rational
+             Exact-Number))
+  ;; For all real types: the props give sign information, and the exactness information is preserved
+  ;; from the original types.
+  (map (lambda (t) (commutative-equality/prop Real t))
+       (list Real-Zero PositiveReal NonnegativeReal NegativeReal NonpositiveReal Real))
+  (->* (list Number Number) Number B))]
+
+[<  (from-cases
+     (-> Integer One B : (-PS (-is-type 0 NonpositiveInteger) (-is-type 0 PositiveInteger)))
+     (-> Real Zero B : (-PS (-is-type 0 NegativeReal) (-is-type 0 NonnegativeReal)))
+     (-> Zero Real B : (-PS (-is-type 1 PositiveReal) (-is-type 1 NonpositiveReal)))
+     (-> Real Real-Zero B : (-PS (-is-type 0 NegativeReal) -tt)) ;; False says nothing because of NaN
+     (-> Real-Zero Real B : (-PS (-is-type 1 PositiveReal) -tt)) ;; False says nothing because of NaN
+     (-> Byte Positive-Byte B : (-PS -tt (-is-type 0 Positive-Byte)))
+     (-> Byte Byte B : (-PS (-is-type 1 Positive-Byte) -tt))
+     (-> PositiveInteger Byte B : (-PS (-and (-is-type 0 Positive-Byte) (-is-type 1 Positive-Byte)) -tt))
+     (-> PositiveReal Byte B : (-PS (-is-type 1 Positive-Byte) -tt)) ; PositiveReal is ok here, no prop for #f
+     (-> Byte PositiveInteger B : (-PS -tt (-and (-is-type 0 Positive-Byte) (-is-type 1 Positive-Byte))))
+     (-> Byte PositiveRationalional B : (-PS -tt (-is-type 0 Positive-Byte))) ; can't be PositiveReal, which includes NaN
+     (-> NonnegativeInteger Byte B : (-PS (-and (-is-type 0 Byte) (-is-type 1 Positive-Byte)) -tt))
+     (-> NonnegativeReal Byte B : (-PS (-is-type 1 Positive-Byte) -tt))
+     (-> Byte NonnegativeInteger B : (-PS -tt (-is-type 1 Byte)))
+     (-> Index Positive-Index B : (-PS -tt (-is-type 0 Positive-Index)))
+     (-> Index Index B : (-PS (-is-type 1 Positive-Index) -tt))
+     (-> PositiveInteger Index B : (-PS (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index)) -tt))
+     (-> PositiveReal Index B : (-PS (-is-type 1 Positive-Index) -tt))
+     (-> Index PositiveInteger B : (-PS -tt (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index))))
+     (-> Index PositiveRationalional B : (-PS -tt (-is-type 0 Positive-Index))) ; can't be PositiveReal, which includes NaN
+     (-> NonnegativeInteger Index B : (-PS (-and (-is-type 0 Index) (-is-type 1 Positive-Index)) -tt))
+     (-> NonnegativeReal Index B : (-PS (-is-type 1 Positive-Index) -tt))
+     (-> Index NonnegativeInteger B : (-PS -tt (-is-type 1 Index)))
+     (-> Fixnum PositiveInteger B : (-PS -tt (-and (-is-type 0 PositiveFixnum) (-is-type 1 PositiveFixnum))))
+     (-> Fixnum PositiveRationalional B : (-PS -tt (-is-type 0 PositiveFixnum)))
+     (-> Fixnum NonnegativeInteger B : (-PS -tt (-and (-is-type 0 Nonnegative-Fixnum) (-is-type 1 Nonnegative-Fixnum))))
+     (-> Fixnum NonnegativeRationalional B : (-PS -tt (-is-type 0 Nonnegative-Fixnum)))
+     (-> NonnegativeInteger Fixnum B : (-PS (-and (-is-type 1 PositiveFixnum) (-is-type 0 Nonnegative-Fixnum)) -tt))
+     (-> NonnegativeReal Fixnum B : (-PS (-is-type 1 PositiveFixnum) -tt))
+     (-> Fixnum NonpositiveInteger B : (-PS (-and (-is-type 0 Negative-Fixnum) (-is-type 1 Nonpositive-Fixnum)) -tt))
+     (-> Fixnum NonpositiveReal B : (-PS (-is-type 0 Negative-Fixnum) -tt))
+     (-> NegativeInteger Fixnum B : (-PS -tt (-and (-is-type 0 Negative-Fixnum) (-is-type 1 Negative-Fixnum))))
+     (-> NegativeRationalional Fixnum B : (-PS -tt (-is-type 1 Negative-Fixnum)))
+     (-> NonpositiveInteger Fixnum B : (-PS -tt (-and (-is-type 0 Nonpositive-Fixnum) (-is-type 1 Nonpositive-Fixnum))))
+     (-> NonpositiveRationalional Fixnum B : (-PS -tt (-is-type 1 Nonpositive-Fixnum)))
+     (-> Real -PosInfinity B : (-PS (-not-type 0 (Un InexactReal-NaN -PosInfinity))
+                                     (-is-type 0 (Un InexactReal-NaN -PosInfinity))))
+     (-> -NegInfinity Real B : (-PS (-not-type 1 (Un InexactReal-NaN -NegInfinity))
+                                     (-is-type 1 (Un InexactReal-NaN -NegInfinity))))
+     (-> -PosInfinity Real B : -false-propset)
+     (-> Real -NegInfinity B : -false-propset)
+     ;; If applying props resulted in the interesection of the prop and the
+     ;; original type, we'd only need the cases for Fixnums and those for Reals.
+     ;; Cases for Integers and co would fall out naturally from the Real cases,
+     ;; since we'd keep track of the representation knowledge we'd already have,
+     ;; and the Real cases are enough to give us sign information.
+     ;; In the meantime, repetition is hard to avoid.
+     (<-type-pattern Integer PositiveInteger NonnegativeInteger NegativeInteger NonpositiveInteger Zero)
+     (<-type-pattern Rational PositiveRationalional NonnegativeRationalional NegativeRationalional NonpositiveRationalional Zero)
+     (<-type-pattern Float Positive-Float Nonnegative-Float Negative-Float Nonpositive-Float #:no-false-props? #t)
+     (<-type-pattern Single-Float Positive-Single-Float Nonnegative-Single-Float Negative-Single-Float Nonpositive-Single-Float #:no-false-props? #t)
+     (<-type-pattern InexactReal Positive-InexactReal Nonnegative-InexactReal Negative-InexactReal Nonpositive-InexactReal #:no-false-props? #t)
+     (<-type-pattern Real PositiveReal NonnegativeReal NegativeReal NonpositiveReal #:no-false-props? #t)
+     (->* (list R R) R B))]
+[>  (from-cases
+     (-> One Integer B : (-PS (-is-type 1 NonpositiveInteger) (-is-type 1 PositiveInteger)))
+     (-> Real Zero B : (-PS (-is-type 0 PositiveReal) (-is-type 0 NonpositiveReal)))
+     (-> Zero Real B : (-PS (-is-type 1 NegativeReal) (-is-type 1 NonnegativeReal)))
+     (-> Real Real-Zero B : (-PS (-is-type 0 PositiveReal) -tt)) ;; False says nothing because of NaN
+     (-> Real-Zero Real B : (-PS (-is-type 1 NegativeReal) -tt)) ;; False says nothing because of NaN
+     (-> Positive-Byte Byte B : (-PS -tt (-is-type 1 Positive-Byte)))
+     (-> Byte Byte B : (-PS (-is-type 0 Positive-Byte) -tt))
+     (-> Byte PositiveInteger B : (-PS (-and (-is-type 0 Positive-Byte) (-is-type 1 Positive-Byte)) -tt))
+     (-> Byte PositiveReal B : (-PS (-is-type 0 Positive-Byte) -tt))
+     (-> PositiveInteger Byte B : (-PS -tt (-and (-is-type 0 Positive-Byte) (-is-type 1 Positive-Byte))))
+     (-> PositiveRationalional Byte B : (-PS -tt (-is-type 1 Positive-Byte)))
+     (-> Byte NonnegativeInteger B : (-PS (-and (-is-type 0 Positive-Byte) (-is-type 1 Byte)) -tt))
+     (-> Byte NonnegativeReal B : (-PS (-is-type 0 Positive-Byte) -tt))
+     (-> NonnegativeInteger Byte B : (-PS -tt (-is-type 0 Byte)))
+     (-> Positive-Index Index B : (-PS -tt (-is-type 1 Positive-Index)))
+     (-> Index Index B : (-PS (-is-type 0 Positive-Index) -tt))
+     (-> Index PositiveInteger B : (-PS (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index)) -tt))
+     (-> Index PositiveReal B : (-PS (-is-type 0 Positive-Index) -tt))
+     (-> PositiveInteger Index B : (-PS -tt (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index))))
+     (-> PositiveRationalional Index B : (-PS -tt (-is-type 1 Positive-Index)))
+     (-> Index NonnegativeInteger B : (-PS (-and (-is-type 0 Positive-Index) (-is-type 1 Index)) -tt))
+     (-> Index NonnegativeReal B : (-PS (-is-type 0 Positive-Index) -tt))
+     (-> NonnegativeInteger Index B : (-PS -tt (-is-type 0 Index)))
+     (-> PositiveInteger Fixnum B : (-PS -tt (-and (-is-type 0 PositiveFixnum) (-is-type 1 PositiveFixnum))))
+     (-> PositiveRationalional Fixnum B : (-PS -tt (-is-type 1 PositiveFixnum)))
+     (-> NonnegativeInteger Fixnum B : (-PS -tt (-and (-is-type 0 Nonnegative-Fixnum) (-is-type 1 Nonnegative-Fixnum))))
+     (-> NonnegativeRationalional Fixnum B : (-PS -tt (-is-type 1 Nonnegative-Fixnum)))
+     (-> Fixnum NonnegativeInteger B : (-PS (-and (-is-type 0 PositiveFixnum) (-is-type 1 Nonnegative-Fixnum)) -tt))
+     (-> Fixnum NonnegativeReal B : (-PS (-is-type 0 PositiveFixnum) -tt))
+     (-> NonpositiveInteger Fixnum B : (-PS (-and (-is-type 0 Nonpositive-Fixnum) (-is-type 1 Negative-Fixnum)) -tt))
+     (-> NonpositiveReal Fixnum B : (-PS (-is-type 1 Negative-Fixnum) -tt))
+     (-> Fixnum NegativeInteger B : (-PS -tt (-and (-is-type 0 Negative-Fixnum) (-is-type 1 Negative-Fixnum))))
+     (-> Fixnum NegativeRationalional B : (-PS -tt (-is-type 0 Negative-Fixnum)))
+     (-> Fixnum NonpositiveInteger B : (-PS -tt (-and (-is-type 0 Nonpositive-Fixnum) (-is-type 1 Nonpositive-Fixnum))))
+     (-> Fixnum NonpositiveRationalional B : (-PS -tt (-is-type 0 Nonpositive-Fixnum)))
+     (-> -PosInfinity Real B : (-PS (-not-type 1 (Un InexactReal-NaN -PosInfinity))
+                                     (-is-type 1 (Un InexactReal-NaN -PosInfinity))))
+     (-> Real -NegInfinity B : (-PS (-not-type 0 (Un InexactReal-NaN -NegInfinity))
+                                     (-is-type 0 (Un InexactReal-NaN -NegInfinity))))
+     (-> Real -PosInfinity B : -false-propset)
+     (-> -NegInfinity Real B : -false-propset)
+     (>-type-pattern Integer PositiveInteger NonnegativeInteger NegativeInteger NonpositiveInteger Zero)
+     (>-type-pattern Rational PositiveRationalional NonnegativeRationalional NegativeRationalional NonpositiveRationalional Zero)
+     (>-type-pattern Float Positive-Float Nonnegative-Float Negative-Float Nonpositive-Float #:no-false-props? #t)
+     (>-type-pattern Single-Float Positive-Single-Float Nonnegative-Single-Float Negative-Single-Float Nonpositive-Single-Float #:no-false-props? #t)
+     (>-type-pattern InexactReal Positive-InexactReal Nonnegative-InexactReal Negative-InexactReal Nonpositive-InexactReal #:no-false-props? #t)
+     (>-type-pattern Real PositiveReal NonnegativeReal NegativeReal NonpositiveReal #:no-false-props? #t)
+     (->* (list R R) R B))]
+[<= (from-cases
+     (-> Integer One B : (-PS (-is-type 0 (Un NonpositiveInteger One)) (-is-type 0 PositiveInteger)))
+     (-> One Integer B : (-PS (-is-type 1 PositiveInteger) (-is-type 1 NonpositiveInteger)))
+     (-> Real Zero B : (-PS (-is-type 0 NonpositiveReal) (-is-type 0 PositiveReal)))
+     (-> Zero Real B : (-PS (-is-type 1 NonnegativeReal) (-is-type 1 NegativeReal)))
+     (-> Real Real-Zero B : (-PS (-is-type 0 NonpositiveReal) -tt)) ;; False says nothing because of NaN
+     (-> Real-Zero Real B : (-PS (-is-type 0 NonnegativeReal) -tt)) ;; False says nothing because of NaN
+     (-> Positive-Byte Byte B : (-PS (-is-type 1 Positive-Byte) -tt))
+     (-> Byte Byte B : (-PS -tt (-is-type 0 Positive-Byte)))
+     (-> PositiveInteger Byte B : (-PS (-and (-is-type 0 Positive-Byte) (-is-type 1 Positive-Byte)) -tt))
+     (-> PositiveReal Byte B : (-PS (-is-type 1 Positive-Byte) -tt))
+     (-> Byte PositiveInteger B : (-PS -tt (-and (-is-type 0 Positive-Byte) (-is-type 1 Positive-Byte))))
+     (-> Byte PositiveRationalional B : (-PS -tt (-is-type 0 Positive-Byte)))
+     (-> NonnegativeInteger Byte B : (-PS (-is-type 0 Byte) -tt))
+     (-> Byte NonnegativeInteger B : (-PS -tt (-and (-is-type 0 Positive-Byte) (-is-type 1 Byte))))
+     (-> Byte NonnegativeRationalional B : (-PS -tt (-is-type 0 Positive-Byte)))
+     (-> Positive-Index Index B : (-PS (-is-type 1 Positive-Index) -tt))
+     (-> Index Index B : (-PS -tt (-is-type 0 Positive-Index)))
+     (-> -Pos Index B : (-PS (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index)) -tt))
+     (-> PositiveReal Index B : (-PS (-is-type 1 Positive-Index) -tt))
+     (-> Index -Pos B : (-PS -tt (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index))))
+     (-> Index PositiveRationalional B : (-PS -tt (-is-type 0 Positive-Index)))
+     (-> NonnegativeInteger Index B : (-PS (-is-type 0 Index) -tt))
+     (-> Index NonnegativeInteger B : (-PS -tt (-and (-is-type 0 Positive-Index) (-is-type 1 Index))))
+     (-> Index NonnegativeRationalional B : (-PS -tt (-is-type 0 Positive-Index)))
+     (-> PositiveInteger Fixnum B : (-PS (-and (-is-type 0 PositiveFixnum) (-is-type 1 PositiveFixnum)) -tt))
+     (-> PositiveReal Fixnum B : (-PS (-is-type 1 PositiveFixnum) -tt))
+     (-> NonnegativeInteger Fixnum B : (-PS (-and (-is-type 0 Nonnegative-Fixnum) (-is-type 1 Nonnegative-Fixnum)) -tt))
+     (-> NonnegativeReal Fixnum B : (-PS (-is-type 1 Nonnegative-Fixnum) -tt))
+     (-> Fixnum NonnegativeInteger B : (-PS -tt (-and (-is-type 0 PositiveFixnum) (-is-type 1 Nonnegative-Fixnum))))
+     (-> Fixnum NonnegativeRationalional B : (-PS -tt (-is-type 0 PositiveFixnum)))
+     (-> NonpositiveInteger Fixnum B : (-PS -tt (-and (-is-type 0 Nonpositive-Fixnum) (-is-type 1 Negative-Fixnum))))
+     (-> NonpositiveRationalional Fixnum B : (-PS -tt (-is-type 1 Negative-Fixnum)))
+     (-> Fixnum NegativeInteger B : (-PS (-and (-is-type 0 Negative-Fixnum) (-is-type 1 Negative-Fixnum)) -tt))
+     (-> Fixnum NegativeReal B : (-PS (-is-type 0 Negative-Fixnum) -tt))
+     (-> Fixnum NonpositiveInteger B : (-PS (-and (-is-type 0 Nonpositive-Fixnum) (-is-type 1 Nonpositive-Fixnum)) -tt))
+     (-> Fixnum NonpositiveReal B : (-PS (-is-type 0 Nonpositive-Fixnum) -tt))
+     (-> Real -PosInfinity B : (-PS (-not-type 0 InexactReal-NaN) (-is-type 0 InexactReal-NaN)))
+     (-> -NegInfinity Real B : (-PS (-not-type 1 InexactReal-NaN) (-is-type 1 InexactReal-NaN)))
+     (-> -PosInfinity Real B : (-PS (-is-type 1 -PosInfinity) (-not-type 1 -PosInfinity)))
+     (-> Real -NegInfinity B : (-PS (-is-type 0 -NegInfinity) (-not-type 0 -NegInfinity)))
+     (<=-type-pattern Integer PositiveInteger NonnegativeInteger NegativeInteger NonpositiveInteger Zero)
+     (<=-type-pattern Rational PositiveRationalional NonnegativeRationalional NegativeRationalional NonpositiveRationalional Zero)
+     (<=-type-pattern Float Positive-Float Nonnegative-Float Negative-Float Nonpositive-Float #:no-false-props? #t)
+     (<=-type-pattern Single-Float Positive-Single-Float Nonnegative-Single-Float Negative-Single-Float Nonpositive-Single-Float #:no-false-props? #t)
+     (<=-type-pattern InexactReal Positive-InexactReal Nonnegative-InexactReal Negative-InexactReal Nonpositive-InexactReal #:no-false-props? #t)
+     (<=-type-pattern Real PositiveReal NonnegativeReal NegativeReal NonpositiveReal #:no-false-props? #t)
+     (->* (list R R) R B))]
+[>= (from-cases
+     (-> One Integer B : (-PS (-is-type 1 (Un One NonpositiveInteger)) (-is-type 1 PositiveInteger)))
+     (-> Integer One B : (-PS (-is-type 0 PositiveInteger) (-is-type 0 NonpositiveInteger)))
+     (-> Real Zero B : (-PS (-is-type 0 NonnegativeReal) (-is-type 0 NegativeReal)))
+     (-> Zero Real B : (-PS (-is-type 1 NonpositiveReal) (-is-type 1 PositiveReal)))
+     (-> Real Real-Zero B : (-PS (-is-type 0 NonnegativeReal) -tt)) ;; False says nothing because of NaN
+     (-> Real-Zero Real B : (-PS (-is-type 0 NonpositiveReal) -tt)) ;; False says nothing because of NaN
+     (-> Byte Positive-Byte B : (-PS (-is-type 0 Positive-Byte) -tt))
+     (-> Byte Byte B : (-PS -tt (-is-type 1 Positive-Byte)))
+     (-> Byte PositiveInteger B : (-PS (-and (-is-type 0 Positive-Byte) (-is-type 1 Positive-Byte)) -tt))
+     (-> Byte PositiveReal B : (-PS (-is-type 0 Positive-Byte) -tt))
+     (-> PositiveInteger Byte B : (-PS -tt (-and (-is-type 0 Positive-Byte) (-is-type 1 Positive-Byte))))
+     (-> PositiveRationalional Byte B : (-PS -tt (-is-type 1 Positive-Byte)))
+     (-> Byte NonnegativeInteger B : (-PS (-is-type 1 Byte) -tt))
+     (-> NonnegativeInteger Byte B : (-PS -tt (-and (-is-type 0 Byte) (-is-type 1 Positive-Byte))))
+     (-> NonnegativeRationalional Byte B : (-PS -tt (-is-type 1 Positive-Byte)))
+     (-> Index Positive-Index B : (-PS (-is-type 0 Positive-Index) -tt))
+     (-> Index Index B : (-PS -tt (-is-type 1 Positive-Index)))
+     (-> Index -Pos B : (-PS (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index)) -tt))
+     (-> Index PositiveReal B : (-PS (-is-type 0 Positive-Index) -tt))
+     (-> -Pos Index B : (-PS -tt (-and (-is-type 0 Positive-Index) (-is-type 1 Positive-Index))))
+     (-> PositiveRationalional Index B : (-PS -tt (-is-type 1 Positive-Index)))
+     (-> Index NonnegativeInteger B : (-PS (-is-type 1 Index) -tt))
+     (-> NonnegativeInteger Index B : (-PS -tt (-and (-is-type 0 Index) (-is-type 1 Positive-Index))))
+     (-> NonnegativeRationalional Index B : (-PS -tt (-is-type 1 Positive-Index)))
+     (-> Fixnum PositiveInteger B : (-PS (-and (-is-type 0 PositiveFixnum) (-is-type 1 PositiveFixnum)) -tt))
+     (-> Fixnum PositiveReal B : (-PS (-is-type 0 PositiveFixnum) -tt))
+     (-> Fixnum NonnegativeInteger B : (-PS (-and (-is-type 0 Nonnegative-Fixnum) (-is-type 1 Nonnegative-Fixnum)) -tt))
+     (-> Fixnum NonnegativeReal B : (-PS (-is-type 0 Nonnegative-Fixnum) -tt))
+     (-> NonnegativeInteger Fixnum B : (-PS -tt (-and (-is-type 0 Nonnegative-Fixnum) (-is-type 1 PositiveFixnum))))
+     (-> NonnegativeRationalional Fixnum B : (-PS -tt (-is-type 1 PositiveFixnum)))
+     (-> Fixnum NonpositiveInteger B : (-PS -tt (-and (-is-type 0 Negative-Fixnum) (-is-type 1 Nonpositive-Fixnum))))
+     (-> Fixnum NonpositiveRationalional B : (-PS -tt (-is-type 0 Negative-Fixnum)))
+     (-> NegativeInteger Fixnum B : (-PS (-and (-is-type 0 Negative-Fixnum) (-is-type 1 Negative-Fixnum)) -tt))
+     (-> NegativeReal Fixnum B : (-PS (-is-type 1 Negative-Fixnum) -tt))
+     (-> NonpositiveInteger Fixnum B : (-PS (-and (-is-type 0 Nonpositive-Fixnum) (-is-type 1 Nonpositive-Fixnum)) -tt))
+     (-> NonpositiveReal Fixnum B : (-PS (-is-type 1 Nonpositive-Fixnum) -tt))
+     (-> -PosInfinity Real B : (-PS (-not-type 1 InexactReal-NaN) (-is-type 1 InexactReal-NaN)))
+     (-> Real -NegInfinity B : (-PS (-not-type 0 InexactReal-NaN) (-is-type 0 InexactReal-NaN)))
+     (-> Real -PosInfinity B : (-PS (-is-type 0 -PosInfinity) (-not-type 0 -PosInfinity)))
+     (-> -NegInfinity Real B : (-PS (-is-type 1 -NegInfinity) (-not-type 1 -NegInfinity)))
+     (>=-type-pattern Integer PositiveInteger NonnegativeInteger NegativeInteger NonpositiveInteger Zero)
+     (>=-type-pattern Rational PositiveRationalional NonnegativeRationalional NegativeRationalional NonpositiveRationalional Zero)
+     (>=-type-pattern Float Positive-Float Nonnegative-Float Negative-Float Nonpositive-Float #:no-false-props? #t)
+     (>=-type-pattern Single-Float Positive-Single-Float Nonnegative-Single-Float Negative-Single-Float Nonpositive-Single-Float #:no-false-props? #t)
+     (>=-type-pattern InexactReal Positive-InexactReal Nonnegative-InexactReal Negative-InexactReal Nonpositive-InexactReal #:no-false-props? #t)
+     (>=-type-pattern Real PositiveReal NonnegativeReal NegativeReal NonpositiveReal #:no-false-props? #t)
+     (->* (list R R) R B))]
+
+[* (from-cases
+    (-> One)
+    (-> Number N : -true-propset : (-arg-path 0))
+    (commutative-case Zero Number Zero)
+    (-> Number One Number : -true-propset : (-arg-path 0))
+    (-> One Number N : -true-propset : (-arg-path 1))
+    (-> Positive-Byte Positive-Byte Positive-Index)
+    (-> Byte Byte Index)
+    (-> Positive-Byte Positive-Byte Positive-Byte PositiveFixnum)
+    (-> Byte Byte Byte Nonnegative-Fixnum)
+    (varop PositiveInteger)
+    (varop NonnegativeInteger)
+    (-> NegativeInteger NegativeInteger)
+    (-> NonpositiveInteger NonpositiveInteger)
+    (-> NegativeInteger NegativeInteger PositiveInteger)
+    (commutative-binop NegativeInteger PositiveInteger NegativeInteger)
+    (-> NonpositiveInteger NonpositiveInteger NonnegativeInteger)
+    (commutative-binop NonpositiveInteger NonnegativeInteger NonpositiveInteger)
+    (-> NegativeInteger NegativeInteger NegativeInteger NegativeInteger)
+    (-> NonpositiveInteger NonpositiveInteger NonpositiveInteger NonpositiveInteger)
+    (map varop (list Integer PositiveRationalional NonnegativeRationalional))
+    (-> NegativeRationalional NegativeRationalional)
+    (-> NonpositiveRationalional NonpositiveRationalional)
+    (-> NegativeRationalional NegativeRationalional PositiveRationalional)
+    (commutative-binop NegativeRationalional PositiveRationalional NegativeRationalional)
+    (-> NonpositiveRationalional NonpositiveRationalional NonnegativeRationalional)
+    (commutative-binop NonpositiveRationalional NonnegativeRationalional NonpositiveRationalional)
+    (-> NegativeRationalional NegativeRationalional NegativeRationalional NegativeRationalional)
+    (-> NonpositiveRationalional NonpositiveRationalional NonpositiveRationalional NonpositiveRationalional)
+    (varop Rational)
+    (varop-1+ Float-Zero)
+    ; no pos * -> pos, possible underflow
+    (varop-1+ Nonnegative-Float)
+    ;; can't do NonPos NonPos -> NonNeg: (* -1.0 0.0) -> NonPos!
+    (-> Negative-Float Negative-Float Nonnegative-Float) ; possible underflow, so no neg neg -> pos
+    (-> Negative-Float Negative-Float Negative-Float Nonpositive-Float) ; see above
+    ;; limited flonum contagion rules
+    ;; (* <float> 0) is exact 0 (i.e. not a float)
+    (commutative-case Nonnegative-Float PositiveReal) ; real args don't include 0
+    (commutative-case Float (Un PositiveReal NegativeReal) Float)
+    (map varop-1+ (list Float Single-Float-Zero Nonnegative-Single-Float))
+    ;; we could add contagion rules for negatives, but we haven't for now
+    (-> Negative-Single-Float Negative-Single-Float Nonnegative-Single-Float) ; possible underflow, so no neg neg -> pos
+    (-> Negative-Single-Float Negative-Single-Float Negative-Single-Float Nonpositive-Single-Float)
+    (commutative-case Nonnegative-Single-Float (Un PositiveRationalional Nonnegative-Single-Float))
+    (commutative-case Single-Float (Un PositiveRationalional NegativeRationalional Single-Float) Single-Float)
+    (map varop-1+ (list Single-Float InexactReal-Zero Nonnegative-InexactReal))
+    (-> Negative-InexactReal Negative-InexactReal Nonnegative-InexactReal)
+    (-> Negative-InexactReal Negative-InexactReal Negative-InexactReal Nonpositive-InexactReal)
+    (commutative-case Nonnegative-InexactReal (Un PositiveRationalional Nonnegative-InexactReal))
+    (commutative-case InexactReal (Un PositiveRationalional NegativeRationalional InexactReal) InexactReal)
+    (varop-1+ InexactReal)
+    ;; reals
+    (varop NonnegativeReal) ; (* +inf.0 0.0) -> +nan.0
+    (-> NonpositiveReal NonpositiveReal NonnegativeReal)
+    (commutative-binop NonpositiveReal NonnegativeReal NonpositiveReal)
+    (-> NonpositiveReal NonpositiveReal NonpositiveReal NonpositiveReal)
+    (varop Real)
+    ;; complexes
+    (commutative-case Float-Complex (Un Inexact-Complex InexactReal PositiveRationalional NegativeRationalional) Float-Complex)
+    (commutative-case Single-Float-Complex (Un Single-Float-Complex Single-Float PositiveRationalional NegativeRationalional) Single-Float-Complex)
+    (commutative-case Inexact-Complex (Un Inexact-Complex InexactReal PositiveRationalional NegativeRationalional) Inexact-Complex)
+    (varop Number))]
+[+ (from-cases
+    (-> Zero)
+    (-> Number N : -true-propset : (-arg-path 0))
+    (binop Zero)
+    (-> Number Zero Number : -true-propset : (-arg-path 0))
+    (-> Zero Number N : -true-propset : (-arg-path 1))
+    (-> Positive-Byte Positive-Byte Positive-Index)
+    (-> Byte Byte Index)
+    (-> Positive-Byte Positive-Byte Positive-Byte Positive-Index)
+    (-> Byte Byte Byte Index)
+    (commutative-binop Positive-Index Index PositiveFixnum)
+    (-> Positive-Index Index Index PositiveFixnum)
+    (-> Index Positive-Index Index PositiveFixnum)
+    (-> Index Index Positive-Index PositiveFixnum)
+    (-> Index Index Nonnegative-Fixnum)
+    (-> Index Index Index Nonnegative-Fixnum)
+    (commutative-binop Negative-Fixnum One Nonpositive-Fixnum)
+    (commutative-binop Nonpositive-Fixnum Nonnegative-Fixnum Fixnum)
+    (commutative-case PositiveInteger NonnegativeInteger PositiveInteger)
+    (commutative-case NegativeInteger NonpositiveInteger NegativeInteger)
+    (map varop (list NonnegativeInteger NonpositiveInteger Integer))
+    (commutative-case PositiveRationalional NonnegativeRationalional PositiveRationalional)
+    (commutative-case NegativeRationalional NonpositiveRationalional NegativeRationalional)
+    (map varop (list NonnegativeRationalional NonpositiveRationalional Rational))
+    ;; flonum + real -> flonum
+    (commutative-case Positive-Float NonnegativeReal Positive-Float)
+    (commutative-case PositiveReal Nonnegative-Float Positive-Float)
+    (commutative-case Negative-Float NonpositiveReal Negative-Float)
+    (commutative-case NegativeReal Nonpositive-Float Negative-Float)
+    (commutative-case Nonnegative-Float NonnegativeReal Nonnegative-Float)
+    (commutative-case Nonpositive-Float NonpositiveReal Nonpositive-Float)
+    (commutative-case Float Real Float)
+    (varop-1+ Float)
+    ;; single-flonum + rat -> single-flonum
+    (commutative-case Positive-Single-Float (Un NonnegativeRationalional Nonnegative-Single-Float) Positive-Single-Float)
+    (commutative-case (Un PositiveRationalional Positive-Single-Float) Nonnegative-Single-Float Positive-Single-Float)
+    (commutative-case Negative-Single-Float (Un NonpositiveRationalional Nonpositive-Single-Float) Negative-Single-Float)
+    (commutative-case (Un NegativeRationalional Negative-Single-Float) Nonpositive-Single-Float Negative-Single-Float)
+    (commutative-case Nonnegative-Single-Float (Un NonnegativeRationalional Nonnegative-Single-Float) Nonnegative-Single-Float)
+    (commutative-case Nonpositive-Single-Float (Un NonpositiveRationalional Nonpositive-Single-Float) Nonpositive-Single-Float)
+    (commutative-case Single-Float (Un Rational Single-Float) Single-Float)
+    (varop-1+ Single-Float)
+    ;; inexact-real + real -> inexact-real
+    (commutative-case Positive-InexactReal NonnegativeReal Positive-InexactReal)
+    (commutative-case PositiveReal Nonnegative-InexactReal Positive-InexactReal)
+    (commutative-case Negative-InexactReal NonpositiveReal Negative-InexactReal)
+    (commutative-case NegativeReal Nonpositive-InexactReal Negative-InexactReal)
+    (commutative-case Nonnegative-InexactReal NonnegativeReal Nonnegative-InexactReal)
+    (commutative-case Nonpositive-InexactReal NonpositiveReal Nonpositive-InexactReal)
+    (commutative-case InexactReal Real InexactReal)
+    ;; real
+    (commutative-case PositiveReal NonnegativeReal PositiveReal)
+    (commutative-case NegativeReal NonpositiveReal NegativeReal)
+    (map varop (list NonnegativeReal NonpositiveReal Real Exact-Number))
+    ;; complex
+    (commutative-case Float-Complex Number Float-Complex)
+    (commutative-case Float Inexact-Complex Float-Complex)
+    (commutative-case Single-Float-Complex (Un Rational Single-Float Single-Float-Complex) Single-Float-Complex)
+    (commutative-case Inexact-Complex (Un Rational InexactReal Inexact-Complex) Inexact-Complex)
+    (varop Number))]
+
+[- (from-cases
+    (binop Zero)
+    (half-negation-pattern PositiveFixnum Negative-Fixnum Nonnegative-Fixnum Nonpositive-Fixnum)
+    (negation-pattern PositiveInteger NegativeInteger NonnegativeInteger NonpositiveInteger)
+    (negation-pattern PositiveRationalional NegativeRationalional NonnegativeRationalional NonpositiveRationalional)
+    (negation-pattern Positive-Float Negative-Float Nonnegative-Float Nonpositive-Float)
+    (negation-pattern Positive-Single-Float Negative-Single-Float Nonnegative-Single-Float Nonpositive-Single-Float)
+    (negation-pattern Positive-InexactReal Negative-InexactReal Nonnegative-InexactReal Nonpositive-InexactReal)
+    (negation-pattern PositiveReal NegativeReal NonnegativeReal NonpositiveReal)
+
+    (-> Number Zero Number : -true-propset : (-arg-path 0))
+    (-> One One Zero)
+    (-> Positive-Byte One Byte)
+    (-> Positive-Index One Index)
+    (-> PositiveFixnum One Nonnegative-Fixnum)
+    (-> PositiveInteger One NonnegativeInteger)
+    (-> Nonnegative-Fixnum Nonnegative-Fixnum Fixnum)
+    (-> Negative-Fixnum Nonpositive-Fixnum Fixnum)
+    (->* (list PositiveInteger NonpositiveInteger) NonpositiveInteger PositiveInteger)
+    (->* (list NonnegativeInteger NonpositiveInteger) NonpositiveInteger NonnegativeInteger)
+    (->* (list NegativeInteger NonnegativeInteger) NonnegativeInteger NegativeInteger)
+    (->* (list NonpositiveInteger NonnegativeInteger) NonnegativeInteger NonpositiveInteger)
+    (varop-1+ Integer)
+    (->* (list PositiveRationalional NonpositiveRationalional) NonpositiveRationalional PositiveRationalional)
+    (->* (list NonnegativeRationalional NonpositiveRationalional) NonpositiveRationalional NonnegativeRationalional)
+    (->* (list NegativeRationalional NonnegativeRationalional) NonnegativeRationalional NegativeRationalional)
+    (->* (list NonpositiveRationalional NonnegativeRationalional) NonnegativeRationalional NonpositiveRationalional)
+    (varop-1+ Rational)
+    ;; floats - uncertain about sign properties in the presence of
+    ;; under/overflow, so these are left out
+    (varop-1+ Float)
+    (commutative-case Float Real Float)
+    (varop-1+ Single-Float)
+    (commutative-case Single-Float (Un Single-Float Rational) Single-Float)
+    (varop-1+ InexactReal)
+    (commutative-case InexactReal (Un InexactReal Rational) InexactReal)
+    (map varop-1+ (list Real Exact-Number))
+    (varop-1+ Float-Complex)
+    (commutative-case Float-Complex Number Float-Complex)
+    (varop-1+ Single-Float-Complex)
+    (commutative-case Single-Float-Complex (Un Single-Float-Complex Exact-Number) Single-Float-Complex)
+    (varop-1+ Inexact-Complex)
+    (commutative-case Inexact-Complex (Un Inexact-Complex Exact-Number) Inexact-Complex)
+    (varop-1+ Number))]
+[/ (from-cases ; very similar to multiplication, without closure properties for integers
+    (commutative-case Zero Number Zero)
+    (unop One)
+    (-> Number One Number : -true-propset : (-arg-path 0))
+    (varop-1+ PositiveRationalional)
+    (varop-1+ NonnegativeRationalional)
+    (-> NegativeRationalional NegativeRationalional)
+    (-> NonpositiveRationalional NonpositiveRationalional)
+    (-> NegativeRationalional NegativeRationalional PositiveRationalional)
+    (commutative-binop NegativeRationalional PositiveRationalional NegativeRationalional)
+    (-> NonpositiveRationalional NonpositiveRationalional NonnegativeRationalional)
+    (commutative-binop NonpositiveRationalional NonnegativeRationalional NonpositiveRationalional)
+    (-> NegativeRationalional NegativeRationalional NegativeRationalional NegativeRationalional)
+    (-> NonpositiveRationalional NonpositiveRationalional NonpositiveRationalional NonpositiveRationalional)
+    (varop-1+ Rational)
+    (-> Float-Zero (Un Positive-Float Negative-Float)) ; one of the infinities
+    ;; No (-> Nonnegative-Float Nonnegative-Float Nonnegative-Float), (/ 0.1 -0.0) => -inf.0
+    ;; No (-> Nonpositive-Float Nonpositive-Float), (/ 0.0) => +inf.0
+    (-> Negative-Float Negative-Float Nonnegative-Float)
+    (-> Negative-Float Negative-Float Negative-Float Nonpositive-Float)
+    ;; limited flonum contagion rules
+    ;; (/ 0 <float>) is exact 0 (i.e. not a float)
+    (commutative-case Positive-Float PositiveReal Nonnegative-Float)
+    (->* (list (Un PositiveReal NegativeReal Float) Float) Float Float)
+    (->* (list Float) Real Float) ; if any argument after the first is exact 0, not a problem
+    (varop-1+ Float)
+    (-> Single-Float-Zero (Un Positive-Single-Float Negative-Single-Float)) ; one of the infinities
+    ;; we could add contagion rules for negatives, but we haven't for now
+    (-> Negative-Single-Float Negative-Single-Float Nonnegative-Single-Float) ; possible underflow, so no neg neg -> pos
+    (-> Negative-Single-Float Negative-Single-Float Negative-Single-Float Nonpositive-Single-Float)
+    (commutative-case Positive-Single-Float (Un PositiveRationalional Positive-Single-Float) Nonnegative-Single-Float)
+    (commutative-case Single-Float (Un PositiveRationalional NegativeRationalional Single-Float) Single-Float)
+    (varop-1+ Single-Float)
+    (-> InexactReal-Zero (Un Positive-InexactReal Negative-InexactReal))
+    (-> Negative-InexactReal Negative-InexactReal Nonnegative-InexactReal)
+    (-> Negative-InexactReal Negative-InexactReal Negative-InexactReal Nonpositive-InexactReal)
+    (commutative-case Positive-InexactReal (Un PositiveRationalional Positive-InexactReal) Nonnegative-InexactReal)
+    (commutative-case InexactReal (Un PositiveRationalional NegativeRationalional InexactReal) InexactReal)
+    (varop-1+ InexactReal)
+    ;; reals
+    (varop-1+ PositiveReal NonnegativeReal)
+    (-> NonpositiveReal NonpositiveReal)
+    (-> NegativeReal NegativeReal NonnegativeReal) ; 0.0 is non-neg, but doesn't preserve sign
+    (-> NegativeReal PositiveReal NonpositiveReal) ; idem
+    (-> PositiveReal NegativeReal NonpositiveReal) ; idem
+    (-> NegativeReal NegativeReal NegativeReal NonpositiveReal) ; idem
+    (varop-1+ Real)
+    ;; complexes
+    (varop-1+ Float-Complex)
+    (commutative-case Float-Complex (Un Inexact-Complex InexactReal PositiveRationalional NegativeRationalional) Float-Complex)
+    (->* (list Float-Complex) Number Float-Complex) ; if any argument after the first is exact 0, not a problem
+    (varop-1+ Single-Float-Complex)
+    (commutative-case Single-Float-Complex (Un Single-Float-Complex Single-Float PositiveRationalional NegativeRationalional) Single-Float-Complex)
+    (varop-1+ Inexact-Complex)
+    (commutative-case Inexact-Complex (Un Inexact-Complex InexactReal PositiveRationalional NegativeRationalional) Inexact-Complex)
+    (varop-1+ Number))]
+
+[max
+ (from-cases (map varop (list Zero One))
+             (commutative-case One Zero)
+             (commutative-case Positive-Byte Byte)
+             (commutative-case Positive-Index Index)
+             (commutative-case PositiveFixnum Fixnum)
+             (commutative-case Nonnegative-Fixnum Fixnum)
+             (map varop (list Index Negative-Fixnum Nonpositive-Fixnum PositiveFixnum Nonnegative-Fixnum Fixnum))
+             (commutative-case PositiveInteger Integer)
+             (commutative-case NonnegativeInteger Integer)
+             (map varop (list NegativeInteger NonpositiveInteger PositiveInteger NonnegativeInteger Integer))
+             ;; we could have more cases here. for instance, when mixing PosInt
+             ;; and NegRats, we get a result of type PosInt (not just PosRat)
+             ;; there's a lot of these, but they may not be worth including
+             (commutative-case PositiveRationalional Rational)
+             (commutative-case NonnegativeRationalional Rational)
+             (map varop (list NegativeRationalional NonpositiveRationalional PositiveRationalional NonnegativeRationalional Rational
+                                 Float-Positive-Zero Float-Negative-Zero Float-Zero))
+             ;; inexactness is contagious: (max 3 2.3) => 3.0
+             ;; we could add cases to encode that
+             (commutative-case Positive-Float Float)
+             (commutative-case Nonnegative-Float Float)
+             (map varop (list Negative-Float Nonpositive-Float Positive-Float Nonnegative-Float Float
+                              Single-Float-Positive-Zero Single-Float-Negative-Zero Single-Float-Zero))
+             (varop Positive-Single-Float)
+             (commutative-case Positive-Single-Float Single-Float)
+             (varop Nonnegative-Single-Float)
+             (commutative-case Nonnegative-Single-Float Single-Float)
+             (map varop (list Negative-Single-Float Nonpositive-Single-Float Single-Float
+                              InexactReal-Positive-Zero InexactReal-Negative-Zero InexactReal-Zero))
+             (commutative-case Positive-InexactReal InexactReal)
+             (commutative-case Nonnegative-InexactReal InexactReal)
+             (map varop (list Negative-InexactReal Nonpositive-InexactReal Positive-InexactReal Nonnegative-InexactReal
+                              InexactReal Real-Zero))
+             (commutative-case PositiveReal Real)
+             (commutative-case NonnegativeReal Real)
+             (map varop (list NegativeReal NonpositiveReal PositiveReal NonnegativeReal Real)))]
+[min
+ (from-cases (map varop (list Zero One))
+             (commutative-case Zero One)
+             (map varop (list Positive-Byte Byte Positive-Index Index PositiveFixnum Nonnegative-Fixnum))
+             (commutative-case Negative-Fixnum Fixnum)
+             (commutative-case Nonpositive-Fixnum Fixnum)
+             (commutative-case Positive-Byte PositiveInteger)
+             (commutative-case Byte NonnegativeInteger)
+             (commutative-case PositiveFixnum PositiveInteger)
+             (commutative-case Nonnegative-Fixnum NonnegativeInteger)
+             (map varop (list Negative-Fixnum Nonpositive-Fixnum Fixnum PositiveInteger NonnegativeInteger))
+             (commutative-case NegativeInteger Integer)
+             (commutative-case NonpositiveInteger Integer)
+             (map varop (list NegativeInteger NonpositiveInteger Integer PositiveRationalional NonnegativeRationalional))
+             (commutative-case NegativeRationalional Rational)
+             (commutative-case NonpositiveRationalional Rational)
+             (map varop (list NegativeRationalional NonpositiveRationalional Rational
+                              Float-Positive-Zero Float-Negative-Zero Float-Zero
+                              Positive-Float Nonnegative-Float))
+             (commutative-case Negative-Float Float)
+             (commutative-case Nonpositive-Float Float)
+             (map varop (list Negative-Float Nonpositive-Float Float
+                              Single-Float-Positive-Zero Single-Float-Negative-Zero Single-Float-Zero
+                              Positive-Single-Float Nonnegative-Single-Float))
+             (commutative-case Negative-Single-Float Single-Float)
+             (commutative-case Nonpositive-Single-Float Single-Float)
+             (map varop (list Negative-Single-Float Nonpositive-Single-Float Single-Float
+                              InexactReal-Positive-Zero InexactReal-Negative-Zero InexactReal-Zero
+                              Positive-InexactReal Nonnegative-InexactReal))
+             (commutative-case Negative-InexactReal InexactReal)
+             (commutative-case Nonpositive-InexactReal InexactReal)
+             (map varop (list Negative-InexactReal Nonpositive-InexactReal InexactReal
+                              Real-Zero PositiveReal NonnegativeReal))
+             (commutative-case NegativeReal Real)
+             (commutative-case NonpositiveReal Real)
+             (map varop (list NegativeReal NonpositiveReal Real)))]
+
+[add1 (from-cases
+       (-> Zero One)
+       (-> One Positive-Byte)
+       (-> Byte Positive-Index)
+       (-> Index PositiveFixnum)
+       (-> Negative-Fixnum Nonpositive-Fixnum)
+       (-> Nonpositive-Fixnum Fixnum)
+       (-> NonnegativeInteger -Pos)
+       (-> NegativeInteger NonpositiveInteger)
+       (unop Integer)
+       (-> NonnegativeRationalional PositiveRationalional)
+       (unop Rational)
+       (-> Nonnegative-Float Positive-Float)
+       (unop Float)
+       (-> Nonnegative-Single-Float Positive-Single-Float)
+       (unop Single-Float)
+       (-> Nonnegative-InexactReal Positive-InexactReal)
+       (unop InexactReal)
+       (-> NonnegativeReal PositiveReal)
+       (map unop (list Real Float-Complex Single-Float-Complex Inexact-Complex Number)))]
+
+[sub1 (from-cases
+       (-> One Zero)
+       (-> Positive-Byte Byte)
+       (-> Positive-Index Index)
+       (-> Index Fixnum)
+       (-> PositiveFixnum Nonnegative-Fixnum)
+       (-> Nonnegative-Fixnum Fixnum)
+       (-> -Pos NonnegativeInteger)
+       (-> NonpositiveInteger NegativeInteger)
+       (unop Integer)
+       (-> NonpositiveRationalional NegativeRationalional)
+       (unop Rational)
+       (-> Nonpositive-Float Negative-Float)
+       (unop Float)
+       (-> Nonpositive-Single-Float Negative-Single-Float)
+       (unop Single-Float)
+       (-> Nonpositive-InexactReal Negative-InexactReal)
+       (unop InexactReal)
+       (-> NonpositiveReal NegativeReal)
+       (map unop (list Real Float-Complex Single-Float-Complex Inexact-Complex Number)))]
+
+[quotient
+ (from-cases
+  (Zero Integer . -> . Zero)
+  (map (lambda (t) (-> t One t)) ; division by one is identity
+       (list Positive-Byte Byte Positive-Index Index
+             PositiveFixnum Nonnegative-Fixnum Negative-Fixnum Nonpositive-Fixnum Fixnum))
+  (Byte NonnegativeInteger . -> . Byte)
+  (Byte Integer . -> . Fixnum) ; may be negative
+  (Index NonnegativeInteger . -> . Index)
+  (Index Integer . -> . Fixnum) ; same.
+  ;; we don't have equivalent for fixnums:
+  ;; (quotient min-fixnum -1) -> max-fixnum + 1
+  (commutative-binop Nonnegative-Fixnum Nonpositive-Fixnum Nonpositive-Fixnum)
+  (Nonpositive-Fixnum Nonpositive-Fixnum . -> . NonnegativeInteger)
+  (Nonnegative-Fixnum NonnegativeInteger . -> . Nonnegative-Fixnum)
+  (Nonnegative-Fixnum Integer . -> . Fixnum)
+  (binop NonnegativeInteger)
+  (commutative-binop NonnegativeInteger NonpositiveInteger NonpositiveInteger)
+  (NonpositiveInteger NonpositiveInteger . -> . NonnegativeInteger)
+  (binop Integer))]
+[remainder ; result has same sign as first arg
+ (from-cases
+  (One One . -> . Zero)
+  (map (lambda (t) (list (-> NonnegativeInteger t t)
+                         (-> t Integer t)))
+       (list Byte Index Nonnegative-Fixnum NonnegativeInteger))
+  (Nonpositive-Fixnum Integer . -> . Nonpositive-Fixnum)
+  (NonpositiveInteger Integer . -> . NonpositiveInteger)
+  (commutative-binop Fixnum Integer)
+  (binop Integer))]
+[modulo ; result has same sign as second arg
+ (from-cases
+  (One One . -> . Zero)
+  (map (lambda (t) (list (-> Integer t t)
+                         (-> t NonnegativeInteger t)))
+       (list Byte Index Nonnegative-Fixnum NonnegativeInteger))
+  (Integer Nonpositive-Fixnum . -> . Nonpositive-Fixnum)
+  (Integer NonpositiveInteger . -> . NonpositiveInteger)
+  (commutative-binop Fixnum Integer)
+  (binop Integer))]
+;; should be consistent with quotient and remainder
+[quotient/remainder
+ (from-cases
+  (Zero Integer . -> . (-values (list Zero Zero)))
+  (One One . -> . (-values (list Zero One)))
+  ;; division by one is identity, and has no remainder
+  (map (lambda (t) (t One . -> . (-values (list t Zero))))
+       (list Positive-Byte Byte Positive-Index Index
+             PositiveFixnum Nonnegative-Fixnum Negative-Fixnum Nonpositive-Fixnum Fixnum))
+  (Byte NonnegativeInteger . -> . (-values (list Byte Byte)))
+  (Byte Integer . -> . (-values (list Fixnum Byte)))
+  (Index NonnegativeInteger . -> . (-values (list Index Index)))
+  (Index Integer . -> . (-values (list Fixnum Index)))
+  (NonnegativeInteger Byte . -> . (-values (list NonnegativeInteger Byte)))
+  (NonnegativeInteger Index . -> . (-values (list NonnegativeInteger Index)))
+  (Nonnegative-Fixnum Nonnegative-Fixnum . -> . (-values (list Nonnegative-Fixnum Nonnegative-Fixnum)))
+  (Nonnegative-Fixnum Nonpositive-Fixnum . -> . (-values (list Nonpositive-Fixnum Nonnegative-Fixnum)))
+  (Nonpositive-Fixnum Nonnegative-Fixnum . -> . (-values (list Nonpositive-Fixnum Nonpositive-Fixnum)))
+  (Nonpositive-Fixnum Nonpositive-Fixnum . -> . (-values (list Nonnegative-Fixnum Nonpositive-Fixnum)))
+  (Nonnegative-Fixnum NonnegativeInteger . -> . (-values (list Nonnegative-Fixnum Nonnegative-Fixnum)))
+  (Nonnegative-Fixnum Integer . -> . (-values (list Fixnum Nonnegative-Fixnum)))
+  (NonnegativeInteger Nonnegative-Fixnum . -> . (-values (list NonnegativeInteger Nonnegative-Fixnum)))
+  ;; in the following cases, we can't guarantee that the quotient is within
+  ;; fixnum range: (quotient min-fixnum -1) -> max-fixnum + 1
+  (Nonpositive-Fixnum Integer . -> . (-values (list Integer Nonpositive-Fixnum)))
+  (Fixnum Integer . -> . (-values (list Integer Fixnum)))
+  (Integer Fixnum . -> . (-values (list Integer Fixnum)))
+  (NonnegativeInteger NonnegativeInteger . -> . (-values (list NonnegativeInteger NonnegativeInteger)))
+  (NonnegativeInteger NonpositiveInteger . -> . (-values (list NonpositiveInteger NonnegativeInteger)))
+  (NonnegativeInteger Integer . -> . (-values (list Integer NonnegativeInteger)))
+  (NonpositiveInteger NonnegativeInteger . -> . (-values (list NonpositiveInteger NonpositiveInteger)))
+  (NonpositiveInteger NonpositiveInteger . -> . (-values (list NonnegativeInteger NonpositiveInteger)))
+  (NonpositiveInteger Integer . -> . (-values (list Integer NonpositiveInteger)))
+  (Integer Integer . -> . (-values (list Integer Integer))))]
+
+[arithmetic-shift (cl->* (Zero NonpositiveInteger . -> . Zero)
+                         (Byte NonpositiveInteger . -> . Byte)
+                         (Index NonpositiveInteger . -> . Index)
+                         (Nonnegative-Fixnum NonpositiveInteger . -> . Nonnegative-Fixnum)
+                         (Fixnum NonpositiveInteger . -> . Fixnum)
+                         (NonnegativeInteger Integer . -> . NonnegativeInteger)
+                         (Integer Integer . -> . Integer))]
+
+[bitwise-and
+ (let ([mix-with-nat
+        (lambda (t)
+          (list (->* (list t) t t) ; closed
+                (->* (list NonnegativeInteger t) t t) ; brings result down
+                (->* (list t NonnegativeInteger) t t)))])
+   (from-cases (-> Negative-Fixnum) ; no args -> -1
+               (map mix-with-nat (list Zero Byte Index Nonnegative-Fixnum))
+               ;; closed on negatives, but not closed if we mix with positives
+               (map varop-1+ (list Negative-Fixnum Nonpositive-Fixnum Fixnum))
+               (map mix-with-nat (list NonnegativeInteger))
+               (map varop-1+ (list NegativeInteger NonpositiveInteger))
+               (null Integer . ->* . Integer)))]
+[bitwise-ior
+ (from-cases (varop Zero)
+             (map (lambda (l) (apply commutative-case l))
+                  (list (list One Zero)
+                        (list Positive-Byte Byte)
+                        (list Byte Byte) ; doesn't need commutative case (varop would do), but saves code to put it here
+                        (list Positive-Index Index)
+                        (list Index Index) ; same
+                        (list PositiveFixnum Nonnegative-Fixnum)
+                        (list Nonnegative-Fixnum Nonnegative-Fixnum)
+                        (list Negative-Fixnum Fixnum) ; as long as there's one negative, the result is negative
+                        (list Fixnum Fixnum)
+                        (list PositiveInteger NonnegativeInteger)
+                        (list NonnegativeInteger NonnegativeInteger)
+                        (list NegativeInteger Integer)
+                        (list Integer Integer))))]
+[bitwise-not (cl->* (-> Nonnegative-Fixnum Negative-Fixnum)
+                    (-> Negative-Fixnum Nonnegative-Fixnum)
+                    (-> Fixnum Fixnum)
+                    (-> NonnegativeInteger NegativeInteger)
+                    (-> NegativeInteger NonnegativeInteger)
+                    (-> Integer Integer))]
+[bitwise-xor
+ (from-cases
+  (-> One One)
+  (-> One One Zero)
+  (-> One One One One)
+  (map varop-1+ (list Zero Byte Index Nonnegative-Fixnum))
+  (-> Negative-Fixnum Negative-Fixnum)
+  (-> Nonpositive-Fixnum Nonpositive-Fixnum)
+  (-> Negative-Fixnum Negative-Fixnum Nonnegative-Fixnum) ; both have to be negative: (0 -1) -> -1
+  (commutative-binop Negative-Fixnum Nonnegative-Fixnum Negative-Fixnum)
+  (-> Negative-Fixnum Nonnegative-Fixnum Nonpositive-Fixnum) ; not commutative: (<pos> (ann 0 <non-pos>)) -> <pos>
+  (map varop-1+ (list Fixnum NonnegativeInteger))
+  (-> NegativeInteger NegativeInteger)
+  (-> NonpositiveInteger NonpositiveInteger)
+  (-> NegativeInteger NegativeInteger NonnegativeInteger)
+  (commutative-binop NegativeInteger NonnegativeInteger NegativeInteger)
+  (-> NegativeInteger NonnegativeInteger NonpositiveInteger) ; see above
+  (varop Integer))]
+[bitwise-bit-set? (-> Integer Integer B)]
+[bitwise-bit-field
+ (from-cases (map (lambda (t [r t]) (-> t Integer Integer t))
+                  (list Byte Index Nonnegative-Fixnum NonnegativeInteger))
+             ;; you can extract as many bits as you want from any negative number
+             (list (-> Integer Integer Integer Integer)))]
+[integer-length (-> Integer Nonnegative-Fixnum)]
+
+[abs (from-cases abs-cases)]
+
+;; exactness
+[exact->inexact
+ (from-cases (map unop all-float-types)
+             (Zero . -> . Float-Zero)
+             (PositiveInteger . -> . Positive-Float)
+             (NegativeInteger . -> . Negative-Float)
+             (PositiveRationalional . -> . Nonnegative-Float)
+             (NegativeRationalional . -> . Nonpositive-Float)
+             (Rational . -> . Float)
+             (map unop (list Float-Zero Positive-Float Nonnegative-Float Negative-Float Nonpositive-Float Float
+                             Single-Float-Zero Positive-Single-Float Nonnegative-Single-Float Negative-Single-Float Nonpositive-Single-Float Single-Float))
+             (NonnegativeReal . -> . Nonnegative-InexactReal) ; not for Pos, possible underflow
+             (NonpositiveReal . -> . Nonpositive-InexactReal)
+             (Real . -> . InexactReal)
+             (Float-Complex . -> . Float-Complex)
+             (Single-Float-Complex . -> . Single-Float-Complex)
+             (Inexact-Complex . -> . Inexact-Complex)
+             (Number . -> . (Un InexactReal Inexact-Complex)))]
+[inexact->exact
+ (from-cases (map unop all-rat-types)
+             (Real-Zero . -> . Zero)
+             (PositiveReal . -> . PositiveRationalional)
+             (NonnegativeReal . -> . NonnegativeRationalional)
+             (NegativeReal . -> . NegativeRationalional)
+             (NonpositiveReal . -> . NonpositiveRationalional)
+             (Real . -> . Rational)
+             (Number . -> . Exact-Number))]
+[fl->exact-integer (cl->*
+                    (Float-Zero . -> . Zero)
+                    (Positive-Float . -> . PositiveInteger)
+                    (Nonnegative-Float . -> . NonnegativeInteger)
+                    (Negative-Float . -> . NegativeInteger)
+                    (Nonpositive-Float . -> . NonpositiveInteger)
+                    (Float . -> . Integer))]
+[real->single-flonum
+ (from-cases (map unop single-flonum-types)
+             (Float-Positive-Zero . -> . Single-Float-Positive-Zero)
+             (Float-Negative-Zero . -> . Single-Float-Negative-Zero)
+             (Real-Zero . -> . Single-Float-Zero)
+             (PositiveInteger . -> . Positive-Single-Float)
+             (NegativeInteger . -> . Negative-Single-Float)
+             ;; no positive / negative cases, possible underflow
+             (NonnegativeReal . -> . Nonnegative-Single-Float)
+             (NonpositiveReal . -> . Nonpositive-Single-Float)
+             (Real . -> . Single-Float-Zero))]
+[real->double-flonum
+ (from-cases (map unop all-flonum-types)
+             (Single-Float-Positive-Zero . -> . Float-Positive-Zero)
+             (Single-Float-Negative-Zero . -> . Float-Negative-Zero)
+             (Real-Zero . -> . Float-Zero)
+             (PositiveInteger . -> . Positive-Float)
+             (NegativeInteger . -> . Negative-Float)
+             ;; no positive / negative cases, possible underflow
+             (NonnegativeReal . -> . Nonnegative-Float)
+             (NonpositiveReal . -> . Nonpositive-Float)
+             (Real . -> . Float))]
+
+[floor
+ (from-cases
+  (map unop all-int-types)
+  (-> NonnegativeRationalional NonnegativeInteger)
+  (-> NegativeRationalional NegativeInteger)
+  (-> NonpositiveRationalional NonpositiveInteger)
+  (-> Rational Integer)
+  (map unop (list Float-Positive-Zero Float-Negative-Zero Float-Zero
+                  Nonnegative-Float Negative-Float Nonpositive-Float Float
+                  Single-Float-Positive-Zero Single-Float-Negative-Zero Single-Float-Zero
+                  Nonnegative-Single-Float Negative-Single-Float Nonpositive-Single-Float Single-Float
+                  InexactReal-Positive-Zero InexactReal-Negative-Zero InexactReal-Zero
+                  Nonnegative-InexactReal Negative-InexactReal Nonpositive-InexactReal InexactReal
+                  Real-Zero NonnegativeReal NegativeReal NonpositiveReal Real)))]
+[ceiling
+ (from-cases
+  (map unop all-int-types)
+  (-> PositiveRationalional PositiveInteger)
+  (-> NonnegativeRationalional NonnegativeInteger)
+  (-> NonpositiveRationalional NonpositiveInteger)
+  (-> Rational Integer)
+  (map unop (list Float-Positive-Zero Float-Negative-Zero Float-Zero
+                  Positive-Float Nonnegative-Float Nonpositive-Float Float
+                  Single-Float-Positive-Zero Single-Float-Negative-Zero Single-Float-Zero
+                  Positive-Single-Float Nonnegative-Single-Float Nonpositive-Single-Float Single-Float
+                  InexactReal-Positive-Zero InexactReal-Negative-Zero InexactReal-Zero
+                  Positive-InexactReal Nonnegative-InexactReal Nonpositive-InexactReal InexactReal
+                  Real-Zero PositiveReal NonnegativeReal NonpositiveReal Real)))]
+[truncate (round-type)]
+[round (round-type)]
+
+[make-rectangular (cl->* (Rational Rational . -> . Exact-Number)
+                         (Float Float . -> . Float-Complex)
+                         (Float (Un PositiveReal NegativeReal) . -> . Float-Complex) ; no exact 0
+                         ((Un PositiveReal NegativeReal) Float . -> . Float-Complex)
+                         (Single-Float Single-Float . -> . Single-Float-Complex)
+                         (InexactReal InexactReal . -> . Inexact-Complex)
+                         (Real Real . -> . Number))]
+[make-polar (cl->* (Float Float . -> . Float-Complex)
+                   (Single-Float Single-Float . -> . Single-Float-Complex)
+                   (InexactReal InexactReal . -> . Inexact-Complex)
+                   (Real Real . -> . Number))]
+[real-part (from-cases
+            (map unop all-real-types)
+            (Exact-Number . -> . Rational)
+            (Float-Complex . -> . Float)
+            (Single-Float-Complex . -> . Single-Float)
+            (Inexact-Complex . -> . InexactReal)
+            (Number . -> . Real))]
+[imag-part (cl->* (Real . -> . Zero)
+                  (Exact-Number . -> . Rational)
+                  (Float-Complex . -> . Float)
+                  (Inexact-Complex . -> . InexactReal)
+                  (Number . -> . Real))]
+[magnitude (from-cases abs-cases
+                       (Float-Complex . -> . Nonnegative-Float)
+                       (Single-Float-Complex . -> . Nonnegative-Single-Float)
+                       (Inexact-Complex . -> . Nonnegative-InexactReal)
+                       (Number . -> . NonnegativeReal))]
+[angle     (cl->* (PositiveReal . -> . Zero)
+                  (Float-Complex . -> . Float)
+                  (Inexact-Complex . -> . InexactReal)
+                  (Number . -> . (Un InexactReal Zero)))]
+[numerator
+ (from-cases (map unop all-int-types)
+             (PositiveRationalional . -> . PositiveInteger)
+             (NonnegativeRationalional . -> . NonnegativeInteger)
+             (NegativeRationalional . -> . NegativeInteger)
+             (NonpositiveRationalional . -> . NonpositiveInteger)
+             (Rational . -> . Integer)
+             ;; includes rational types, but these have been matched already
+             (map unop all-real-types))]
+[denominator (cl->* (Integer . -> . One)
+                    (Rational . -> . PositiveInteger)
+                    (Float . -> . Positive-Float)
+                    (Single-Float . -> . Positive-Single-Float)
+                    (InexactReal . -> . Positive-InexactReal)
+                    (Real . -> . PositiveReal))]
+[rationalize
+ (from-cases (map (lambda (t) (-> t Rational t))
+                  all-int-types)
+             (NonnegativeRationalional Rational . -> . NonnegativeRationalional) ; non-zero args produce zero
+             (NonpositiveRationalional Rational . -> . NonpositiveRationalional)
+             (Rational Rational . -> . Rational)
+             (map (lambda (l) (apply commutative-binop l))
+                  ;; actually, second argument could be negative in all cases,
+                  ;; and it would still work, but this would require twice as
+                  ;; many cases
+                  (list (list NonnegativeReal Nonnegative-Float)
+                        (list NonpositiveReal Nonpositive-Float)
+                        (list Real Float)
+                        (list NonnegativeReal Nonnegative-Single-Float)
+                        (list NonpositiveReal Nonpositive-Single-Float)
+                        (list Real Single-Float)
+                        (list NonnegativeReal Nonnegative-InexactReal)
+                        (list NonpositiveReal Nonpositive-InexactReal)
+                        (list Real InexactReal)))
+             (map binop (list NonnegativeReal NonpositiveReal Real)))]
+[expt
+ (from-cases (-> One Rational One)
+             (map (lambda (t) (-> t Zero One)) all-number-types) ; will error if negative
+             (PositiveInteger NonnegativeInteger . -> . PositiveInteger)
+             (NonnegativeInteger NonnegativeInteger . -> . NonnegativeInteger)
+             (Integer NonnegativeInteger . -> . Integer)
+             (PositiveInteger Integer . -> . PositiveRationalional)
+             (NonnegativeInteger Integer . -> . NonnegativeRationalional)
+             (Integer Integer . -> . Rational)
+             (PositiveRationalional Integer . -> . PositiveRationalional)
+             (NonnegativeRationalional Integer . -> . NonnegativeRationalional)
+             (Rational Integer . -> . Rational)
+             (Nonnegative-Float Float . -> . Nonnegative-Float)
+             (Nonnegative-Float Real . -> . (Un Nonnegative-Float One))
+             (PositiveReal Nonnegative-Float . -> . (Un Nonnegative-Float One))
+             ;; even integer exponents can give complex results
+             ;; too large exponents turn into infinities, and (expt -inf.0 -inf.0) => nan.0+nan.0i
+             ;; so no narrower cases for those. fixnums are ok, though
+             (Float (Un Negative-Fixnum PositiveFixnum) . -> . Float)
+             (Float Fixnum . -> . (Un Float One))
+             (Float Float . -> . (Un Float Float-Complex))
+             ;; 1st arg can't be non-neg, -0.0 gives the wrong sign
+             (Positive-Single-Float (Un Single-Float Negative-Fixnum PositiveFixnum) . -> . Nonnegative-Single-Float)
+             (Nonnegative-Single-Float (Un Single-Float Negative-Fixnum PositiveFixnum) . -> . Single-Float)
+             (Single-Float (Un Negative-Fixnum PositiveFixnum) . -> . Single-Float)
+             (Single-Float Fixnum . -> . (Un Single-Float One))
+             (Single-Float Single-Float . -> . (Un Single-Float Single-Float-Complex))
+             (Positive-InexactReal (Un Negative-Fixnum PositiveFixnum) . -> . Nonnegative-InexactReal)
+             (Nonnegative-InexactReal (Un Negative-Fixnum PositiveFixnum) . -> . InexactReal)
+             (PositiveReal Real . -> . NonnegativeReal)
+             (NonnegativeReal Real . -> . Real)
+             (InexactReal (Un Negative-Fixnum PositiveFixnum) . -> . InexactReal)
+             (InexactReal InexactReal . -> . (Un InexactReal Inexact-Complex))
+             (Real NonnegativeInteger . -> . Real)
+             (Float-Complex Float-Complex . -> . Float-Complex)
+             (Float-Complex Float . -> . (Un Float-Complex Float))
+             (Float-Complex InexactReal . -> . (Un Float-Complex InexactReal))
+             (Float-Complex Inexact-Complex . -> . Float-Complex)
+             (Single-Float-Complex Single-Float-Complex . -> . Single-Float-Complex)
+             (Single-Float-Complex Single-Float . -> . (Un Single-Float-Complex Single-Float))
+             (Inexact-Complex Inexact-Complex . -> . Inexact-Complex)
+             (Number Number . -> . Number))]
+[sqrt
+ (from-cases
+  (map unop (list Zero One
+                  Float-Positive-Zero Float-Negative-Zero Float-Zero Positive-Float Nonnegative-Float
+                  Single-Float-Positive-Zero Single-Float-Negative-Zero Single-Float-Zero Positive-Single-Float Nonnegative-Single-Float
+                  InexactReal-Positive-Zero InexactReal-Negative-Zero InexactReal-Zero Positive-InexactReal Nonnegative-InexactReal
+                  Real-Zero PositiveReal NonnegativeReal))
+  (Float-Complex . -> . Float-Complex)
+  (Single-Float-Complex . -> . Single-Float-Complex)
+  (Inexact-Complex . -> . Inexact-Complex)
+  (Number . -> . Number))]
+[integer-sqrt
+ (from-cases
+  (-> (Un Real-Zero One) (Un Real-Zero One) : -true-propset : (-arg-path 0))
+  (unop Byte)
+  (Nonnegative-Fixnum . -> . Index)
+  (NonnegativeRationalional . -> . NonnegativeInteger)
+  (map unop (list Nonnegative-Float Nonnegative-Single-Float Nonnegative-InexactReal NonnegativeReal))
+  ; This errors on NaN so we can ignore it
+  (Rational . -> . Exact-Number)
+  (Real . -> . Number))] ; defined on inexact integers too, but not complex
+[integer-sqrt/remainder
+ (from-cases
+  (Real-Zero . -> . (make-Values (list (-result Real-Zero -true-propset (-arg-path 0))
+                                       (-result Real-Zero -true-propset (-arg-path 0)))))
+  (One . -> . (-values (list One Zero)))
+  (Byte . -> . (-values (list Byte Byte)))
+  (Index . -> . (-values (list Index Index)))
+  (Nonnegative-Fixnum . -> . (-values (list Index Nonnegative-Fixnum)))
+  (NonnegativeRationalional . -> . (-values (list NonnegativeInteger NonnegativeInteger)))
+
+  (map (λ (t) (t . -> . (-values (list t t))))
+       (list Nonnegative-Float
+             Nonnegative-Single-Float
+             Nonnegative-InexactReal
+             NonnegativeReal))
+
+  (Rational . -> . (-values (list Exact-Number Integer)))
+  (Real . -> . (-values (list Number Real))))] ; defined on inexact integers too
+
+[log (cl->*
+      (NonnegativeRationalional . -> . Real)
+      (Float-Zero . -> . Negative-Float)
+      (Nonnegative-Float . -> . Float)
+      (Single-Float-Zero . -> . Negative-Single-Float)
+      (Nonnegative-Single-Float . -> . Single-Float)
+      (InexactReal-Zero . -> . Negative-InexactReal)
+      (Nonnegative-InexactReal . -> . InexactReal)
+      (NonnegativeReal . -> . Real)
+      (Float-Complex . -> . Float-Complex)
+      (Single-Float-Complex . -> . Single-Float-Complex)
+      (Inexact-Complex . -> . Inexact-Complex)
+      (Number . -> . Number))]
+[exp (from-cases (Zero . -> . One)
+                 (map unop
+                      (list Float Single-Float InexactReal Real
+                            Float-Complex Single-Float-Complex Inexact-Complex Number)))]
+
+[cos (from-cases (Zero . -> . One)
+                 (map unop
+                      (list Float Single-Float InexactReal Real
+                            Float-Complex Single-Float-Complex Inexact-Complex Number)))]
+[sin (from-cases (map unop
+                      (list Zero Float Single-Float InexactReal Real
+                            Float-Complex Single-Float-Complex Inexact-Complex Number)))]
+[tan (from-cases (map unop
+                      (list Zero Float Single-Float InexactReal Real
+                            Float-Complex Single-Float-Complex Inexact-Complex Number)))]
+[acos (from-cases (One . -> . Zero)
+                  (map unop
+                       (list Float Single-Float InexactReal Real
+                             Float-Complex Single-Float-Complex Inexact-Complex Number)))]
+[asin (from-cases (Zero . -> . One)
+                  (map unop
+                       (list Float Single-Float InexactReal Real
+                             Float-Complex Single-Float-Complex Inexact-Complex Number)))]
+[atan (from-cases
+       (map unop (list Zero Float Single-Float InexactReal Real
+                       Float-Complex Single-Float-Complex Inexact-Complex Number))
+       ;; 2-arg case, atan2
+       (Zero PositiveRationalional . -> . Zero)
+       (map binop (list Float Single-Float InexactReal Real)))]
+
+[gcd (from-cases (varop Zero)
+                 (varop-1+ One)
+                 (varop-1+ Positive-Byte)
+                 (varop Byte)
+                 (varop-1+ Positive-Index)
+                 (varop Index)
+                 (varop-1+ PositiveFixnum)
+                 (varop Fixnum Nonnegative-Fixnum)
+                 (varop-1+ PositiveInteger)
+                 (varop Integer NonnegativeInteger)
+                 (varop-1+ PositiveRationalional)
+                 (varop Rational NonnegativeRationalional)
+                 ;; also supports inexact integers
+                 (varop-1+ Positive-Float)
+                 (commutative-case Positive-Float PositiveReal Positive-Float)
+                 (varop Float Nonnegative-Float)
+                 (commutative-case Float Real Nonnegative-Float)
+                 (varop-1+ Positive-Single-Float)
+                 (varop Single-Float Nonnegative-Single-Float)
+                 (varop-1+ Positive-InexactReal)
+                 (varop InexactReal Nonnegative-InexactReal)
+                 ;; Note: this will mess up error messages, since only integers
+                 ;; (exact or not) are accepted, not any reals.
+                 ;; should we only accept exact integers?
+                 (varop-1+ PositiveReal)
+                 (varop Real NonnegativeReal))]
+[lcm (from-cases (map unop (list Zero One Positive-Byte Byte Positive-Index Index PositiveFixnum))
+                 (Negative-Fixnum . -> . PositiveFixnum)
+                 (Fixnum . -> . Nonnegative-Fixnum)
+                 (commutative-case Zero Rational) ; zero anywhere -> zero
+                 (commutative-case Real-Zero Real)
+                 (map (lambda (t) (commutative-binop One t))
+                      (list Positive-Byte Byte Positive-Index Index PositiveFixnum))
+                 (commutative-binop One Negative-Fixnum PositiveFixnum)
+                 (commutative-binop One Fixnum Nonnegative-Fixnum)
+                 (binop Positive-Byte Positive-Index)
+                 (binop Byte Index)
+                 (varop (Un PositiveInteger NegativeInteger) PositiveInteger)
+                 (varop Integer NonnegativeInteger)
+                 (varop (Un PositiveRationalional NegativeRationalional) PositiveRationalional)
+                 (varop Rational NonnegativeRationalional)
+                 ;; also supports inexact integers
+                 (commutative-case Float-Zero Real Float-Zero)
+                 (commutative-case Single-Float-Zero Real Single-Float-Zero)
+                 (commutative-case InexactReal-Zero Real InexactReal-Zero)
+                 (varop-1+ (Un Positive-Float Negative-Float) Positive-Float)
+                 (varop-1+ Float Nonnegative-Float)
+                 (commutative-case (Un Positive-Float Negative-Float) (Un PositiveReal NegativeReal) Positive-Float)
+                 (commutative-case Float (Un PositiveReal NegativeReal) Nonnegative-Float) ; exact 0 -> exact 0
+                 (varop-1+ (Un Positive-Single-Float Negative-Single-Float) Positive-Single-Float)
+                 (varop-1+ Single-Float Nonnegative-Single-Float)
+                 (varop-1+ (Un Positive-InexactReal Negative-InexactReal) Positive-InexactReal)
+                 (varop-1+ InexactReal Nonnegative-InexactReal)
+                 ;; Note: same as above.
+                 (varop (Un PositiveReal NegativeReal) PositiveReal)
+                 (varop Real NonnegativeReal))]
+
+;; racket/math
+
+[sgn (cl->* (Zero . -> . Zero)
+            (PositiveRationalional . -> . One)
+            (NonnegativeRationalional . -> . (Un Zero One))
+            (NegativeRationalional . -> . (-val -1))
+            (NonpositiveRationalional . -> .(Un (-val -1) Zero))
+            (Rational . -> . (Un (-val -1) Zero One))
+            (Float . -> . Float)
+            (Single-Float . -> . Single-Float)
+            (Real . -> . Real))]
+
+[pi Positive-Float]
+[pi.f Positive-Single-Float]
+[sqr (from-cases (map unop (list Zero One))
+                 (-> Positive-Byte Positive-Index)
+                 (-> Byte Index)
+                 (unop PositiveInteger)
+                 (-> Integer NonnegativeInteger)
+                 (unop PositiveRationalional)
+                 (-> Rational NonnegativeRationalional)
+                 ;; possible underflow, no pos -> pos
+                 (-> Float Nonnegative-Float)
+                 (-> Single-Float Nonnegative-Single-Float)
+                 (-> InexactReal Nonnegative-InexactReal)
+                 (-> Real NonnegativeReal)
+                 (map unop (list Float-Complex Single-Float-Complex
+                                 Inexact-Complex Exact-Number Number)))]
+[conjugate (from-cases
+            (map unop all-real-types)
+            (Float-Complex . -> . Float-Complex)
+            (Single-Float-Complex . -> . Single-Float-Complex)
+            (Inexact-Complex . -> . Inexact-Complex)
+            (Exact-Number . -> . Exact-Number)
+            (Number . -> . Number))]
+[sinh (from-cases
+       (unop Zero) ; only exact case
+       ;; possible underflow, no pos -> pos. 0 -> 0, no NonnegativeRationalional -> Nonnegative-Float
+       ((Un PositiveRationalional Nonnegative-Float) . -> . Nonnegative-Float)
+       ((Un NegativeRationalional Nonpositive-Float) . -> . Nonpositive-Float)
+       (map unop (list Float-NaN Float
+                       Single-Flonum-NaN Nonnegative-Single-Float Nonpositive-Single-Float Single-Float
+                       Nonnegative-InexactReal Nonpositive-InexactReal InexactReal
+                       NonnegativeReal NonpositiveReal Real
+                       Float-Complex Single-Float-Complex Inexact-Complex Number)))]
+[cosh (from-cases ; no exact cases
+       (map unop (list Float-NaN Single-Flonum-NaN))
+       ((Un Rational Float) . -> . Positive-Float)
+       (Single-Float . -> . Positive-Single-Float)
+       (InexactReal . -> . Positive-InexactReal)
+       (Real . -> . PositiveReal)
+       (map unop (list Float-Complex Single-Float-Complex Inexact-Complex Number)))]
+[tanh (from-cases ; same as sinh
+       (unop Zero) ; only exact case
+       ;; possible underflow, no pos -> pos. 0 -> 0, no NonnegativeRationalional -> Nonnegative-Float
+       ((Un PositiveRationalional Nonnegative-Float) . -> . Nonnegative-Float)
+       ((Un NegativeRationalional Nonpositive-Float) . -> . Nonpositive-Float)
+       (map unop (list Float-NaN Float
+                       Single-Flonum-NaN Nonnegative-Single-Float Nonpositive-Single-Float Single-Float
+                       Nonnegative-InexactReal Nonpositive-InexactReal InexactReal
+                       NonnegativeReal NonpositiveReal Real
+                       Float-Complex Single-Float-Complex Inexact-Complex Number)))]
+
+[degrees->radians
+ (from-cases
+  (unop Zero) ; only exact case
+  ((Un PositiveRationalional Positive-Float) . -> . Nonnegative-Float) ; possible underflow, no pos -> pos
+  ((Un NegativeRationalional Negative-Float) . -> . Nonpositive-Float)
+  ((Un Positive-Single-Float) . -> . Nonnegative-Single-Float)
+  ((Un Negative-Single-Float) . -> . Nonpositive-Single-Float)
+  (map unop (list Float-NaN Single-Flonum-NaN
+                  Nonnegative-Float Nonpositive-Float Float
+                  Nonnegative-Single-Float Nonpositive-Single-Float Single-Float
+                  Positive-Inexact-Real Nonnegative-Inexact-Real Negative-Inexact-Real Nonpositive-Inexact-Real Inexact-Real
+                  PositiveReal NonnegativeReal NegativeReal NonpositiveReal Real)))]
+
+[radians->degrees
+ (from-cases
+  (unop Zero) ; only exact case
+  ((Un PositiveRationalional Positive-Float) . -> . Positive-Float)
+  ((Un NegativeRationalional Negative-Float) . -> . Negative-Float)
+  (map unop (list Float-NaN Single-Flonum-NaN
+                  Nonnegative-Float Nonpositive-Float Float
+                  Positive-Single-Float Nonnegative-Single-Float Negative-Single-Float Nonpositive-Single-Float Single-Float
+                  Positive-Inexact-Real Nonnegative-Inexact-Real Negative-Inexact-Real Nonpositive-Inexact-Real Inexact-Real
+                  PositiveReal NonnegativeReal NegativeReal NonpositiveReal Real)))]
+
+[exact-round (exact-round-type)]
+[exact-truncate (exact-round-type)]
+
+[exact-floor
+ (from-cases
+  (map unop all-int-types)
+  (inexact-zero->exact-zero-type)
+  (-> (Un NonnegativeRationalional Nonnegative-Float Nonnegative-Single-Float Nonnegative-Inexact-Real NonnegativeReal) NonnegativeInteger)
+  (-> (Un NegativeRationalional Negative-Float Negative-Single-Float Negative-Inexact-Real NegativeReal) NegativeInteger)
+  (-> (Un NonpositiveRationalional Nonpositive-Float Nonpositive-Single-Float Nonpositive-Inexact-Real NonpositiveReal) NonpositiveInteger)
+  (-> (Un Rational Float Single-Float Inexact-Real Real) Integer))]
+
+[exact-ceiling
+ (from-cases
+  (map unop all-int-types)
+  (inexact-zero->exact-zero-type)
+  (-> (Un PositiveRationalional Positive-Float Positive-Single-Float Positive-Inexact-Real PositiveReal) PositiveInteger)
+  (-> (Un NonnegativeRationalional Nonnegative-Float Nonnegative-Single-Float Nonnegative-Inexact-Real NonnegativeReal) NonnegativeInteger)
+  (-> (Un NonpositiveRationalional Nonpositive-Float Nonpositive-Single-Float Nonpositive-Inexact-Real NonpositiveReal) NonpositiveInteger)
+  (-> (Un Rational Float Single-Float Inexact-Real Real) Integer))]
+
+[nan? (make-pred-ty (list Real) B Inexact-Real-NaN)]
+
+[infinite? (make-pred-ty (list Real) B (Un -PosInfinity -NegInfinity))]
+[positive-integer? (asym-pred Univ B (-PS (-is-type 0 (Un PositiveInteger Positive-Float Positive-Single-Float))
+                                          (-not-type 0 PositiveInteger)))]
+[negative-integer? (asym-pred Univ B (-PS (-is-type 0 (Un NegativeInteger Negative-Float Negative-Single-Float))
+                                          (-not-type 0 NegativeInteger)))]
+[nonpositive-integer? (asym-pred Univ B (-PS (-is-type 0 (Un NonpositiveInteger Nonpositive-Float Nonpositive-Single-Float))
+                                             (-not-type 0 NonpositiveInteger)))]
+[nonnegative-integer? (asym-pred Univ B (-PS (-is-type 0 (Un NonnegativeInteger Nonnegative-Float Nonnegative-Single-Float))
+                                             (-not-type 0 NonnegativeInteger)))]
+[natural? (make-pred-ty NonnegativeInteger)]
+
+;; racket/fixnum
+[fx+ (fx+-type)]
+[fx- (fx--type)]
+[fx* (fx*-type)]
+[fxquotient (fxquotient-type)]
+[fxremainder (fxremainder-type)]
+[fxmodulo (fxmodulo-type)]
+[fxabs (fxabs-type)]
+
+[fxand (fxand-type)]
+[fxior (fxior-type)]
+[fxxor (fxxor-type)]
+[fxnot (fxnot-type)]
+[fxlshift (fxlshift-type)]
+[fxrshift (fxrshift-type)]
+
+[fx= (fx=-type)]
+[fx< (fx<-type)]
+[fx> (fx>-type)]
+[fx<= (fx<=-type)]
+[fx>= (fx>=-type)]
+[fxmin (fxmin-type)]
+[fxmax (fxmax-type)]
+
+[unsafe-fx+ (fx+-type)]
+[unsafe-fx- (fx--type)]
+[unsafe-fx* (fx*-type)]
+[unsafe-fxquotient (fxquotient-type)]
+[unsafe-fxremainder (fxremainder-type)]
+[unsafe-fxmodulo (fxmodulo-type)]
+[unsafe-fxabs (fxabs-type)]
+
+[unsafe-fxand (fxand-type)]
+[unsafe-fxior (fxior-type)]
+[unsafe-fxxor (fxxor-type)]
+[unsafe-fxnot (fxnot-type)]
+[unsafe-fxlshift (fxlshift-type)]
+[unsafe-fxrshift (fxrshift-type)]
+
+[unsafe-fx= (fx=-type)]
+[unsafe-fx< (fx<-type)]
+[unsafe-fx> (fx>-type)]
+[unsafe-fx<= (fx<=-type)]
+[unsafe-fx>= (fx>=-type)]
+[unsafe-fxmin (fxmin-type)]
+[unsafe-fxmax (fxmax-type)]
+
+
+;; flonum ops
+[flabs (flabs-type 'flonum)]
+[fl+ (fl+-type 'flonum)]
+[fl- (fl--type 'flonum)]
+[fl* (fl*-type 'flonum)]
+[fl/ (fl/-type 'flonum)]
+[fl= (fl=-type 'flonum)]
+[fl<= (fl<=-type 'flonum)]
+[fl>= (fl>=-type 'flonum)]
+[fl> (fl>-type 'flonum)]
+[fl< (fl<-type 'flonum)]
+[flmin (flmin-type 'flonum)]
+[flmax (flmax-type 'flonum)]
+[flround (flround-type 'flonum)]
+[flfloor (flfloor-type 'flonum)]
+[flceiling (flceiling-type 'flonum)]
+[fltruncate (flround-type 'flonum)]
+[flsin (fl-unop)] ; special cases (0s) not worth special-casing
+[flcos (fl-unop)]
+[fltan (fl-unop)]
+[flatan (fl-unop)]
+[flasin (fl-unop)]
+[flacos (fl-unop)]
+[fllog (fllog-type 'flonum)]
+[flexp (flexp-type 'flonum)]
+[flsqrt (flsqrt-type 'flonum)]
+[flexpt (flexpt-type 'flonum)]
+[->fl (fx->fl-type 'flonum)]
+[fx->fl (fx->fl-type 'flonum)]
+[fl->fx (fl->fx-type 'flonum)]
+[make-flrectangular (make-flrectangular-type)]
+[flreal-part (flreal-part-type)]
+[flimag-part (flimag-part-type)]
+[flrandom (flrandom-type)]
+
+[unsafe-flabs (flabs-type 'flonum)]
+[unsafe-fl+ (fl+-type 'flonum)]
+[unsafe-fl- (fl--type 'flonum)]
+[unsafe-fl* (fl*-type 'flonum)]
+[unsafe-fl/ (fl/-type 'flonum)]
+[unsafe-fl= (fl=-type 'flonum)]
+[unsafe-fl<= (fl<=-type 'flonum)]
+[unsafe-fl>= (fl>=-type 'flonum)]
+[unsafe-fl> (fl>-type 'flonum)]
+[unsafe-fl< (fl<-type 'flonum)]
+[unsafe-flmin (flmin-type 'flonum)]
+[unsafe-flmax (flmax-type 'flonum)]
+
+;These are currently the same binding as the safe versions
+;and so are not needed. If this changes they should be
+;uncommented. There is a check in the definitions part of
+;the file that makes sure that they are the same binding.
+;
+;[unsafe-flround (flround-type 'flonum)]
+;[unsafe-flfloor (flfloor-type 'flonum)]
+;[unsafe-flceiling (flceiling-type 'flonum)]
+;[unsafe-fltruncate (flround-type 'flonum)]
+;[unsafe-flsin (fl-unop)]
+;[unsafe-flcos (fl-unop)]
+;[unsafe-fltan (fl-unop)]
+;[unsafe-flatan (fl-unop)]
+;[unsafe-flasin (fl-unop)]
+;[unsafe-flacos (fl-unop)]
+;[unsafe-fllog (fllog-type 'flonum)]
+;[unsafe-flexp (flexp-type 'flonum)]
+;[unsafe-flexpt (flexpt-type 'flonum)]
+;
+[unsafe-flsqrt (flsqrt-type 'flonum)]
+[unsafe-fx->fl (fx->fl-type 'flonum)]
+[unsafe-fl->fx (fl->fx-type 'flonum)]
+[unsafe-make-flrectangular (make-flrectangular-type)]
+[unsafe-flreal-part (flreal-part-type)]
+[unsafe-flimag-part (flimag-part-type)]
+[unsafe-flrandom (flrandom-type)]
+
+; racket/extflonum
+[extflonum? (make-pred-ty -ExtFlonum)]
+[extflonum-available? (-> B)]
+[pi.t -PosExtFlonum]
+
+[extflabs (flabs-type 'ext-flonum)]
+[extfl+ (fl+-type 'ext-flonum)]
+[extfl- (fl--type 'ext-flonum)]
+[extfl* (fl*-type 'ext-flonum)]
+[extfl/ (fl/-type 'ext-flonum)]
+[extfl= (fl=-type 'ext-flonum)]
+[extfl<= (fl<=-type 'ext-flonum)]
+[extfl>= (fl>=-type 'ext-flonum)]
+[extfl> (fl>-type 'ext-flonum)]
+[extfl< (fl<-type 'ext-flonum)]
+[extflmin (flmin-type 'ext-flonum)]
+[extflmax (flmax-type 'ext-flonum)]
+[extflround (flround-type 'ext-flonum)]
+[extflfloor (flfloor-type 'ext-flonum)]
+[extflceiling (flceiling-type 'ext-flonum)]
+[extfltruncate (flround-type 'ext-flonum)]
+[extflsin (extfl-unop)] ; special cases (0s) not worth special-casing
+[extflcos (extfl-unop)]
+[extfltan (extfl-unop)]
+[extflatan (extfl-unop)]
+[extflasin (extfl-unop)]
+[extflacos (extfl-unop)]
+[extfllog (fllog-type 'ext-flonum)]
+[extflexp (flexp-type 'ext-flonum)]
+[extflexpt (flexpt-type 'ext-flonum)]
+[extflsqrt (flsqrt-type 'ext-flonum)]
+[->extfl (fx->fl-type 'ext-flonum)]
+[extfl->exact-integer (cl->* (-ExtFlonumZero . -> . Zero)
+                             (-PosExtFlonum . -> . PositiveInteger)
+                             (-NonNegExtFlonum . -> . NonnegativeInteger)
+                             (-NegExtFlonum . -> . NegativeInteger)
+                             (-NonPosExtFlonum . -> . NonpositiveInteger)
+                             (-ExtFlonum . -> . Integer))]
+[real->extfl (cl->* (Real-Zero . -> . -ExtFlonumZero)
+                    ;; no positive / negative cases, possible underflow
+                    (NonnegativeReal . -> . -NonNegExtFlonum)
+                    (NonpositiveReal . -> . -NonPosExtFlonum)
+                    (Real . -> . -ExtFlonum))]
+[extfl->exact (cl->* (-ExtFlonumZero . -> . Zero)
+                     (-PosExtFlonum . -> . PositiveRationalional)
+                     (-NonNegExtFlonum . -> . NonnegativeRationalional)
+                     (-NegExtFlonum . -> . NegativeRationalional)
+                     (-NonPosExtFlonum . -> . NonpositiveRationalional)
+                     (-ExtFlonum . -> . Rational))]
+[extfl->inexact (cl->* (-ExtFlonumZero . -> . Float-Zero)
+                       ;; no positive / negative cases, possible underflow
+                       (-NonNegExtFlonum . -> . Nonnegative-Float)
+                       (-NonPosExtFlonum . -> . Nonpositive-Float)
+                       (-ExtFlonum . -> . Float))]
+[unsafe-extflabs (flabs-type 'ext-flonum)]
+[unsafe-extfl+ (fl+-type 'ext-flonum)]
+[unsafe-extfl- (fl--type 'ext-flonum)]
+[unsafe-extfl* (fl*-type 'ext-flonum)]
+[unsafe-extfl/ (fl/-type 'ext-flonum)]
+[unsafe-extfl= (fl=-type 'ext-flonum)]
+[unsafe-extfl<= (fl<=-type 'ext-flonum)]
+[unsafe-extfl>= (fl>=-type 'ext-flonum)]
+[unsafe-extfl> (fl>-type 'ext-flonum)]
+[unsafe-extfl< (fl<-type 'ext-flonum)]
+[unsafe-extflmin (flmin-type 'ext-flonum)]
+[unsafe-extflmax (flmax-type 'ext-flonum)]
+
+;These are currently the same binding as the safe versions
+;and so are not needed. If this changes they should be
+;uncommented. There is a check in the definitions part of
+;the file that makes sure that they are the same binding.
+;
+;[unsafe-extflround (flround-type 'ext-flonum)]
+;[unsafe-extflfloor (flfloor-type 'ext-flonum)]
+;[unsafe-extflceiling (flceiling-type 'ext-flonum)]
+;[unsafe-extfltruncate (flround-type 'ext-flonum)]
+;[unsafe-extflsin (extfl-unop)]
+;[unsafe-extflcos (extfl-unop)]
+;[unsafe-extfltan (extfl-unop)]
+;[unsafe-extflatan (extfl-unop)]
+;[unsafe-extflasin (extfl-unop)]
+;[unsafe-extflacos (extfl-unop)]
+;[unsafe-extfllog (fllog-type 'ext-flonum)]
+;[unsafe-extflexp (flexp-type 'ext-flonum)]
+;[unsafe-extflexpt (flexpt-type 'ext-flonum)]
+;
+[unsafe-extflsqrt (flsqrt-type 'ext-flonum)]
+[unsafe-fx->extfl (fx->fl-type 'ext-flonum)]
+[unsafe-extfl->fx (fl->fx-type 'ext-flonum)]

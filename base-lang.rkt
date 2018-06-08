@@ -23,13 +23,17 @@
          Float-NaN
          Float-Positive-Zero
          Float-Negative-Zero
-         Positive-Float-No-NaN
-         Negative-Float-No-NaN
+         Positive-Float-Number
+         Positive-Float-Infinity
+         Negative-Float-Number
+         Negative-Float-Infinity
          Single-Float-NaN
          Single-Float-Positive-Zero
          Single-Float-Negative-Zero
-         Positive-Single-Float-No-NaN
-         Negative-Single-Float-No-NaN
+         Positive-Single-Float-Number
+         Positive-Single-Float-Infinity
+         Negative-Single-Float-Number
+         Negative-Single-Float-Infinity
          Exact-Imaginary
          Exact-Complex
          Float-Imaginary
@@ -106,12 +110,13 @@
   [Rational (Negative-Rational Zero Positive-Rational)]
 
   [Float-Zero (Float-Positive-Zero Float-Negative-Zero Float-NaN)]
-  [Positive-Float (Positive-Float-No-NaN Float-NaN)]
+  [Positive-Float (Positive-Float-Number Positive-Float-Infinity Float-NaN)]
   [Nonnegative-Float (Positive-Float Float-Zero)]
-  [Negative-Float (Negative-Float-No-NaN Float-NaN)]
+  [Negative-Float (Negative-Float-Number Negative-Float-Infinity Float-NaN)]
   [Nonpositive-Float (Negative-Float Float-Zero)]
-  [Float (Negative-Float-No-NaN Float-Negative-Zero Float-Positive-Zero
-                                Positive-Float-No-NaN Float-NaN)]
+  [Float (Negative-Float-Number Negative-Float-Infinity Float-Negative-Zero
+                                Float-Positive-Zero
+                                Positive-Float-Number Positive-Float-Infinity Float-NaN)]
 
   [Single-Float-Zero (Single-Float-Positive-Zero Single-Float-Negative-Zero Single-Float-NaN)]
 
@@ -122,11 +127,11 @@
                       Inexact-Real-Negative-Zero
                       Inexact-Real-NaN)]
 
-  [Positive-Single-Float (Positive-Single-Float-No-NaN Single-Float-NaN)]
+  [Positive-Single-Float (Positive-Single-Float-Number Positive-Single-Float-Infinity Single-Float-NaN)]
   [Positive-Inexact-Real (Positive-Single-Float Positive-Float)]
   [Nonnegative-Single-Float (Positive-Single-Float Single-Float-Zero)]
   [Nonnegative-Inexact-Real (Positive-Inexact-Real Inexact-Real-Zero)]
-  [Negative-Single-Float (Negative-Single-Float-No-NaN Single-Float-NaN)]
+  [Negative-Single-Float (Negative-Single-Float-Number Negative-Single-Float-Infinity Single-Float-NaN)]
   [Negative-Inexact-Real (Negative-Single-Float Negative-Float)]
   [Nonpositive-Single-Float (Negative-Single-Float Single-Float-Zero)]
   [Nonpositive-Inexact-Real (Negative-Inexact-Real Inexact-Real-Zero)]
@@ -185,13 +190,17 @@
    'Float-NaN (λ (x) (and (flonum? x) (eqv? x +nan.0)))
    'Float-Positive-Zero (λ (x) (eqv? x 0.0))
    'Float-Negative-Zero (λ (x) (eqv? x -0.0))
-   'Positive-Float-No-NaN (λ (x) (and (flonum? x) (positive? x)))
-   'Negative-Float-No-NaN (λ (x) (and (flonum? x) (negative? x)))
-   'Single-Flonum-NaN (λ (x) (and (single-flonum? x) (eqv? x +nan.f)))
-   'Single-Flonum-Positive-Zero (λ (x) (eqv? x 0.0f0))
-   'Single-Flonum-Negative-Zero (λ (x) (eqv? x -0.0f0))
-   'Positive-Single-Flonum-No-NaN (λ (x) (and (single-flonum? x) (positive? x)))
-   'Negative-Single-Flonum-No-NaN (λ (x) (and (single-flonum? x) (negative? x)))
+   'Positive-Float-Number (λ (x) (and (flonum? x) (positive? x) (not (eqv? x +inf.0))))
+   'Positive-Float-Infinity (λ (x) (eqv? x +inf.0))
+   'Negative-Float-Number (λ (x) (and (flonum? x) (negative? x) (not (eqv? x -inf.0))))
+   'Negative-Float-Infinity (λ (x) (eqv? x -inf.0))
+   'Single-Float-NaN (λ (x) (and (single-flonum? x) (eqv? x +nan.f)))
+   'Single-Float-Positive-Zero (λ (x) (eqv? x 0.0f0))
+   'Single-Float-Negative-Zero (λ (x) (eqv? x -0.0f0))
+   'Positive-Single-Float-Number (λ (x) (and (single-flonum? x) (positive? x) (not (eqv? x +inf.f))))
+   'Positive-Single-Float-Infinity (λ (x) (eqv? x +inf.f))
+   'Negative-Single-Float-Number (λ (x) (and (single-flonum? x) (negative? x) (not (eqv? x -inf.f))))
+   'Negative-Single-Float-Infinity (λ (x) (eqv? x -inf.f))
    'Exact-Imaginary (λ (x) (and (number? x)
                                 (not (real? x))
                                 (eqv? 0 (real-part x))
