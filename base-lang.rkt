@@ -51,9 +51,9 @@
   ;; syntactic types
   [ntype ::= nbase (U nbase ...)]
   [btype ::= True False (U True False) (U False True)]
-  [type ::= ntype btype]
+  [type ::= ntype btype Any]
   [prop ::= tt (∈ 0 type) (∉ 0 type) (∈ 1 type) (∉ 1 type) (∧ (∈ 0 type) (∈ 1 type))]
-  [domain ::= (type ...)]
+  [domain ::= (type type ...)]
   [range ::= (type) (type prop prop)]
   [arrow ::= (-> domain range)]
   [funtype ::= (case-> arrow ...)]
@@ -73,6 +73,7 @@
    (union any_0 ... nbase ... any_1 ...)])
 
 (define ntype? (redex-match? base ntype))
+(define funtype? (redex-match? base funtype))
 
 (define-syntax-rule (define-numeric-unions [name (content contents ...)] ...)
   (begin
