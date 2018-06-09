@@ -48,6 +48,7 @@
   [pred ::= number? positive?]
   [nexp ::= val (uop nexp) (bop nexp nexp)]
   [bexp ::= (pred nexp) (comp nexp nexp)]
+  [operator ::= pred comp uop bop]
   ;; syntactic types
   [ntype ::= nbase (U nbase ...)]
   [btype ::= True False (U True False) (U False True)]
@@ -63,6 +64,8 @@
      (Or τ τ) (And τ τ) (Not τ)
      Any Empty])
 
+(define operator? (redex-match? base operator))
+
 (define-metafunction base
   union : ntype ... -> ntype
   [(union nbase ...)
@@ -74,6 +77,7 @@
 
 (define ntype? (redex-match? base ntype))
 (define funtype? (redex-match? base funtype))
+(define arrow? (redex-match? base arrow))
 
 (define-syntax-rule (define-numeric-unions [name (content contents ...)] ...)
   (begin
@@ -145,10 +149,10 @@
 
   [Real-Zero (Zero Inexact-Real-Zero)]
   [Real-Zero-No-NaN (Zero Inexact-Real-Positive-Zero Inexact-Real-Negative-Zero)]
-  [PosReal (Positive-Rational Positive-Inexact-Real)]
-  [NonNegReal (Nonnegative-Rational Nonnegative-Inexact-Real)]
-  [NegReal (Negative-Rational Negative-Inexact-Real)]
-  [NonPosReal (Nonpositive-Rational Nonpositive-Inexact-Real)]
+  [Positive-Real (Positive-Rational Positive-Inexact-Real)]
+  [Nonnegative-Real (Nonnegative-Rational Nonnegative-Inexact-Real)]
+  [Negative-Real (Negative-Rational Negative-Inexact-Real)]
+  [Nonpositive-Real (Nonpositive-Rational Nonpositive-Inexact-Real)]
   [Real (Rational Inexact-Real)]
 
   [Exact-Number (Exact-Imaginary Exact-Complex Rational)]
