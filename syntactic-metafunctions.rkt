@@ -9,11 +9,6 @@
 (provide (all-defined-out)
          (all-from-out "base-lang.rkt"))
 
-(define-term Bool (U True False))
-
-(define funtype? (redex-match? base funtype))
-(define domain? (redex-match? base domain))
-(define range? (redex-match? base range))
 
 ;; roughly the intersection of two types
 (define-metafunction base
@@ -46,24 +41,45 @@
 
 ;; simple subtyping
 (define-metafunction base
-  nsubtype : ntype ntype -> boolean
-  [(nsubtype ntype ntype) #t]
-  [(nsubtype (U nbase_1 ...) ntype)
+  syntactic-subtype : ntype ntype -> boolean
+  [(syntactic-subtype ntype ntype) #t]
+  [(syntactic-subtype nbase_!_ nbase_!_) #f]
+  [(syntactic-subtype (U nbase_1 ...) ntype)
    ,(for/and ([nb (in-list (term (nbase_1 ...)))])
-      (term (nsubtype ,nb ntype)))]
-  [(nsubtype ntype (U nbase_1 ...))
+      (term (syntactic-subtype ,nb ntype)))]
+  [(syntactic-subtype ntype (U nbase_1 ...))
    ,(for/or ([nb (in-list (term (nbase_1 ...)))])
-      (term (nsubtype ntype ,nb)))]
-  [(nsubtype _ _) #f])
+      (term (syntactic-subtype ntype ,nb)))])
 
 (define-metafunction base
-  nequiv : ntype ntype -> boolean
-  [(nequiv ntype_1 ntype_2)
-   ,(and (term (nsubtype ntype_1 ntype_2))
-         (term (nsubtype ntype_2 ntype_1)))])
+  syntactic-funapp : funtype type ... -> type or #f
+  ;; none worked
+  [(syntactic-funapp (case->) any) #f]
+  ;; single argument
+  [(syntactic-funapp (case-> (-> (ntype_dom) (ntype_rng)) any ...) ntype_arg)
+   ntype_rng
+   (side-condition (term (syntactic-subtype ntype_arg ntype_dom)))]
+  [(syntactic-funapp (case-> (-> (ntype_dom) (ntype_rng)) any ...) any_arg)
+   (syntactic-funapp (case-> any ...) any_arg)]
+  ;; two arguments
+  [(syntactic-funapp (case-> (-> (ntype_dom1 ntype_dom2) (ntype_rng)) any ...)
+                     ntype_arg1 ntype_arg2)
+   ntype_rng
+   (side-condition (term (syntactic-subtype ntype_arg1 ntype_dom1)))
+   (side-condition (term (syntactic-subtype ntype_arg2 ntype_dom2)))]
+  [(syntactic-funapp (case-> (-> (ntype_dom1 ntype_dom2) (ntype_rng)) any ...)
+                     any_1 any_2)
+   (syntactic-funapp (case-> any ...) any_1 any_2)])
+
+
+(define-metafunction base
+  syntactic-equiv : ntype ntype -> boolean
+  [(syntactic-equiv ntype_1 ntype_2)
+   ,(and (term (syntactic-subtype ntype_1 ntype_2))
+         (term (syntactic-subtype ntype_2 ntype_1)))])
 
 (define (equiv-types t1 t2)
-  (term (nequiv ,t1 ,t2)))
+  (term (syntactic-equiv ,t1 ,t2)))
 
 
 

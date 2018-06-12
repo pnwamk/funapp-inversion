@@ -57,7 +57,7 @@
   [domain ::= (type type ...)]
   [range ::= (type) (type prop prop)]
   [arrow ::= (-> domain range)]
-  [funtype ::= (case-> arrow arrow ...)]
+  [funtype ::= (case-> arrow ...)]
   [syntactic-type ::= funtype type]
   ;; semantic types
   [ι ::= nbase True False]
