@@ -53,16 +53,19 @@
   [ntype ::= nbase (U nbase ...)]
   [btype ::= True False (U True False) (U False True)]
   [type ::= ntype btype Any]
-  [prop ::= tt (∈ 0 type) (∉ 0 type) (∈ 1 type) (∉ 1 type) (∧ (∈ 0 type) (∈ 1 type))]
+  [prop ::= tt ff (∈ 0 type) (∉ 0 type) (∈ 1 type) (∉ 1 type) (∧ (∈ 0 type) (∈ 1 type))]
   [domain ::= (type type ...)]
   [range ::= (type) (type prop prop)]
   [arrow ::= (-> domain range)]
-  [funtype ::= (case-> arrow ...)]
+  [funtype ::= (case-> arrow arrow ...)]
+  [syntact-type ::= funtype type]
   ;; semantic types
   [ι ::= nbase True False]
-  [τ ::= ι (Prod τ τ) (Fun τ τ)
+  [τ ::= ι (Pair τ τ) (Fun τ τ)
      (Or τ τ) (And τ τ) (Not τ)
      Any Empty])
+
+(define-term Boolean (U True False))
 
 (define operator? (redex-match? base operator))
 
@@ -79,15 +82,16 @@
 (define funtype? (redex-match? base funtype))
 (define arrow? (redex-match? base arrow))
 
-(define-syntax-rule (define-numeric-unions [name (content contents ...)] ...)
+(define-syntax-rule (define-syntactic-numeric-unions
+                      [name (content contents ...)] ...)
   (begin
     (define-term name (union content contents ...))
     ...
     (unless (ntype? (term name))
-      (error 'define-numeric-unions "invalid ntype ~a" (term name)))
+      (error 'define-syntactic-numeric-unions "invalid ntype ~a" (term name)))
     ...))
 
-(define-numeric-unions
+(define-syntactic-numeric-unions
   [Positive-Byte (One Byte-Larger-Than-One)]
   [Byte (Zero Positive-Byte)]
   
@@ -146,6 +150,8 @@
                  Positive-Single-Float
                  Single-Float-NaN)]
   [Inexact-Real (Single-Float Float)]
+  [Positive-Infinity (Positive-Float-Infinity Positive-Single-Float-Infinity)]
+  [Negative-Infinity (Negative-Float-Infinity Negative-Single-Float-Infinity)]
 
   [Real-Zero (Zero Inexact-Real-Zero)]
   [Real-Zero-No-NaN (Zero Inexact-Real-Positive-Zero Inexact-Real-Negative-Zero)]
@@ -245,3 +251,38 @@
   (or (for/or ([pred/name (in-list nbase-predicate->type-table)])
         (and ((car pred/name) n) (cdr pred/name)))
       (error 'number->ntype "unable to determine type for ~v" n)))
+
+(define-metafunction base
+  syntactic->semantic : syntact-type -> τ
+  [(syntactic->semantic ι) ι]
+  [(syntactic->semantic Any) Any]
+  [(syntactic->semantic (U)) Empty]
+  [(syntactic->semantic (U type_0 type_1 ...))
+   ,(foldl (λ (elem acc) (term (Or ,elem ,acc)))
+           (term type_0)
+           (term (type_1 ...)))]
+  [(syntactic->semantic (case-> (-> (type_d0) (type_r0))
+                                (-> (type_d1) (type_r1))
+                                ...))
+   ,(foldl (λ (d r acc)
+             (term (And (Fun (syntactic->semantic ,d)
+                             (syntactic->semantic ,r))
+                        ,acc)))
+           (term (Fun (syntactic->semantic type_d0)
+                      (syntactic->semantic type_r0)))
+           (term (type_d1 ...))
+           (term (type_r1 ...)))]
+  [(syntactic->semantic (case-> (-> (type_d00 type_d01) (type_r0))
+                                (-> (type_d10 type_d11) (type_r1))
+                                ...))
+   ,(foldl (λ (d0 d1 r acc)
+             (term (And (Fun (Pair (syntactic->semantic ,d0)
+                                   (syntactic->semantic ,d1))
+                             (syntactic->semantic ,r))
+                        ,acc)))
+           (term (Fun (Pair (syntactic->semantic type_d00)
+                            (syntactic->semantic type_d01))
+                      (syntactic->semantic type_r0)))
+           (term (type_d10 ...))
+           (term (type_d11 ...))
+           (term (type_r1 ...)))])
