@@ -58,7 +58,7 @@
   [range ::= (type) (type prop prop)]
   [arrow ::= (-> domain range)]
   [funtype ::= (case-> arrow arrow ...)]
-  [syntact-type ::= funtype type]
+  [syntactic-type ::= funtype type]
   ;; semantic types
   [ι ::= nbase True False]
   [τ ::= ι (Pair τ τ) (Fun τ τ)
@@ -83,15 +83,18 @@
 (define arrow? (redex-match? base arrow))
 
 (define-syntax-rule (define-syntactic-numeric-unions
+                      table-name
                       [name (content contents ...)] ...)
   (begin
     (define-term name (union content contents ...))
     ...
     (unless (ntype? (term name))
       (error 'define-syntactic-numeric-unions "invalid ntype ~a" (term name)))
-    ...))
+    ...
+    (define table-name (make-immutable-hash (list (cons 'name (term name)) ...)))))
 
 (define-syntactic-numeric-unions
+  numeric-unions-table
   [Positive-Byte (One Byte-Larger-Than-One)]
   [Byte (Zero Positive-Byte)]
   
@@ -173,7 +176,7 @@
 
 (define (exact-rational? x) (and (rational? x) (exact? x)))
 
-(define nbase-type->predicate-table
+(define nbase-type-predicate-table
   (hash
    'Zero (λ (n) (eq? n 0))
    'One (λ (n) (eq? n 1))
@@ -225,35 +228,35 @@
                       (and (number? x)
                            (flonum? (imag-part x))
                            (eqv? 0 (real-part x))))
-   'Single-Flonum-Imaginary (λ (x)
-                              (and (number? x)
-                                   (single-flonum? (imag-part x))
-                                   (eqv? 0 (real-part x))))
+   'Single-Float-Imaginary (λ (x)
+                             (and (number? x)
+                                  (single-flonum? (imag-part x))
+                                  (eqv? 0 (real-part x))))
    'Float-Complex (λ (x)
                     (and (number? x)
                          (flonum? (imag-part x))
                          (flonum? (real-part x))))
-   'Single-Flonum-Complex (λ (x)
-                            (and (number? x)
-                                 (single-flonum? (imag-part x))
-                                 (single-flonum? (real-part x))))))
+   'Single-Float-Complex (λ (x)
+                           (and (number? x)
+                                (single-flonum? (imag-part x))
+                                (single-flonum? (real-part x))))))
 
 (define (nbase->pred nt)
-  (hash-ref nbase-type->predicate-table nt
+  (hash-ref nbase-type-predicate-table nt
             (λ () (error 'nbase->pred "~v is not a known numeric base type" nt))))
 
-(define nbase-predicate->type-table
-  (for/list ([(ty pred) (in-hash nbase-type->predicate-table)])
+(define nbase-predicate-type-table
+  (for/list ([(ty pred) (in-hash nbase-type-predicate-table)])
     (cons pred ty)))
 
 
 (define (number->ntype n)
-  (or (for/or ([pred/name (in-list nbase-predicate->type-table)])
+  (or (for/or ([pred/name (in-list nbase-predicate-type-table)])
         (and ((car pred/name) n) (cdr pred/name)))
       (error 'number->ntype "unable to determine type for ~v" n)))
 
 (define-metafunction base
-  syntactic->semantic : syntact-type -> τ
+  syntactic->semantic : syntactic-type -> τ
   [(syntactic->semantic ι) ι]
   [(syntactic->semantic Any) Any]
   [(syntactic->semantic (U)) Empty]

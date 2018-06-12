@@ -35,7 +35,8 @@
          (-> (Single-Float-Complex) (Single-Float-Complex))
          (-> (Nonnegative-Real) (Positive-Real))
          (-> (Negative-Fixnum) (Nonpositive-Fixnum))
-         (-> (Negative-Integer) (Nonpositive-Integer)))])
+         (-> (Negative-Integer) (Nonpositive-Integer))
+         (-> (Number) (Number)))])
 
          
 
