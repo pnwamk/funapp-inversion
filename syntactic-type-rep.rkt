@@ -84,6 +84,10 @@
 (define tt (TT))
 (define ff (FF))
 
+(struct PAIR ([lhs : NUMERIC]
+              [rhs : NUMERIC])
+  #:transparent)
+
 
 (: union (-> NUMERIC NUMERIC NUMERIC))
 (define (union n1 n2)

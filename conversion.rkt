@@ -6,7 +6,8 @@
 
 (provide ->semantic)
 
-(: ->semantic (-> (U NUMERIC UNOP BINOP (Listof UNOP) (Listof BINOP))
+(: ->semantic (-> (U NUMERIC UNOP BINOP (Listof UNOP) (Listof BINOP)
+                     PAIR)
                   TYPE))
 (define (->semantic t)
   (match t
@@ -26,5 +27,6 @@
                 [t : TYPE])
               (type-and (->semantic u) t))
             (->semantic b)
-            binops)]))
+            binops)]
+    [(PAIR lhs rhs) (Prod-TYPE (->semantic lhs) (->semantic rhs))]))
 

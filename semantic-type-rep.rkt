@@ -22,11 +22,11 @@
   (syntax-rules ()
     [(_ v) v]
     [(_ k v)
-     (make-weak-hash
+     (make-weak-hasheq
       (list ((ann cons (All (A B) (-> A B (Pair A B))))
              k v)))]
     [(_ k1 k2 . rest)
-     (make-weak-hash
+     (make-weak-hasheq
       (list (cons k1 (make-memo-entry k2 . rest))))]))
 
 (define-syntax memo-table-construct
@@ -131,7 +131,7 @@
 (: atom (-> TYPE TYPE ATOM))
 (define atom
   (let ([atom-table : (HT TYPE (HT TYPE (Pair TYPE TYPE)))
-                    (make-weak-hash)])
+                    (make-weak-hasheq)])
     (λ (a d)
       (memo-table-construct atom-table (cons a d) a d))))
 
@@ -145,7 +145,7 @@
                  NODE))
 (define make-NODE
   (let ([node-table : (HT ATOM (HT BDD (HT BDD (HT BDD NODE))))
-                    (make-weak-hash)])
+                    (make-weak-hasheq)])
     (λ (a l m r)
       (memo-table-construct node-table (NODE a l m r) a l m r))))
 
@@ -180,7 +180,7 @@
 (: type (-> BASE BDD BDD TYPE))
 (define type
   (let ([type-table : (HT BASE (HT BDD (HT BDD TYPE)))
-                    (make-weak-hash)])
+                    (make-weak-hasheq)])
     (λ (b p a)
       (memo-table-construct type-table (TYPE b p a) b p a))))
 
@@ -336,22 +336,13 @@
     ['TOP 'BOT]
     ['BOT 'TOP]
     [(NODE a l m 'BOT)
-     (define ¬m (bdd-not m))
-     (node a 'BOT (bdd-or l ¬m) ¬m)]
+     (node a 'BOT (bdd-not (bdd-or l m)) (bdd-not m))]
     [(NODE a 'BOT m r)
-     (define ¬m (bdd-not m))
-     (node a ¬m (bdd-or ¬m r) 'BOT)]
-    ;; is this third clause unnecessary???
-    ;; I think so...
-    ;[(NODE a l 'BOT r)
-    ; (define ¬l (bdd-not l))
-    ; (define ¬r (bdd-not r))
-    ; ;; TODO (bdd-or ¬l r) => 'BOT ???
-    ; (node a ¬l (bdd-or ¬l r) ¬r)]
+     (node a (bdd-not m) (bdd-not (bdd-or m r)) 'BOT)]
+    [(NODE a l 'BOT r)
+     (node a (bdd-not l) (bdd-not (bdd-or l r)) (bdd-not r))]
     [(NODE a l m r)
-     (define ¬l (bdd-not l))
-     (define ¬r (bdd-not r))
-     (node a (bdd-or ¬l m) 'BOT (bdd-or ¬r m))]))
+     (node a (bdd-not (bdd-or l m)) 'BOT (bdd-not (bdd-or r m)))]))
 
 (: type-and (-> TYPE TYPE TYPE))
 (define (type-and t1 t2)
@@ -380,9 +371,6 @@
 (: type-not (-> TYPE TYPE))
 (define (type-not t)
   (type-diff Any-TYPE t))
-
-
-
 
 
 
