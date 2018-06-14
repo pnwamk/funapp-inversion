@@ -22,11 +22,11 @@
   (syntax-rules ()
     [(_ v) v]
     [(_ k v)
-     (make-weak-hasheq
+     (make-weak-hash
       (list ((ann cons (All (A B) (-> A B (Pair A B))))
              k v)))]
     [(_ k1 k2 . rest)
-     (make-weak-hasheq
+     (make-weak-hash
       (list (cons k1 (make-memo-entry k2 . rest))))]))
 
 (define-syntax memo-table-construct
@@ -65,9 +65,9 @@
   (base #t (symbols->bits syms)))
 
 (define-syntax-rule (SIGN-MASK)
-  #b1111111111111111111111111111110)
-(define-syntax-rule (BIT-MASK)
   #b0000000000000000000000000000001)
+(define-syntax-rule (BIT-MASK)
+  #b1111111111111111111111111111110)
 
 (void
  (assert (SIGN-MASK) fixnum?)
@@ -80,7 +80,7 @@
 
 (: base-sign (-> BASE Boolean))
 (define (base-sign b)
-  (unsafe-fx= 0 (unsafe-fxand (BASE-data b) (SIGN-MASK))))
+  (not (unsafe-fx= 0 (unsafe-fxand (BASE-data b) (SIGN-MASK)))))
 
 (: base-bits (-> BASE Fixnum))
 (define (base-bits b)
@@ -89,7 +89,7 @@
 (: base (-> Boolean Fixnum BASE))
 (define (base sign bits)
   (cond
-    [sign (make-BASE (unsafe-fxior bits (BIT-MASK)))]
+    [sign (make-BASE (unsafe-fxior bits (SIGN-MASK)))]
     [else (make-BASE bits)]))
 
 (define-syntax-rule (unsafe-fxdiff bits1 bits2)
@@ -131,20 +131,21 @@
 (: atom (-> TYPE TYPE ATOM))
 (define atom
   (let ([atom-table : (HT TYPE (HT TYPE (Pair TYPE TYPE)))
-                    (make-weak-hasheq)])
+                    (make-weak-hash)])
     (λ (a d)
       (memo-table-construct atom-table (cons a d) a d))))
 
 (struct NODE ([atom : ATOM]
               [left : BDD]
               [middle : BDD]
-              [right : BDD]))
+              [right : BDD])
+  #:transparent)
 
 (: make-NODE (-> ATOM BDD BDD BDD
                  NODE))
 (define make-NODE
   (let ([node-table : (HT ATOM (HT BDD (HT BDD (HT BDD NODE))))
-                    (make-weak-hasheq)])
+                    (make-weak-hash)])
     (λ (a l m r)
       (memo-table-construct node-table (NODE a l m r) a l m r))))
 
@@ -173,12 +174,13 @@
         [else (hash-set! base-table b b)
               b]))))
 
-(struct TYPE ([base : BASE] [prods : BDD] [arrows : BDD]))
+(struct TYPE ([base : BASE] [prods : BDD] [arrows : BDD])
+  #:transparent)
 
 (: type (-> BASE BDD BDD TYPE))
 (define type
   (let ([type-table : (HT BASE (HT BDD (HT BDD TYPE)))
-                    (make-weak-hasheq)])
+                    (make-weak-hash)])
     (λ (b p a)
       (memo-table-construct type-table (TYPE b p a) b p a))))
 
