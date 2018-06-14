@@ -1,97 +1,79 @@
-#lang racket/base
+#lang typed/racket/base
 
-(require "base-lang.rkt"
-         "syntactic-numeric-types.rkt"
-         "semantic-numeric-types.rkt"
-         "syntactic-metafunctions.rkt"
-         "semantic-subtyping/interface.rkt"
-         redex/reduction-semantics
-         racket/list)
+(require "syntactic-type-rep.rkt"
+         "semantic-type-rep.rkt"
+         "conversion.rkt"
+         "semantic-type-ops.rkt"
+         "semantic-type-metafunctions.rkt"
+         "conversion.rkt"
+         (prefix-in semantic: "semantic-numeric-types.rkt")
+         (prefix-in syntactic: "syntactic-numeric-types.rkt")
+         )
 
-(define add1-syntactic
-  (hash-ref syntactic-funtype-table 'add1))
+
 (define add1-semantic
-  (term (syntactic->semantic
-         ,(hash-ref semantic-funtype-table 'add1))))
+  (->semantic semantic:type-of-add1))
+(define +-semantic
+  (->semantic semantic:type-of-add1))
 
+
+(: add1-comp-test (-> (Listof Symbol) (Listof NUMERIC) Void))
 (define (add1-comp-test names types)
-  (for/and ([name (in-list names)]
-            [syntactic-t (in-list types)])
+  (for ([name (in-list names)]
+        [syntactic-t (in-list types)])
     (eprintf "add1 test for ~a\n" name)
-    (define semantic-t
-      (term (syntactic->semantic ,syntactic-t)))
-    (define syntactic-result (term (syntactic-funapp ,add1-syntactic ,syntactic-t)))
-    (define semantic-result (maybe-apply-function add1-semantic semantic-t))
+    (define semantic-t (->semantic syntactic-t))
+    (define syntactic-result (syntactic-funapp syntactic:type-of-add1 syntactic-t))
+    (define semantic-result (funapp add1-semantic semantic-t))
     (cond
       [(not syntactic-result)
        (error 'add1-comp-test "syntactic apply failed, argument type: ~a\n" name)]
       [(not semantic-result)
        (error 'add1-comp-test "semantic apply failed, argument type: ~a\n" name)]
-      [(not (semantic-subtype? semantic-result (term (syntactic->semantic ,syntactic-result))))
+      [(not (subtype? semantic-result (->semantic syntactic-result)))
        (error 'add1-comp-test "semantic </: syntactic result!\n arg: ~a\n semantic: ~a\n syntactic: ~a\n"
               name
               semantic-result
-              syntactic-result)]
-      [else #t])))
+              syntactic-result)])))
 
-(define +-syntactic
-  (hash-ref syntactic-funtype-table '+))
-(define +-semantic
-  (term (syntactic->semantic
-         ,(hash-ref semantic-funtype-table '+))))
-
+(: +-comp-test (-> (Listof Symbol) (Listof NUMERIC) Void))
 (define (+-comp-test names types)
-  (for/and ([name1 (in-list names)]
-            [syntactic-t1 (in-list types)])
-    (for/and ([name2 (in-list names)]
-              [syntactic-t2 (in-list types)])
+  (for ([name1 (in-list names)]
+        [syntactic-t1 (in-list types)])
+    (for ([name2 (in-list names)]
+          [syntactic-t2 (in-list types)])
       (eprintf "+ test for ~a ~a\n" name1 name2)
-      (define semantic-t1
-        (term (syntactic->semantic ,syntactic-t1)))
-      (define semantic-t2
-        (term (syntactic->semantic ,syntactic-t2)))
-      (eprintf "calculating syntactic result...")
+      (define semantic-t1 (->semantic syntactic-t1))
+      (define semantic-t2 (->semantic syntactic-t2))
       (define syntactic-result
-        (term (syntactic-funapp ,+-syntactic ,syntactic-t1 ,syntactic-t2)))
-      (eprintf " ~a\n" syntactic-result)
-      (eprintf "calculating semantic result...")
+        (syntactic-funapp syntactic:type-of-+ syntactic-t1 syntactic-t2))
       (define semantic-result
-        (maybe-apply-function +-semantic (term (Pair ,semantic-t1 ,semantic-t2))))
-      (eprintf " ~a\n" semantic-result)
+        (funapp +-semantic (Prod-TYPE semantic-t1 semantic-t2)))
       (cond
         [(not syntactic-result)
-         (error '+-comp-test "syntactic apply failed, argument type: ~a ~a\n" name1 name2)]
+         (error '+-comp-test "syntactic apply failed, argument types: ~a ~a\n" name1 name2)]
         [(not semantic-result)
-         (error '+-comp-test "semantic apply failed, argument type: ~a ~a\n" name1 name2)]
-        [(begin
-           (eprintf "comparing results...")
-           (not (semantic-subtype? semantic-result (term (syntactic->semantic ,syntactic-result)))))
+         (error '+-comp-test "semantic apply failed, argument types: ~a ~a\n" name1 name2)]
+        [(empty? semantic-result)
+         (error '+-comp-test "semantic apply produced Empty, argument types: ~a ~a\n" name1 name2)]
+        [(not (subtype? semantic-result (->semantic syntactic-result)))
          (error '+-comp-test "semantic </: syntactic result!\n arg1: ~a\n arg1: ~a\n semantic: ~a\n syntactic: ~a\n"
                 name1
                 name2
                 semantic-result
-                syntactic-result)]
-        [else
-         (eprintf "done\n")
-         #t]))))
+                syntactic-result)]))))
 
 
 
 
 ;; test add1
-#;#;
-(test-equal (add1-comp-test (hash-keys nbase-type-predicate-table)
-                            (hash-keys nbase-type-predicate-table))
-            #t)
-(test-equal (add1-comp-test (hash-keys numeric-unions-table)
-                            (hash-values numeric-unions-table))
-            #t)
 
-(test-equal (+-comp-test (hash-keys nbase-type-predicate-table)
-                         (hash-keys nbase-type-predicate-table))
-            #t)
-(test-equal (+-comp-test (hash-keys numeric-unions-table)
-                         (hash-values numeric-unions-table))
-            #t)
+(add1-comp-test numeric-base-list
+                numeric-base-list)
+(add1-comp-test (hash-keys numeric-unions-table)
+                (hash-values numeric-unions-table))
 
-(test-results)
+(+-comp-test numeric-base-list
+             numeric-base-list)
+(+-comp-test (hash-keys numeric-unions-table)
+             (hash-values numeric-unions-table))

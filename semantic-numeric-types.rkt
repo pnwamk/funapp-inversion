@@ -1,74 +1,65 @@
-#lang racket/base
+#lang typed/racket/base
 
-(require redex/reduction-semantics
-         "base-lang.rkt")
+(require "syntactic-type-rep.rkt")
 
-(provide semantic-funtype-table)
+(provide type-of-add1
+         type-of-+
+         #;type-of-<)
 
-(define-syntax-rule (define-funtype-table funtype-table
-                      [name (case-> case ...)]
-                      ...)
-  (begin
-    (cond
-      [(not (operator? (term name)))
-       (error 'define-funtype-table "~a is not an operator" 'name)]
-      [(not (arrow? (term case)))
-       (error 'define-funtype-table "~a is not a valid arrow"
-              'case)]
-      ...)
-    ...
-    (define funtype-table
-      (make-immutable-hash (list (cons (term name) (term (case-> case ...))) ...)))))
 
-(define-funtype-table
-  semantic-funtype-table
-  [add1 (case-> ;; 23 cases --> 13 cases
-         (-> (Zero) (One))
-         (-> (One) (Byte))
-         (-> (Byte) (Index))
-         (-> (Index) (Fixnum))
-         (-> (Integer) (Integer))
-         (-> (Rational) (Rational))
-         (-> (Float) (Float))
-         (-> (Single-Float) (Single-Float))
-         (-> (Float-Complex) (Float-Complex))
-         (-> (Single-Float-Complex) (Single-Float-Complex))
-         (-> (Nonnegative-Real) (Positive-Real))
-         (-> (Negative-Fixnum) (Nonpositive-Fixnum))
-         (-> (Negative-Integer) (Nonpositive-Integer))
-         (-> (Number) (Number)))]
-  [+ (case-> ;; 86 cases --> 28 cases
-      (-> (Byte Byte) (Index))
-      (-> (Index Index) (Nonnegative-Fixnum))
-      (-> (Negative-Fixnum One) (Nonpositive-Fixnum))
-      (-> (One Negative-Fixnum) (Nonpositive-Fixnum))
-      (-> (Nonpositive-Fixnum Nonnegative-Fixnum) (Fixnum))
-      (-> (Nonnegative-Fixnum Nonpositive-Fixnum) (Fixnum))
-      (-> (Integer Integer) (Integer))
-      (-> (Rational Rational) (Rational))
-      (-> (Float Real) (Float))
-      (-> (Real Float) (Float))
-      (-> (Single-Float (union Rational Single-Float)) (Single-Float))
-      (-> ((union Rational Single-Float) Single-Float) (Single-Float))
-      (-> (Inexact-Real Real) (Inexact-Real))
-      (-> (Real Inexact-Real) (Inexact-Real))
-      (-> (Real Real) (Real))
-      (-> (Exact-Number Exact-Number) (Exact-Number))
-      (-> (Float-Complex Number) (Float-Complex))
-      (-> (Number Float-Complex) (Float-Complex))
-      (-> (Float Inexact-Complex) (Float-Complex))
-      (-> (Inexact-Complex Float) (Float-Complex))
-      (-> (Single-Float-Complex (union Rational Single-Float Single-Float-Complex)) (Single-Float-Complex))
-      (-> ((union Rational Single-Float Single-Float-Complex) Single-Float-Complex) (Single-Float-Complex))
-      (-> (Inexact-Complex (union Rational Inexact-Real Inexact-Complex)) (Inexact-Complex))
-      (-> ((union Rational Inexact-Real Inexact-Complex) Inexact-Complex) (Inexact-Complex))
-      (-> (Number Number) (Number))
-      (-> (Nonnegative-Real Positive-Real) (Positive-Real))
-      (-> (Positive-Real Nonnegative-Real) (Positive-Real))
-      (-> (Negative-Real Nonpositive-Real) (Negative-Real))
-      (-> (Nonpositive-Real Negative-Real) (Negative-Real))
-      (-> (Nonnegative-Real Nonnegative-Real) (Nonnegative-Real))
-      (-> (Nonpositive-Real Nonpositive-Real) (Nonpositive-Real)))])
+(: type-of-add1 (Listof UNOP))
+(define type-of-add1
+  (list ;; 23 cases
+   (UNOP Zero One)
+   (UNOP One Byte)
+   (UNOP Byte Index)
+   (UNOP Index Fixnum)
+   (UNOP Integer Integer)
+   (UNOP Rational Rational)
+   (UNOP Float Float)
+   (UNOP Single-Float Single-Float)
+   (UNOP Float-Complex Float-Complex)
+   (UNOP Single-Float-Complex Single-Float-Complex)
+   (UNOP Nonnegative-Real Positive-Real)
+   (UNOP Negative-Fixnum Nonpositive-Fixnum)
+   (UNOP Negative-Integer Nonpositive-Integer)
+   (UNOP Number Number)))
+
+(: type-of-+ (Listof BINOP))
+(define type-of-+
+  (list ;; 86 cases --> 28 cases
+   (BINOP Byte Byte Index)
+   (BINOP Index Index Nonnegative-Fixnum)
+   (BINOP Negative-Fixnum One Nonpositive-Fixnum)
+   (BINOP One Negative-Fixnum Nonpositive-Fixnum)
+   (BINOP Nonpositive-Fixnum Nonnegative-Fixnum Fixnum)
+   (BINOP Nonnegative-Fixnum Nonpositive-Fixnum Fixnum)
+   (BINOP Integer Integer Integer)
+   (BINOP Rational Rational Rational)
+   (BINOP Float Real Float)
+   (BINOP Real Float Float)
+   (BINOP Single-Float (Un Rational Single-Float) Single-Float)
+   (BINOP (Un Rational Single-Float) Single-Float Single-Float)
+   (BINOP Inexact-Real Real Inexact-Real)
+   (BINOP Real Inexact-Real Inexact-Real)
+   (BINOP Real Real Real)
+   (BINOP Exact-Number Exact-Number Exact-Number)
+   (BINOP Float-Complex Number Float-Complex)
+   (BINOP Number Float-Complex Float-Complex)
+   (BINOP Float Inexact-Complex Float-Complex)
+   (BINOP Inexact-Complex Float Float-Complex)
+   (BINOP Single-Float-Complex (Un Rational Single-Float Single-Float-Complex) Single-Float-Complex)
+   (BINOP (Un Rational Single-Float Single-Float-Complex) Single-Float-Complex Single-Float-Complex)
+   (BINOP Inexact-Complex (Un Rational Inexact-Real Inexact-Complex) Inexact-Complex)
+   (BINOP (Un Rational Inexact-Real Inexact-Complex) Inexact-Complex Inexact-Complex)
+   (BINOP Number Number Number)
+   (BINOP Nonnegative-Real Positive-Real Positive-Real)
+   (BINOP Positive-Real Nonnegative-Real Positive-Real)
+   (BINOP Negative-Real Nonpositive-Real Negative-Real)
+   (BINOP Nonpositive-Real Negative-Real Negative-Real)
+   (BINOP Nonnegative-Real Nonnegative-Real Nonnegative-Real)
+   (BINOP Nonpositive-Real Nonpositive-Real Nonpositive-Real)))
+
 
          
 
