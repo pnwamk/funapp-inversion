@@ -28,6 +28,9 @@
              (eq? 'TOP (TYPE-prods t))
              (eq? 'TOP (TYPE-arrows t)))
          #f]
+        [(and (eq? 'BOT (TYPE-prods t))
+              (eq? 'BOT (TYPE-arrows t)))
+         #f]
         [else
          (define cached-result (hash-ref empty-table t #f))
          (cond
