@@ -4,12 +4,17 @@
          racket/match)
 
 (provide subtype?
-         empty?)
+         empty?
+         overlap?)
 
 
 (: subtype? (-> TYPE TYPE Boolean))
 (define (subtype? t1 t2)
   (empty? (type-diff t1 t2)))
+
+(: overlap? (-> TYPE TYPE Boolean))
+(define (overlap? t1 t2)
+  (not (empty? (type-and t1 t2))))
 
 
 (: empty? (-> TYPE Boolean))

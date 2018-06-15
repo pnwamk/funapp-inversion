@@ -62,15 +62,25 @@
     [else
      (let loop : TYPE
        ([bdd (TYPE-arrows fun)]
-        [arg : TYPE arg]
-        [res : TYPE Any-TYPE])
+        [P : (Listof ATOM) '()])
        (match bdd
          ['BOT Empty-TYPE]
-         [_ #:when (or (empty? arg) (empty? res)) Empty-TYPE]
-         ['TOP res]
-         [(NODE (cons s1 s2) l m r)
-          (define tl1 (loop l arg (type-and res s2)))
-          (define tl2 (loop l (type-diff arg s1) res))
-          (define tm (loop m arg res))
-          (define tr (loop r arg res))
-          (type-or tl1 (type-or tl2 (type-or tm tr)))]))]))
+         ['TOP (funapp-helper arg Any-TYPE P)]
+         [(NODE (and a (cons s1 _)) l m r)
+          (define tl
+            (cond
+              [(overlap? s1 arg) (loop l (cons a P))]
+              [else (loop l P)]))
+          (define tm (loop m P))
+          (define tr (loop r P))
+          (type-or tl (type-or tm tr))]))]))
+
+(: funapp-helper (-> TYPE TYPE (Listof ATOM) TYPE))
+(define (funapp-helper arg res P)
+  (match P
+    [_ #:when (or (empty? arg) (empty? res)) Empty-TYPE]
+    [(cons (cons s1 s2) P)
+     (define res1 (funapp-helper arg (type-and res s2) P))
+     (define res2 (funapp-helper (type-diff arg s1) res P))
+     (type-or res1 res2)]
+    [_ res]))
