@@ -66,7 +66,7 @@
         [res : TYPE Any-TYPE])
        (match bdd
          ['BOT Empty-TYPE]
-         [_ #:when (empty? arg) Empty-TYPE]
+         [_ #:when (or (empty? arg) (empty? res)) Empty-TYPE]
          ['TOP res]
          [(NODE (cons s1 s2) l m r)
           (define tl1 (loop l arg (type-and res s2)))

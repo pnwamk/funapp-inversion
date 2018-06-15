@@ -34,5 +34,5 @@
 (check<:-true  (PAIR Zero Number) (PAIR Number Number))
 (check<:-true  (PAIR Number Number) (PAIR Number Number))
 (check<:-false  (PAIR Number Number) (PAIR Zero Zero))
-(check<:-false  (PAIR Number Number) (PAIR Number Zero) )
+(check<:-false  (PAIR Number Number) (PAIR Number Zero))
 (check<:-false  (PAIR Number Number) (PAIR Zero Number))

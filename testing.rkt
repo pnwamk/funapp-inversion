@@ -14,7 +14,7 @@
 (define add1-semantic
   (->semantic semantic:type-of-add1))
 (define +-semantic
-  (->semantic semantic:type-of-add1))
+  (->semantic semantic:type-of-+))
 
 
 (: add1-comp-test (-> (Listof Symbol) (Listof NUMERIC) Void))
@@ -62,7 +62,6 @@
                 name2
                 semantic-result
                 syntactic-result)]))))
-
 
 
 
