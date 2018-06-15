@@ -388,8 +388,8 @@
 
 (: Arrow-TYPE (-> TYPE TYPE TYPE))
 (define (Arrow-TYPE t1 t2)
-  (type bot-BASE 'BOT (node (cons t1 t2) 'TOP 'BOT 'BOT)))
+  (type bot-BASE 'BOT (node (atom t1 t2) 'TOP 'BOT 'BOT)))
 
 (: Prod-TYPE (-> TYPE TYPE TYPE))
 (define (Prod-TYPE t1 t2)
-  (type bot-BASE (node (cons t1 t2) 'TOP 'BOT 'BOT) 'BOT))
+  (type bot-BASE (node (atom t1 t2) 'TOP 'BOT 'BOT) 'BOT))
