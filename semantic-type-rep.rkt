@@ -3,45 +3,53 @@
 (require (only-in "syntactic-type-rep.rkt"
                   NUMERIC-BASE
                   numeric-base-list)
+         (for-syntax racket/base)
          racket/match
          (only-in racket/unsafe/ops
+                  unsafe-fx+
                   unsafe-fx<
                   unsafe-fx>
                   unsafe-fxand
                   unsafe-fxior
+                  unsafe-fxxor
+                  unsafe-fxlshift
+                  unsafe-fxrshift
                   unsafe-fx=
                   unsafe-fxnot))
 
-(provide (except-out (all-defined-out)
-                     make-memo-entry
-                     memo-table-construct))
+(provide (all-defined-out))
 
 (define-type (HT K V) (HashTable K V))
 
-(define-syntax make-memo-entry
-  (syntax-rules ()
-    [(_ v) v]
-    [(_ k v)
-     (make-weak-hasheq
-      (list ((ann cons (All (A B) (-> A B (Pair A B))))
-             k v)))]
-    [(_ k1 k2 . rest)
-     (make-weak-hasheq
-      (list (cons k1 (make-memo-entry k2 . rest))))]))
 
-(define-syntax memo-table-construct
-  (syntax-rules ()
-    [(_ cur make-expr) cur]
-    [(_ cur make-expr field rest ...)
-     (let ([next (hash-ref cur field #f)])
-       (cond
-         [next (memo-table-construct next make-expr rest ...)]
-         [else
-          (define val make-expr)
-          (define entry (make-memo-entry rest ... val))
-          (hash-set! cur field entry)
-          val]))]))
+#|
+;; random primes with 60 bits
+137139276007508911
+1049307376606978823
+104910382219104389
+|#
 
+;; 60 bit number (fixnum? on 64 bit) with random half 0s and half 1s
+(define-syntax-rule (RANDOM-MASK)
+  634984049258069545)
+
+(define-syntax hash+
+  (syntax-rules ()
+    [(_ hc) hc]
+    [(_ hc1 hcs ...) (unsafe-fx+ hc1 (hash+ hcs ...))]))
+
+(define-syntax combine-hashes
+  (syntax-rules ()
+    [(combine-hashes seed) seed]
+    [(combine-hashes seed hc)
+     (unsafe-fxxor
+      seed
+      (hash+ hc
+             (RANDOM-MASK)
+             (unsafe-fxlshift seed 6)
+             (unsafe-fxrshift seed 2)))]
+    [(combine-hashes seed hcs ...)
+     (combine-hashes seed (combine-hashes hcs ...))]))
 
 
 (: base-bit-table (HT NUMERIC-BASE Fixnum))
@@ -60,7 +68,7 @@
          #b0
          syms))
 
-(: symbols->BASE (-> (Listof NUMERIC-BASE) BASE))
+(: symbols->BASE (-> (Listof NUMERIC-BASE) Fixnum))
 (define (symbols->BASE syms)
   (base #t (symbols->bits syms)))
 
@@ -78,24 +86,24 @@
               (sub1 (arithmetic-shift 1 (add1 (length numeric-base-list)))))
   (error "masks and base-list out of sync"))
 
-(: base-sign (-> BASE Boolean))
+(: base-sign (-> Fixnum Boolean))
 (define (base-sign b)
-  (not (unsafe-fx= 0 (unsafe-fxand (BASE-data b) (SIGN-MASK)))))
+  (not (unsafe-fx= 0 (unsafe-fxand b (SIGN-MASK)))))
 
-(: base-bits (-> BASE Fixnum))
+(: base-bits (-> Fixnum Fixnum))
 (define (base-bits b)
-  (unsafe-fxand (BASE-data b) (BIT-MASK)))
+  (unsafe-fxand b (BIT-MASK)))
 
-(: base (-> Boolean Fixnum BASE))
+(: base (-> Boolean Fixnum Fixnum))
 (define (base sign bits)
   (cond
-    [sign (make-BASE (unsafe-fxior bits (SIGN-MASK)))]
-    [else (make-BASE bits)]))
+    [sign (unsafe-fxior bits (SIGN-MASK))]
+    [else bits]))
 
 (define-syntax-rule (unsafe-fxdiff bits1 bits2)
   (unsafe-fxand bits1 (unsafe-fxnot bits2)))
 
-(: base-or (-> BASE BASE BASE))
+(: base-or (-> Fixnum Fixnum Fixnum))
 (define (base-or b1 b2)
   (define bits1 (base-bits b1))
   (define bits2 (base-bits b2))
@@ -105,7 +113,7 @@
     [(#f #t) (base #f (unsafe-fxdiff bits2 bits1))]
     [(#f #f) (base #f (unsafe-fxand  bits1 bits2))]))
 
-(: base-and (-> BASE BASE BASE))
+(: base-and (-> Fixnum Fixnum Fixnum))
 (define (base-and b1 b2)
   (define bits1 (base-bits b1))
   (define bits2 (base-bits b2))
@@ -115,7 +123,7 @@
     [(#f #t) (base #t (unsafe-fxdiff bits2 bits1))]
     [(#f #f) (base #f (unsafe-fxior  bits1 bits2))]))
 
-(: base-diff (-> BASE BASE BASE))
+(: base-diff (-> Fixnum Fixnum Fixnum))
 (define (base-diff b1 b2)
   (define bits1 (base-bits b1))
   (define bits2 (base-bits b2))
@@ -129,60 +137,60 @@
 (define-type ATOM (Pair TYPE TYPE))
 
 (: atom (-> TYPE TYPE ATOM))
-(define atom
-  (let ([atom-table : (HT TYPE (HT TYPE (Pair TYPE TYPE)))
-                    (make-weak-hasheq)])
-    (λ (a d)
-      (memo-table-construct atom-table (cons a d) a d))))
+(define atom cons)
 
-(struct NODE ([atom : ATOM]
-              [left : BDD]
-              [middle : BDD]
-              [right : BDD])
+(struct REP ([hash : Fixnum]) #:transparent)
+
+(struct TOP REP ())
+;; do NOT create another instance
+(define top (TOP (assert 14755516491509597 fixnum?))) ;; prime
+
+(struct BOT REP ())
+;; do NOT create another instance
+(define bot (BOT (assert 654942626022799249 fixnum?))) ;; prime
+
+
+(struct NODE REP
+  ([atom : ATOM]
+   [left : BDD]
+   [middle : BDD]
+   [right : BDD])
   #:transparent)
 
 (: make-NODE (-> ATOM BDD BDD BDD
                  NODE))
-(define make-NODE
-  (let ([node-table : (HT ATOM (HT BDD (HT BDD (HT BDD NODE))))
-                    (make-weak-hasheq)])
-    (λ (a l m r)
-      (memo-table-construct node-table (NODE a l m r) a l m r))))
+(define (make-NODE a l m r)
+  (define hc1 (REP-hash (car a)))
+  (define hc2 (REP-hash (cdr a)))
+  (define hc3 (REP-hash l))
+  (define hc4 (REP-hash m))
+  (define hc5 (REP-hash r))
+  (NODE (combine-hashes hc1 hc2 hc3 hc4 hc5)
+        a l m r))
 
-(define top 'TOP)
-(: top? (-> Any Boolean : TOP))
-(define (top? x) (eq? x 'TOP))
+(define-match-expander NODE:
+  (λ (stx)
+    (syntax-case stx ()
+      [(_ a l m r) #'(NODE _ a l m r)])))
 
-(define bot 'TOP)
-(: bot? (-> Any Boolean : BOT))
-(define (bot? x) (eq? x 'BOT))
-
-(define-type TOP 'TOP)
-(define-type BOT 'BOT)
 (define-type BDD (U TOP BOT NODE))
 
 
-(struct BASE ([data : Fixnum]) #:transparent)
-
-(: make-BASE (-> Fixnum BASE))
-(define make-BASE
-  (let ([base-table : (HT BASE BASE) (make-weak-hash)])
-    (λ (data)
-      (define b (BASE data))
-      (cond
-        [(hash-ref base-table b #f)]
-        [else (hash-set! base-table b b)
-              b]))))
-
-(struct TYPE ([base : BASE] [prods : BDD] [arrows : BDD])
+(struct TYPE REP ([base : Fixnum]
+                  [prods : BDD]
+                  [arrows : BDD])
   #:transparent)
 
-(: type (-> BASE BDD BDD TYPE))
-(define type
-  (let ([type-table : (HT BASE (HT BDD (HT BDD TYPE)))
-                    (make-weak-hasheq)])
-    (λ (b p a)
-      (memo-table-construct type-table (TYPE b p a) b p a))))
+(define-match-expander TYPE:
+  (λ (stx)
+    (syntax-case stx ()
+      [(_ b p a) #'(TYPE _ b p a)])))
+
+(: type (-> Fixnum BDD BDD TYPE))
+(define (type b p a)
+  (define hc2 (REP-hash p))
+  (define hc3 (REP-hash a))
+  (TYPE (combine-hashes b hc2 hc3) b p a))
 
 (define-syntax lexical<?
   (syntax-rules ()
@@ -202,152 +210,146 @@
 (: atom<? (-> ATOM ATOM Boolean))
 (define (atom<? a1 a2)
   (cond
-    [(eq? a1 a2) #f]
-    [else
-     (define hc1 (eq-hash-code a1))
-     (define hc2 (eq-hash-code a2))
-     (cond
-       [(unsafe-fx< hc1 hc2) #t]
-       [(unsafe-fx> hc1 hc2) #f]
-       [else (lexical<? [type<? (car a1) (car a2)]
-                        [type<? (cdr a1) (cdr a2)])])]))
+    [else (lexical<? [type<? (car a1) (car a2)]
+                     [type<? (cdr a1) (cdr a2)])]))
 
-(: base<? (-> BASE BASE Boolean))
+(: base<? (-> Fixnum Fixnum Boolean))
 (define (base<? b1 b2)
-  (cond
-    [(eq? b1 b2) #f]
-    [else
-     (define hc1 (eq-hash-code b1))
-     (define hc2 (eq-hash-code b2))
-     (cond
-       [(unsafe-fx< hc1 hc2) #t]
-       [(unsafe-fx> hc1 hc2) #f]
-       [else (unsafe-fx< (BASE-data b1) (BASE-data b2))])]))
+  (unsafe-fx< b1 b2))
 
 (: bdd<? (-> BDD BDD Boolean))
 (define (bdd<? b1 b2)
-  (cond
-    [(eq? b1 b2) #f]
-    [(eq? b2 'TOP) #t]
-    [(eq? b2 'BOT) #f]
-    [(eq? b1 'TOP) #f]
-    [(eq? b1 'BOT) #t]
-    [else
-     (define hc1 (eq-hash-code b1))
-     (define hc2 (eq-hash-code b2))
-     (cond
-       [(unsafe-fx< hc1 hc2) #t]
-       [(unsafe-fx> hc1 hc2) #f]
-       [else (lexical<? [atom<? (NODE-atom b1) (NODE-atom b2)]
-                        [bdd<? (NODE-left b1) (NODE-left b2)]
-                        [bdd<? (NODE-middle b1) (NODE-middle b2)]
-                        [bdd<? (NODE-right b1) (NODE-right b2)])])]))
+  (define hc1 (REP-hash b1))
+  (define hc2 (REP-hash b2))
+  (match* (b1 b2)
+    [(_ _) #:when (unsafe-fx< hc1 hc2) #t]
+    [(_ _) #:when (unsafe-fx> hc1 hc2) #f]
+    [(_ _) #:when (equal? b1 b2) #f]
+    [((NODE: a1 l1 m1 r1) (NODE: a2 l2 m2 r2))
+     (lexical<? [atom<? a1 a2]
+                [bdd<? l1 l2]
+                [bdd<? m1 m2]
+                [bdd<? r1 r2])]))
 
 
 (: type<? (-> TYPE TYPE Boolean))
 (define (type<? t1 t2)
-  (define hc1 (eq-hash-code t1))
-  (define hc2 (eq-hash-code t2))
-  (cond
-    [(unsafe-fx< hc1 hc2) #t]
-    [(unsafe-fx> hc1 hc2) #f]
-    [else (lexical<? [base<? (TYPE-base t1)   (TYPE-base t2)]
-                     [bdd<?  (TYPE-prods t1)  (TYPE-prods t2)]
-                     [bdd<?  (TYPE-arrows t1) (TYPE-arrows t2)])]))
+  (define hc1 (REP-hash t1))
+  (define hc2 (REP-hash t2))
+  (match* (t1 t2)
+    [(_ _) #:when (unsafe-fx< hc1 hc2) #t]
+    [(_ _) #:when (unsafe-fx> hc1 hc2) #f]
+    [(_ _) #:when (equal? t1 t2) #f]
+    [((TYPE: b1 p1 a1) (TYPE: b2 p2 a2))
+     (lexical<? [unsafe-fx< b1 b2]
+                [bdd<? p1 p2]
+                [bdd<? a1 a2])]))
 
 
 
 (: node (-> (Pair TYPE TYPE) BDD BDD BDD BDD))
 (define (node a l m r)
   (cond
-    [(eq? m 'TOP) 'TOP]
-    [(eq? l r) (bdd-or l m)]
+    [(eq? m top) top]
+    [(equal? l r) (bdd-or l m)]
     [else (make-NODE a l m r)]))
 
 (: bdd-or (-> BDD BDD BDD))
 (define (bdd-or b1 b2)
   (match* (b1 b2)
-    [(_ _) #:when (eq? b1 b2) b1]
-    [(_ 'TOP) 'TOP]
-    [('TOP _) 'TOP]
-    [(b 'BOT) b]
-    [('BOT b) b]
-    [((NODE a1 l1 m1 r1) (NODE a2 l2 m2 r2))
-     #:when (eq? a1 a2)
-     (node a1 (bdd-or l1 l2) (bdd-or m1 m2) (bdd-or r1 r2))]
-    [((NODE a1 l1 m1 r1) (NODE a2 _ _ _))
+    [(_ (== top eq?)) top]
+    [((== top eq?) _) top]
+    [(b (== bot eq?)) b]
+    [((== bot eq?) b) b]
+    [((NODE: a l1 m1 r1) (NODE: a l2 m2 r2))
+     (cond
+       [(and (equal? l1 l2)
+             (equal? m1 m2)
+             (equal? r1 r2))
+        b1]
+       [else
+        (node a (bdd-or l1 l2) (bdd-or m1 m2) (bdd-or r1 r2))])]
+    [((NODE: a1 l1 m1 r1) (NODE: a2 _ _ _))
      #:when (atom<? a1 a2)
      (node a1 l1 (bdd-or m1 b2) r1)]
-    [((NODE _ _ _ _) (NODE a2 l2 m2 r2))
+    [((NODE: _ _ _ _) (NODE: a2 l2 m2 r2))
      (node a2 l2 (bdd-or m2 b1) r2)]))
 
 
 (: bdd-and (-> BDD BDD BDD))
 (define (bdd-and b1 b2)
   (match* (b1 b2)
-    [(_ _) #:when (eq? b1 b2) b1]
-    [(b 'TOP) b]
-    [('TOP b) b]
-    [(_ 'BOT) 'BOT]
-    [('BOT _) 'BOT]
-    [((NODE a1 l1 m1 r1) (NODE a2 l2 m2 r2))
-     #:when (eq? a1 a2)
-     (node a1
-           (bdd-and (bdd-or l1 m1)
-                    (bdd-or l2 m2))
-           'BOT
-           (bdd-and (bdd-or r1 m1)
-                    (bdd-or r2 m2)))]
-    [((NODE a1 l1 m1 r1) (NODE a2 _ _ _))
+    [(b (== top eq?)) b]
+    [((== top eq?) b) b]
+    [(_ (== bot eq?)) bot]
+    [((== bot eq?) _) bot]
+    [((NODE: a l1 m1 r1) (NODE: a l2 m2 r2))
+     (cond
+       [(and (equal? l1 l2)
+             (equal? m1 m2)
+             (equal? r1 r2))
+        b1]
+       [else
+        (node a
+              (bdd-and (bdd-or l1 m1)
+                       (bdd-or l2 m2))
+              bot
+              (bdd-and (bdd-or r1 m1)
+                       (bdd-or r2 m2)))])]
+    [((NODE: a1 l1 m1 r1) (NODE: a2 _ _ _))
      #:when (atom<? a1 a2)
      (node a1 (bdd-and l1 b2) (bdd-and m1 b2) (bdd-and r1 b2))]
-    [((NODE _ _ _ _) (NODE a2 l2 m2 r2))
+    [((NODE: _ _ _ _) (NODE: a2 l2 m2 r2))
      (node a2 (bdd-and b1 l2) (bdd-and b1 m2) (bdd-and b1 r2))]))
 
 (: bdd-diff (-> BDD BDD BDD))
 (define (bdd-diff b1 b2)
   (match* (b1 b2)
-    [(_ _) #:when (eq? b1 b2) 'BOT]
-    [(b 'TOP) 'BOT]
-    [('TOP b) (bdd-not b)]
-    [(b 'BOT) b]
-    [('BOT _) 'BOT]
-    [((NODE a1 l1 m1 r1) (NODE a2 _ _ _))
-     #:when (eq? a1 a2)
-     (node a1
-           (bdd-diff l1 b2)
-           (bdd-diff m1 b2)
-           (bdd-diff r1 b2))]
-    [((NODE a1 l1 m1 r1) (NODE a2 _ _ _))
+    [(b (== top eq?)) bot]
+    [((== top eq?) b) (bdd-not b)]
+    [(b (== bot eq?)) b]
+    [((== bot eq?) _) bot]
+    [((NODE: a l1 m1 r1) (NODE: a l2 m2 r2))
+     (cond
+       [(and (equal? l1 l2)
+             (equal? m1 m2)
+             (equal? r1 r2))
+        bot]
+       [else
+        (node a
+              (bdd-diff l1 b2)
+              (bdd-diff m1 b2)
+              (bdd-diff r1 b2))])]
+    [((NODE: a1 l1 m1 r1) (NODE: a2 _ _ _))
      #:when (atom<? a1 a2)
      (node a1
            (bdd-diff (bdd-or l1 m1) b2)
-           'BOT
+           bot
            (bdd-diff (bdd-or r1 m1) b2))]
-    [((NODE _ _ _ _) (NODE a2 l2 m2 r2))
+    [((NODE: _ _ _ _) (NODE: a2 l2 m2 r2))
      (node a2
            (bdd-diff b1 (bdd-or l2 m2))
-           'BOT
+           bot
            (bdd-diff b1 (bdd-or r2 m2)))]))
 
 (: bdd-not (-> BDD BDD))
 (define (bdd-not b)
   (match b
-    ['TOP 'BOT]
-    ['BOT 'TOP]
-    [(NODE a l m 'BOT)
-     (node a 'BOT (bdd-not (bdd-or l m)) (bdd-not m))]
-    [(NODE a 'BOT m r)
-     (node a (bdd-not m) (bdd-not (bdd-or m r)) 'BOT)]
-    [(NODE a l 'BOT r)
+    [(== top eq?) bot]
+    [(== bot eq?) top]
+    [(NODE: a l m (== bot eq?))
+     (node a bot (bdd-not (bdd-or l m)) (bdd-not m))]
+    [(NODE: a (== bot eq?) m r)
+     (node a (bdd-not m) (bdd-not (bdd-or m r)) bot)]
+    [(NODE: a l (== bot eq?) r)
      (node a (bdd-not l) (bdd-not (bdd-or l r)) (bdd-not r))]
-    [(NODE a l m r)
-     (node a (bdd-not (bdd-or l m)) 'BOT (bdd-not (bdd-or r m)))]))
+    [(NODE: a l m r)
+     (node a (bdd-not (bdd-or l m)) bot (bdd-not (bdd-or r m)))]))
 
 (: type-and (-> TYPE TYPE TYPE))
 (define (type-and t1 t2)
   (match* (t1 t2)
-    [((TYPE b1 p1 a1) (TYPE b2 p2 a2))
+    [((TYPE: b1 p1 a1) (TYPE: b2 p2 a2))
      (type (base-and b1 b2)
            (bdd-and p1 p2)
            (bdd-and a1 a2))]))
@@ -355,7 +357,7 @@
 (: type-or (-> TYPE TYPE TYPE))
 (define (type-or t1 t2)
   (match* (t1 t2)
-    [((TYPE b1 p1 a1) (TYPE b2 p2 a2))
+    [((TYPE: b1 p1 a1) (TYPE: b2 p2 a2))
      (type (base-or b1 b2)
            (bdd-or p1 p2)
            (bdd-or a1 a2))]))
@@ -363,7 +365,7 @@
 (: type-diff (-> TYPE TYPE TYPE))
 (define (type-diff t1 t2)
   (match* (t1 t2)
-    [((TYPE b1 p1 a1) (TYPE b2 p2 a2))
+    [((TYPE: b1 p1 a1) (TYPE: b2 p2 a2))
      (type (base-diff b1 b2)
            (bdd-diff p1 p2)
            (bdd-diff a1 a2))]))
@@ -379,17 +381,17 @@
 (define top-BASE (base #f #b0))
 (define bot-BASE (base #t #b0))
 
-(define Any-TYPE (type top-BASE 'TOP 'TOP))
-(define Empty-TYPE (type bot-BASE 'BOT 'BOT))
-(define Any-Base-TYPE (type top-BASE 'BOT 'BOT))
-(define Any-Prod-TYPE (type bot-BASE 'TOP 'BOT))
-(define Any-Arrow-TYPE (type bot-BASE 'BOT 'TOP))
+(define Any-TYPE (type top-BASE top top))
+(define Empty-TYPE (type bot-BASE bot bot))
+(define Any-Base-TYPE (type top-BASE bot bot))
+(define Any-Prod-TYPE (type bot-BASE top bot))
+(define Any-Arrow-TYPE (type bot-BASE bot top))
 
 
 (: Arrow-TYPE (-> TYPE TYPE TYPE))
 (define (Arrow-TYPE t1 t2)
-  (type bot-BASE 'BOT (node (cons t1 t2) 'TOP 'BOT 'BOT)))
+  (type bot-BASE bot (node (atom t1 t2) top bot bot)))
 
 (: Prod-TYPE (-> TYPE TYPE TYPE))
 (define (Prod-TYPE t1 t2)
-  (type bot-BASE (node (cons t1 t2) 'TOP 'BOT 'BOT) 'BOT))
+  (type bot-BASE (node (atom t1 t2) top bot bot) bot))

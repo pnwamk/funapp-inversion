@@ -19,10 +19,10 @@
         [s2 : TYPE Any-TYPE]
         [N : (Listof ATOM) '()])
        (match bdd
-         ['BOT Empty-TYPE]
+         [(== bot eq?) Empty-TYPE]
          [_ #:when (or (empty? s1) (empty? s2)) Empty-TYPE]
-         ['TOP (prod-phi i s1 s2 N)]
-         [(NODE (and a (cons t1 t2)) l m r)
+         [(== top eq?) (prod-phi i s1 s2 N)]
+         [(NODE: (and a (cons t1 t2)) l m r)
           (define tl (loop l (type-and s1 t1) (type-and s2 t2) N))
           (define tm (loop m s1 s2 N))
           (define tr (loop r s1 s2 (cons a N)))
@@ -46,9 +46,9 @@
        ([bdd : BDD (TYPE-arrows t)]
         [t : TYPE Empty-TYPE])
        (match bdd
-         ['TOP t]
-         ['BOT Any-TYPE]
-         [(NODE (cons s1 _) l m r)
+         [(== top eq?) t]
+         [(== bot eq?) Any-TYPE]
+         [(NODE: (cons s1 _) l m r)
           (type-and (loop l (type-or t s1))
                     (type-and (loop m t)
                               (loop r t)))]))]))
@@ -64,9 +64,9 @@
        ([bdd (TYPE-arrows fun)]
         [P : (Listof ATOM) '()])
        (match bdd
-         ['BOT Empty-TYPE]
-         ['TOP (funapp-helper arg Any-TYPE P)]
-         [(NODE (and a (cons s1 _)) l m r)
+         [(== bot eq?) Empty-TYPE]
+         [(== top eq?) (funapp-helper arg Any-TYPE P)]
+         [(NODE: (and a (cons s1 _)) l m r)
           (define tl
             (cond
               [(overlap? s1 arg) (loop l (cons a P))]

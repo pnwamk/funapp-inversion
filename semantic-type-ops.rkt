@@ -17,30 +17,18 @@
   (not (empty? (type-and t1 t2))))
 
 
-(: empty? (-> TYPE Boolean))
-(define empty?
-  (let ([empty-table : (HT TYPE (U 'YES 'NO))
-                     (make-weak-hasheq)])
-    (λ (t)
-      (cond
-        [(eq? t Empty-TYPE) #t]
-        [(or (not (eq? bot-BASE (TYPE-base t)))
-             (eq? 'TOP (TYPE-prods t))
-             (eq? 'TOP (TYPE-arrows t)))
-         #f]
-        [else
-         (define cached-result (hash-ref empty-table t #f))
-         (cond
-           [(not cached-result)
-            (match-define (TYPE b p a) t)
-            (define result (and (empty-base? b)
-                                (empty-prod? p)
-                                (empty-arrow? a)))
-            (hash-set! empty-table t (if result 'YES 'NO))
-            result]
-           [else (eq? cached-result 'YES)])]))))
+(define empty-table : (HT Fixnum (Listof (Pair TYPE Boolean)))
+  (make-hasheq))
 
-(: empty-base? (-> BASE Boolean))
+
+(: empty? (-> TYPE Boolean))
+(define (empty? t)
+  (match-define (TYPE: b p a) t)
+  (and (empty-base? b)
+       (empty-prod? p)
+       (empty-arrow? a)))
+
+(: empty-base? (-> Fixnum Boolean))
 (define (empty-base? b)
   (eq? b bot-BASE))
 
@@ -52,11 +40,12 @@
      [s2 : TYPE Any-TYPE]
      [N : (Listof ATOM) '()])
     (match bdd
-      ['BOT #true]
-      ['TOP (or (empty? s1)
-                (empty? s2)
-                (prod-theta s1 s2 N))]
-      [(NODE (and a (cons t1 t2)) l m r)
+      [(== bot eq?) #true]
+      [(== top eq?)
+       (or (empty? s1)
+           (empty? s2)
+           (prod-theta s1 s2 N))]
+      [(NODE: (and a (cons t1 t2)) l m r)
        (and (loop l (type-and s1 t1) (type-and s2 t2) N)
             (loop m s1 s2 N)
             (loop r s1 s2 (cons a N)))])))
@@ -80,12 +69,12 @@
      [P : (Listof ATOM) '()]
      [N : (Listof ATOM) '()])
     (match* (bdd N)
-      [('BOT _) #true]
-      [('TOP _) #false]
-      [('TOP (cons (cons t1 t2) N))
+      [((== bot eq?) _) #true]
+      [((== top eq?) _) #false]
+      [((== top eq?) (cons (cons t1 t2) N))
        (or (and (subtype? t1 s) (arrow-theta t1 (type-not t2) P))
-           (loop 'TOP s P N))]
-      [((NODE (and a (cons s1 _)) l m r) _)
+           (loop top s P N))]
+      [((NODE: (and a (cons s1 _)) l m r) _)
        (and (loop l (type-or s s1) (cons a P) N)
             (loop m s P N)
             (loop r s P (cons a N)))])))

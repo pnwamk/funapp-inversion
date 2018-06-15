@@ -46,9 +46,14 @@
       (define semantic-t1 (->semantic syntactic-t1))
       (define semantic-t2 (->semantic syntactic-t2))
       (define syntactic-result
-        (syntactic-funapp syntactic:type-of-+ syntactic-t1 syntactic-t2))
+        (time
+         (syntactic-funapp syntactic:type-of-+
+                           syntactic-t1
+                           syntactic-t2)))
       (define semantic-result
-        (funapp +-semantic (Prod-TYPE semantic-t1 semantic-t2)))
+        (time
+         (funapp +-semantic
+                 (Prod-TYPE semantic-t1 semantic-t2))))
       (cond
         [(not syntactic-result)
          (error '+-comp-test "syntactic apply failed, argument types: ~a ~a\n" name1 name2)]
@@ -66,13 +71,15 @@
 
 
 ;; test add1
-
+#;#;
 (add1-comp-test numeric-base-list
                 numeric-base-list)
 (add1-comp-test (hash-keys numeric-unions-table)
                 (hash-values numeric-unions-table))
-
+#;#;
 (+-comp-test numeric-base-list
              numeric-base-list)
 (+-comp-test (hash-keys numeric-unions-table)
              (hash-values numeric-unions-table))
+
+(+-comp-test (list 'Number) (list Number))

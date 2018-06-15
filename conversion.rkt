@@ -11,11 +11,11 @@
                   TYPE))
 (define (->semantic t)
   (match t
-    [(? symbol? s) (type (symbols->BASE (list s)) 'BOT 'BOT)]
+    [(? symbol? s) (type (symbols->BASE (list s)) bot bot)]
     [(UNOP dom rng) (Arrow-TYPE (->semantic dom) (->semantic rng))]
     [(BINOP dom1 dom2 rng) (Arrow-TYPE (Prod-TYPE (->semantic dom1) (->semantic dom2))
                                        (->semantic rng))]
-    [(cons 'U types) (type (symbols->BASE types) 'BOT 'BOT)]
+    [(cons 'U types) (type (symbols->BASE types) bot bot)]
     [(cons (? UNOP? u) unops)
      (foldl (λ ([u : UNOP]
                 [t : TYPE])
