@@ -71,15 +71,15 @@
 
 
 ;; test add1
-#;#;
-(add1-comp-test numeric-base-list
-                numeric-base-list)
-(add1-comp-test (hash-keys numeric-unions-table)
-                (hash-values numeric-unions-table))
-#;#;
-(+-comp-test numeric-base-list
-             numeric-base-list)
-(+-comp-test (hash-keys numeric-unions-table)
-             (hash-values numeric-unions-table))
+(time
+ (add1-comp-test numeric-base-list
+                 numeric-base-list)
+ (add1-comp-test (hash-keys numeric-unions-table)
+                 (hash-values numeric-unions-table))
+ (+-comp-test numeric-base-list
+              numeric-base-list)
+ (+-comp-test (hash-keys numeric-unions-table)
+              (hash-values numeric-unions-table))
 
-(+-comp-test (list 'Number) (list Number))
+ (+-comp-test (list 'Number) (list Number))
+ (eprintf "DONE\n"))
