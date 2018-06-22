@@ -132,8 +132,35 @@ rngTy fty@(Ty _ _ arrows) argty =
           | otherwise = rng
         aux (Node (Arrow s1 s2) l m r) arg rng
           | isEmpty arg = emptyTy
+          | isEmpty rng = emptyTy
           | otherwise = tyOr lty1 $ tyOr lty2 $ tyOr mty rty
           where lty1 = aux l arg (tyAnd rng s2)
                 lty2 = aux l (tyDiff arg s1) rng
                 mty = aux m arg rng
                 rty = aux r arg rng
+
+
+inTy :: Ty -> Ty -> Maybe Ty
+inTy fty@(Ty _ _ arrows) out =
+  case (domTy fty) of
+    Nothing    -> Nothing
+    (Just dom) -> Just res
+      where res = input arrows dom out []
+            input :: (BDD Arrow) -> Ty -> Ty -> [Arrow] -> Ty
+            input Bot arg rng pos = emptyTy
+            input Top dom rng pos = tyDiff p n
+              where (p,n) = aux dom rng pos
+            input (Node a l m r) dom rng pos = tyOr lRes $ tyOr mRes rRes
+              where lRes = input l dom rng (a:pos)
+                    mRes = input m dom rng pos
+                    rRes = input r dom rng pos
+            aux :: Ty -> Ty -> [Arrow] -> (Ty , Ty)
+            aux dom rng []
+              | (isEmpty rng) = (emptyTy , dom)
+              | otherwise     = (dom , emptyTy)
+            aux dom rng ((Arrow t1 t2):pos) = (tyOr p1 p2 , tyOr n1 n2)
+              where (p1,n1) = aux (tyAnd t1 dom) (tyAnd t2 rng) pos
+                    (p2,n2) = aux dom rng pos
+                  
+
+  

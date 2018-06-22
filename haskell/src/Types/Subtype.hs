@@ -24,16 +24,15 @@ isEmptyProd (Node p@(Prod t1 t2) l m r) s1 s2 neg =
   && (isEmptyProd m s1 s2 neg)
   && (isEmptyProd r s1 s2 (p:neg))
 isEmptyProd Bot _ _ _ = True
-isEmptyProd Top s1 s2 neg =
-  ((isEmpty s1)
-  || (isEmpty s2)
-  || (aux s1 s2 neg))
+isEmptyProd Top s1 s2 neg = ((isEmpty s1)
+                             || (isEmpty s2)
+                             || (aux s1 s2 neg))
   where aux :: Ty -> Ty -> [Prod] -> Bool
         aux s1 s2 [] = False
-        aux s1 s2 ((Prod t1 t2):neg) = lhsCheck && rhsCheck
-          where lhsCheck = ((isEmpty diff1) || (aux diff1 s2 neg))
+        aux s1 s2 ((Prod t1 t2):neg) = lEmpty && rEmpty
+          where lEmpty = ((isEmpty diff1) || (aux diff1 s2 neg))
                 diff1 = (tyDiff s1 t1)
-                rhsCheck = ((isEmpty diff2) || (aux s1 diff2 neg))
+                rEmpty = ((isEmpty diff2) || (aux s1 diff2 neg))
                 diff2 = (tyDiff s2 t2)
 
 -- Is a BDD of arrows equivalent to ∅?
