@@ -10,12 +10,17 @@ import Data.Foldable
 
 main :: IO ()
 main = do
-  putStrLn "Comparing inc with base types"
-  forM_ baseTypes $ \t -> do
-    putStr $ " Comparing in with " ++ (show t) ++ "... "
-    putStrLn (if (compareUnOpRes t Sem.incType Syn.incType)
+  putStrLn "Comparing inc: "
+  forM_ numericTypes $ \(name, ty) -> do
+    putStr $ "  " ++ name ++ " ... "
+    putStrLn (if (compareUnOpRes ty Sem.incType Syn.incType)
               then ""
               else "failed!")
-  putStrLn "Comparing inc with complex types"
-  putStrLn "Comparing plus with base types"
-  putStrLn "Comparing plus with complex types"
+  putStrLn "Comparing plus:"
+  forM_ numericTypes $ \(name1, ty1) -> do
+    forM_ numericTypes $ \(name2, ty2) -> do
+      putStr $ "  " ++ name1 ++ " x " ++ name2 ++ " ... "
+      putStrLn (if (compareBinOpRes ty1 ty2 Sem.plusType Syn.plusType)
+              then ""
+              else "failed!")
+  

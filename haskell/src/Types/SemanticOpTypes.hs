@@ -13,6 +13,9 @@ incType = [ (zero, one)
           , (singleFloat, singleFloat)
           , (floatComplex, floatComplex)
           , (singleFloatComplex, singleFloatComplex)
+          , (nonnegativeReal, positiveReal)
+          , (negativeFixnum, nonpositiveFixnum)
+          , (negativeInteger, nonpositiveInteger)
           , (number, number)]
 
 plusType :: [(Ty, Ty, Ty)]
