@@ -1,6 +1,4 @@
-module Types.SyntacticOpTypes
-  ( 
-  ) where
+module Types.SyntacticOpTypes where
 
 import Types.Syntax
 

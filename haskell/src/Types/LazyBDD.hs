@@ -4,6 +4,7 @@ module Types.LazyBDD
   , BDD(..)
   , Arrow(..)
   , Prod(..)
+  , prodTy
   , parseTy
   , tyAnd
   , tyOr
