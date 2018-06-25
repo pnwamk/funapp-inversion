@@ -15,6 +15,7 @@ genMetafunctionSpec ::
   -> (a -> Maybe a)
   -> (a -> Maybe a)
   -> (a -> a -> Maybe a)
+  -> (a -> a -> Maybe a)
   -> Spec
 genMetafunctionSpec
   parse
@@ -24,7 +25,8 @@ genMetafunctionSpec
   rawFstProj
   rawSndProj
   rawDomTy
-  rawRngTy = do
+  rawRngTy
+  rawInTy = do
   describe "First Projection Tests" $ do
     it "Projection from Empty 1" $ do
       fstProjEquiv Empty Empty `shouldBe` True
@@ -155,38 +157,70 @@ genMetafunctionSpec
         True)
         -- TODO add more
 
-
-    -- it "Simple Arrow" $ property $
-    --   \t1 t2 -> rngTyEquiv (Arrow t1 t2) t1 t2
-    -- it "Arrow Intersection1" $ property $
-    --   \t1 t2 t3 t4 -> (rngTyEquiv
-    --                    (And [(Arrow t1 t2),
-    --                          (Arrow t3 t4)])
-    --                     t1
-    --                     (if subtype t1 t3
-    --                      then And [t2, t4]
-    --                      else t2))
-    -- it "Arrow Intersection2" $ property $
-    --   \t1 t2 t3 t4 -> (rngTyEquiv
-    --                    (And [(Arrow t1 t2),
-    --                          (Arrow t3 t4)])
-    --                     t3
-    --                     (if subtype t3 t1
-    --                      then And [t2, t4]
-    --                      else t4))
-    -- it "Arrow Intersection3" $ property $
-    --   \t1 t2 t3 t4 -> (rngTyEquiv
-    --                    (And [(Arrow t1 t2),
-    --                          (Arrow t3 t4)])
-    --                     (Or [t1, t3])
-    --                     (Or [t2, t4]))
-    -- it "Arrow Union" $ property $
-    --   \t1 t2 -> (rngTyEquiv
-    --               (Or [(Arrow (Or [T, Zero]) t1),
-    --                    (Arrow (Or [T, F]) t2)])
-    --               T
-    --             (Or [t1, t2]))
-
+    describe "Input Type Tests" $ do
+    it "Simple Arrow1" $ do
+      (inTyEquiv (Arrow T F) F T `shouldBe` True)
+    it "Simple Arrow1" $ do
+      (inTyEquiv (Arrow T F) (Not F) (Or []) `shouldBe` True)
+    it "Arrow Intersection 1" $ do
+      (inTyEquiv (And [(Arrow (Not F) F), (Arrow F T)]) T F `shouldBe` True)
+    it "Arrow Intersection 2" $ do
+      (inTyEquiv (And [(Arrow (Not F) F), (Arrow F T)]) (Not F) F `shouldBe` True)
+    it "Arrow Intersection 3" $ do
+      (inTyEquiv (And [(Arrow (Not F) F), (Arrow F T)]) F (Not F) `shouldBe` True)
+    it "Arrow Intersection 4" $ do
+      (inTyEquiv (And [(Arrow T F), (Arrow F T), (Arrow Zero One)]) (Not F) (Or [F, Zero]) `shouldBe` True)
+    it "Arrow Intersection 5" $ do
+      (inTyEquiv (And [(Arrow T F), (Arrow F T), (Arrow Zero One)]) F T `shouldBe` True)
+    it "Arrow Intersection 6" $ do
+      (inTyEquiv (Or [(And [(Arrow T F), (Arrow F T), (Arrow Zero One)]),
+                     (And [(Arrow F F), (Arrow T T), (Arrow Zero One)])])
+                  F (Or [T,F])
+                  `shouldBe` True)
+    it "Arrow Intersection 7" $ do
+      (inTyEquiv (Or [(And [(Arrow T F), (Arrow F T), (Arrow Zero One)]),
+                     (And [(Arrow F F), (Arrow T T), (Arrow Zero One)])])
+                  (Not F) (Or [Zero, T, F])
+                  `shouldBe` True)
+    it "inTyDisjoint 1" $ property $
+      \t1 t2 -> (inTyDisjoint (Arrow t1 t2))
+    it "inTyDisjoint 2" $ property $
+      \t1 t2 t3 t4 -> (inTyDisjoint (And [(Arrow t1 t2), (Arrow t3 t4)]))
+    it "inTyDisjoint 3" $ property $
+      \t1 t2 t3 t4 t5 t6 t7 t8 ->
+        (inTyDisjoint (Or
+                        (And [(Arrow t1 t2), (Arrow t3 t4)])
+                        (And [(Arrow t5 t6), (Arrow t7 t8)])))
+    it "inTyTrue 1" $ property $
+      \t1 t2 -> (inTyTrue (Arrow t1 t2))
+    it "inTyTrue 2" $ property $
+      \t1 t2 t3 t4 -> (inTyTrue (And [(Arrow t1 t2), (Arrow t3 t4)]))
+    it "inTyTrue 3" $ property $
+      \t1 t2 t3 t4 t5 t6 t7 t8 ->
+        (inTyTrue (Or
+                   (And [(Arrow t1 t2), (Arrow t3 t4)])
+                   (And [(Arrow t5 t6), (Arrow t7 t8)])))
+    it "inTyFalse 1" $ property $
+      \t1 t2 -> (inTyFalse (Arrow t1 t2))
+    it "inTyFalse 2" $ property $
+      \t1 t2 t3 t4 -> (inTyFalse (And [(Arrow t1 t2), (Arrow t3 t4)]))
+    it "inTyFalse 3" $ property $
+      \t1 t2 t3 t4 t5 t6 t7 t8 ->
+        (inTyFalse (Or
+                    (And [(Arrow t1 t2), (Arrow t3 t4)])
+                    (And [(Arrow t5 t6), (Arrow t7 t8)])))
+    it "inTyCases 1" $ property $
+      \t1 t2 t3 -> (inTyCases (Arrow t1 t2) t3)
+    it "inTyCases 2" $ property $
+      \t1 t2 t3 t4 t5 -> (inTyCases (And [(Arrow t1 t2), (Arrow t3 t4)]) t5)
+    it "inTyCases 3" $ property $
+      \t1 t2 t3 t4 t5 t6 t7 t8 t9 ->
+        (inTyCases
+         (Or
+           (And [(Arrow t1 t2), (Arrow t3 t4)])
+           (And [(Arrow t5 t6), (Arrow t7 t8)]))
+         t9)
+        
 
     where fstProjEquiv :: Ty -> Ty -> Bool
           fstProjEquiv rawt1 rawt2 =
@@ -234,5 +268,97 @@ genMetafunctionSpec
               Nothing  -> False
               Just t1' -> rawEquiv t1' t2
             where t1 = (parse rawt1)
+                  argty = (parse rawargty)
+                  t2 = (parse rawt2)
+
+
+          inTyEquiv :: Ty -> Ty -> Ty -> Bool
+          inTyEquiv rawt1 rawargty rawt2 =
+            case (rawInTy t1 argty) of
+              Nothing  -> False
+              Just t1' -> rawEquiv t1' t2
+            where t1 = (parse rawt1)
+                  argty = (parse rawargty)
+                  t2 = (parse rawt2)
+
+          inTyDisjoint :: Ty -> Bool
+          inTyDisjoint rawfunty =
+            case ((rawInTy funty false), (rawInTy funty nonFalse))  of
+              (Just neg, Just pos) -> not (rawOverlap neg pos) 
+              otherwise -> True
+            where funty = (parse rawfunty)
+                  false = (parse F)
+                  nonFalse = (parse (Not F))
+
+          inTyTrue :: Ty -> Bool
+          inTyTrue rawfunty =
+            case (rawInTy funty nonFalse) of
+              Nothing  -> True
+              Just truthy ->
+                case (rawRngTy funty truthy) of
+                  Nothing -> False
+                  Just res -> (rawSubtype res nonFalse)
+            where funty = (parse rawfunty)
+                  nonFalse = (parse (Not F))
+
+          inTyFalse :: Ty -> Bool
+          inTyFalse rawfunty =
+            case (rawInTy funty false) of
+              Nothing  -> True
+              Just falsy ->
+                case (rawRngTy funty falsy) of
+                  Nothing -> False
+                  Just res -> (rawSubtype res false)
+            where funty = (parse rawfunty)
+                  false = (parse F)
+
+          inTyCases :: Ty -> Ty -> Ty -> Bool
+          inTyCases rawtfunty rawargty =
+            case (rawRngTy funty argty) of
+              Nothing  -> True
+              Just resty ->
+                -- if the argument is empty we don't have interesting
+                -- info to compare, so just abort with success
+                if (rawEmpty argty)
+                then True
+                -- similarly, if the result is empty, just verify
+                -- the argument type is not something that we would
+                -- have predicted could be mapped to a false or non-false
+                -- value (since it wasn't mapped to any value...)
+                else if (rawEmpty resty)
+                then (not (rawSubtype argty (tyOr posty negty)))
+                -- if the argument is something that
+                -- we predict will be mapped to a non-false value,
+                -- verify that indeed is the case
+                else if (rawSubtype argty posty)
+                then ((rawSubtype resty nonFalseTy)
+                       && (not (rawSubtype resty falseTy))
+                       && (not (rawSubtype argty negty)))
+                -- if the argument is something that
+                -- we predict will be mapped to false,
+                -- verify that indeed is the case
+                else if (rawSubtype argty negty)
+                then ((rawSubtype resty falseTy)
+                       && (not (rawSubtype resty nonFalseTy))
+                       && (not (rawSubtype argty posty)))
+                -- we can't tell if that argument type will be
+                -- mapped to a false or non-false value, so
+                -- go ahead and check that the predicted result
+                -- type is non false or non-false
+                else if (rawSubtype argty (tyOr posty negty))
+                then ((not (rawSubtype resty falseTy))
+                      && (not (rawSubtype resty nonFalseTy)))
+                -- at this point, part of the argument type
+                -- is not covered by the union of the predicted false
+                -- and non-false type, which means that part is mapped
+                -- to bottom, so verify if we isolate that part, the
+                -- predicted function application result is empty
+                else (rawEmpty (rawRngTy funty uncovered))
+                where posty = (rawInTy funty nonFalseTy)
+                      negty = (rawInTy funty falseTy)
+                      uncovered = (tyDiff argty (tyOr posty negty))
+            where nonFalseTy = (parse (Not F))
+                  falseTy = (parse F)
+                  funty = (parse rawtfunty)
                   argty = (parse rawargty)
                   t2 = (parse rawt2)

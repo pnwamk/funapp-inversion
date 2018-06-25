@@ -6,6 +6,7 @@ module Types.Metafunctions
   , sndProj
   , domTy
   , rngTy
+  , inTy
   ) where
 
 import Types.Base

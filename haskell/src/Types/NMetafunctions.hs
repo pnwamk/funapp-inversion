@@ -6,6 +6,7 @@ module Types.NMetafunctions
   , sndProj
   , domTy
   , rngTy
+  , inTy
   ) where
 
 import Types.Base
@@ -118,23 +119,49 @@ rngTy fty@(Ty _ _ arrows) argty =
   case (domTy fty) of
     (Just dom) | (subtype argty dom) -> Just res
     _ -> Nothing
-  where pss = map fst (flattenBDD arrows)
-        res = foldl (\t ps -> tyOr t (calcRng ps argty)) emptyTy pss
+  where ps = map fst (flattenBDD arrows)
+        res = foldl (\t p -> tyOr t (calcRng p argty)) emptyTy ps
 
 
 calcRng :: [Arrow] -> Ty -> Ty
-calcRng ps argty = foldl tyOr emptyTy ts
-  where pss = nonEmptySubsets ps
-        ts = map getTy pss
+calcRng p argty = foldl tyOr emptyTy ts
+  where ps = nonEmptySubsets p
+        ts = map getTy ps
         getTy :: [Arrow] -> Ty
         getTy pos
           | subtype argty compDom = emptyTy
           | otherwise = rng
           where compDom = (foldl (\t (Arrow s1 _) -> tyOr t s1)
                            emptyTy
-                           (ps \\ pos))
+                           (p \\ pos))
                 rng = (foldl (\t (Arrow _ s2) -> tyAnd t s2)
                            anyTy
                            pos)
-          
+
+
+inTy :: Ty -> Ty -> Maybe Ty
+inTy fty@(Ty _ _ arrows) out =
+  case (domTy fty) of
+    Nothing    -> Nothing
+    (Just dom) -> Just (tyAnd dom res)
+      where ps =  map fst (flattenBDD arrows)
+            res = (foldl
+                   (\t p -> tyOr t (pDiff (calcInTy p out)))
+                   emptyTy
+                   ps)
+            pDiff :: (Ty, Ty) -> Ty
+            pDiff (t1,t2) = tyDiff t1 t2
+
+
+calcInTy :: [Arrow] -> Ty -> (Ty, Ty)
+calcInTy p out = if (overlap rng out)
+                 then (dom, emptyTy)
+                 else (emptyTy, dom)
+  where ps = nonEmptySubsets p
+        dom = foldl tyAnd anyTy (map arrowDom ps)
+        rng = foldl tyAnd anyTy (map arrowRng ps)
+        arrowDom (Arrow t1 _) = t1 
+        arrowRng (Arrow _ t2) = t2
+        
+
   

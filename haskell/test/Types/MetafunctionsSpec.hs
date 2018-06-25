@@ -18,4 +18,5 @@ spec = (genMetafunctionSpec
          M.fstProj
          M.sndProj
          M.domTy
-         M.rngTy)
+         M.rngTy
+         M.inTy)
