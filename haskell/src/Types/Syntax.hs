@@ -1,7 +1,4 @@
-module Types.Syntax
-  ( Ty(..)
-  , baseTypes
-  ) where
+module Types.Syntax where
 
 import Test.QuickCheck
 
@@ -55,7 +52,14 @@ data Ty =
   | Empty
   deriving (Eq, Show, Ord)
 
+data Obj = ArgZero | ArgOne
 
+data Prop =
+    TT
+  | FF
+  | IsA Obj Ty
+  | NotA Obj Ty
+  | Conj Prop Prop
 
 baseTypes :: [Ty]
 baseTypes =
