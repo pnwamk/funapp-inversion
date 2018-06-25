@@ -24,12 +24,12 @@ compUnMaybeOp op1 op2 rawt = equivMaybeTy res1 res2
         res2 = op2 t
 
 compBinMaybeOp ::
-  (BDD.Ty -> Maybe BDD.Ty)
-  -> (BDD.Ty -> Maybe BDD.Ty)
+  (BDD.Ty -> BDD.Ty -> Maybe BDD.Ty)
+  -> (BDD.Ty -> BDD.Ty -> Maybe BDD.Ty)
   -> Ty
   -> Ty
   -> Bool
-compUnMaybeOp op1 op2 rawt1 rawt2 = equivMaybeTy res1 res2
+compBinMaybeOp op1 op2 rawt1 rawt2 = equivMaybeTy res1 res2
   where t1 = BDD.parseTy rawt1
         t2 = BDD.parseTy rawt2
         res1 = op1 t1 t2
@@ -46,10 +46,10 @@ compDomTy :: Ty -> Bool
 compDomTy = compUnMaybeOp N.domTy M.domTy
 
 compRngTy :: Ty -> Ty -> Bool
-compRngTy = compUnMaybeOp N.rngTy M.rngTy
+compRngTy = compBinMaybeOp N.rngTy M.rngTy
 
 compInTy :: Ty -> Ty -> Bool
-compInTy = compUnMaybeOp N.inTy M.inTy
+compInTy = compBinMaybeOp N.inTy M.inTy
 
 
 spec :: Spec

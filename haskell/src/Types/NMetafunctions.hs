@@ -146,22 +146,23 @@ inTy fty@(Ty _ _ arrows) out =
     (Just dom) -> Just (tyAnd dom res)
       where ps =  map fst (flattenBDD arrows)
             res = (foldl
-                   (\t p -> tyOr t (pDiff (calcInTy p out)))
+                   (\t p -> tyOr t (tyDiff
+                                    (calcInTy p out (not . isEmpty))
+                                    (calcInTy p out isEmpty)))
                    emptyTy
                    ps)
-            pDiff :: (Ty, Ty) -> Ty
-            pDiff (t1,t2) = tyDiff t1 t2
 
 
-calcInTy :: [Arrow] -> Ty -> (Ty, Ty)
-calcInTy p out = if (overlap rng out)
-                 then (dom, emptyTy)
-                 else (emptyTy, dom)
-  where ps = nonEmptySubsets p
-        dom = foldl tyAnd anyTy (map arrowDom ps)
-        rng = foldl tyAnd anyTy (map arrowRng ps)
-        arrowDom (Arrow t1 _) = t1 
-        arrowRng (Arrow _ t2) = t2
+calcInTy :: [Arrow] -> Ty -> (Ty -> Bool) -> Ty
+calcInTy p out include = foldl tyOr emptyTy (map aux (nonEmptySubsets p))
+  where aux :: [Arrow] -> Ty
+        aux p' = if (include rng)
+                 then dom
+                 else emptyTy
+          where dom = foldl tyAnd anyTy (map arrowDom p')
+                rng = foldl tyAnd out (map arrowRng p')
+                arrowDom (Arrow t1 _) = t1 
+                arrowRng (Arrow _ t2) = t2
         
 
   

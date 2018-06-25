@@ -4,18 +4,19 @@ module Types.MetafunctionTests (genMetafunctionSpec) where
 import Test.Hspec
 import Test.QuickCheck
 import Types.Syntax
+import qualified Types.LazyBDD as Impl
 
 
 genMetafunctionSpec ::
-  (Ty -> a)
-  -> (a -> a -> Bool)
-  -> (a -> a -> Bool)
-  -> (a -> a -> Bool)
-  -> (a -> Maybe a)
-  -> (a -> Maybe a)
-  -> (a -> Maybe a)
-  -> (a -> a -> Maybe a)
-  -> (a -> a -> Maybe a)
+  (Ty -> Impl.Ty)
+  -> (Impl.Ty -> Impl.Ty -> Bool)
+  -> (Impl.Ty -> Impl.Ty -> Bool)
+  -> (Impl.Ty -> Impl.Ty -> Bool)
+  -> (Impl.Ty -> Maybe Impl.Ty)
+  -> (Impl.Ty -> Maybe Impl.Ty)
+  -> (Impl.Ty -> Maybe Impl.Ty)
+  -> (Impl.Ty -> Impl.Ty -> Maybe Impl.Ty)
+  -> (Impl.Ty -> Impl.Ty -> Maybe Impl.Ty)
   -> Spec
 genMetafunctionSpec
   parse
@@ -157,7 +158,7 @@ genMetafunctionSpec
         True)
         -- TODO add more
 
-    describe "Input Type Tests" $ do
+  describe "Input Type Tests" $ do
     it "Simple Arrow1" $ do
       (inTyEquiv (Arrow T F) F T `shouldBe` True)
     it "Simple Arrow1" $ do
@@ -188,27 +189,24 @@ genMetafunctionSpec
       \t1 t2 t3 t4 -> (inTyDisjoint (And [(Arrow t1 t2), (Arrow t3 t4)]))
     it "inTyDisjoint 3" $ property $
       \t1 t2 t3 t4 t5 t6 t7 t8 ->
-        (inTyDisjoint (Or
-                        (And [(Arrow t1 t2), (Arrow t3 t4)])
-                        (And [(Arrow t5 t6), (Arrow t7 t8)])))
+        (inTyDisjoint (Or [(And [(Arrow t1 t2), (Arrow t3 t4)]),
+                           (And [(Arrow t5 t6), (Arrow t7 t8)])]))
     it "inTyTrue 1" $ property $
       \t1 t2 -> (inTyTrue (Arrow t1 t2))
     it "inTyTrue 2" $ property $
       \t1 t2 t3 t4 -> (inTyTrue (And [(Arrow t1 t2), (Arrow t3 t4)]))
     it "inTyTrue 3" $ property $
       \t1 t2 t3 t4 t5 t6 t7 t8 ->
-        (inTyTrue (Or
-                   (And [(Arrow t1 t2), (Arrow t3 t4)])
-                   (And [(Arrow t5 t6), (Arrow t7 t8)])))
+        (inTyTrue (Or [(And [(Arrow t1 t2), (Arrow t3 t4)]),
+                       (And [(Arrow t5 t6), (Arrow t7 t8)])]))
     it "inTyFalse 1" $ property $
       \t1 t2 -> (inTyFalse (Arrow t1 t2))
     it "inTyFalse 2" $ property $
       \t1 t2 t3 t4 -> (inTyFalse (And [(Arrow t1 t2), (Arrow t3 t4)]))
     it "inTyFalse 3" $ property $
       \t1 t2 t3 t4 t5 t6 t7 t8 ->
-        (inTyFalse (Or
-                    (And [(Arrow t1 t2), (Arrow t3 t4)])
-                    (And [(Arrow t5 t6), (Arrow t7 t8)])))
+        (inTyFalse (Or [(And [(Arrow t1 t2), (Arrow t3 t4)]),
+                        (And [(Arrow t5 t6), (Arrow t7 t8)])]))
     it "inTyCases 1" $ property $
       \t1 t2 t3 -> (inTyCases (Arrow t1 t2) t3)
     it "inTyCases 2" $ property $
@@ -216,9 +214,8 @@ genMetafunctionSpec
     it "inTyCases 3" $ property $
       \t1 t2 t3 t4 t5 t6 t7 t8 t9 ->
         (inTyCases
-         (Or
-           (And [(Arrow t1 t2), (Arrow t3 t4)])
-           (And [(Arrow t5 t6), (Arrow t7 t8)]))
+         (Or [(And [(Arrow t1 t2), (Arrow t3 t4)]),
+              (And [(Arrow t5 t6), (Arrow t7 t8)])])
          t9)
         
 
@@ -285,7 +282,7 @@ genMetafunctionSpec
           inTyDisjoint rawfunty =
             case ((rawInTy funty false), (rawInTy funty nonFalse))  of
               (Just neg, Just pos) -> not (rawOverlap neg pos) 
-              otherwise -> True
+              _ -> True
             where funty = (parse rawfunty)
                   false = (parse F)
                   nonFalse = (parse (Not F))
@@ -312,21 +309,22 @@ genMetafunctionSpec
             where funty = (parse rawfunty)
                   false = (parse F)
 
-          inTyCases :: Ty -> Ty -> Ty -> Bool
+          inTyCases :: Ty -> Ty -> Bool
           inTyCases rawtfunty rawargty =
-            case (rawRngTy funty argty) of
-              Nothing  -> True
-              Just resty ->
+            case ((rawRngTy funty argty),
+                  (rawInTy funty nonFalseTy),
+                  (rawInTy funty falseTy)) of
+              (Just resty, Just posty, Just negty) ->
                 -- if the argument is empty we don't have interesting
                 -- info to compare, so just abort with success
-                if (rawEmpty argty)
+                if (rawSubtype argty Impl.emptyTy)
                 then True
                 -- similarly, if the result is empty, just verify
                 -- the argument type is not something that we would
                 -- have predicted could be mapped to a false or non-false
                 -- value (since it wasn't mapped to any value...)
-                else if (rawEmpty resty)
-                then (not (rawSubtype argty (tyOr posty negty)))
+                else if (rawSubtype resty Impl.emptyTy)
+                then (not (rawSubtype argty (Impl.tyOr posty negty)))
                 -- if the argument is something that
                 -- we predict will be mapped to a non-false value,
                 -- verify that indeed is the case
@@ -345,7 +343,7 @@ genMetafunctionSpec
                 -- mapped to a false or non-false value, so
                 -- go ahead and check that the predicted result
                 -- type is non false or non-false
-                else if (rawSubtype argty (tyOr posty negty))
+                else if (rawSubtype argty (Impl.tyOr posty negty))
                 then ((not (rawSubtype resty falseTy))
                       && (not (rawSubtype resty nonFalseTy)))
                 -- at this point, part of the argument type
@@ -353,12 +351,13 @@ genMetafunctionSpec
                 -- and non-false type, which means that part is mapped
                 -- to bottom, so verify if we isolate that part, the
                 -- predicted function application result is empty
-                else (rawEmpty (rawRngTy funty uncovered))
-                where posty = (rawInTy funty nonFalseTy)
-                      negty = (rawInTy funty falseTy)
-                      uncovered = (tyDiff argty (tyOr posty negty))
+                else case coveredRng of
+                       Nothing -> False
+                       Just rng -> (rawSubtype rng Impl.emptyTy)
+                where uncovered = (Impl.tyDiff argty (Impl.tyOr posty negty))
+                      coveredRng = (rawRngTy funty uncovered)
+              _ -> True
             where nonFalseTy = (parse (Not F))
                   falseTy = (parse F)
                   funty = (parse rawtfunty)
                   argty = (parse rawargty)
-                  t2 = (parse rawt2)
