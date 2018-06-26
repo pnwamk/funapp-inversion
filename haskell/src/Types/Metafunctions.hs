@@ -135,7 +135,9 @@ rngTy fty@(Ty _ _ arrows) argty =
                 tm = loop m p
                 tr = loop r p
         aux :: [Arrow] -> Ty -> Ty -> Ty
-        aux [] arg res = res
+        aux [] arg res
+          | isEmpty arg = emptyTy
+          | otherwise = res
         aux ((Arrow s1 s2):p) arg res = tyOr res1 res2
           where res' = tyAnd res s2
                 arg' = tyDiff arg s1
