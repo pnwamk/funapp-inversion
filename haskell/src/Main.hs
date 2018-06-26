@@ -30,5 +30,5 @@ main = do
       putStr $ "(" ++ (show (diffUTCTime end start)) ++ ")"
       putStrLn (if result
                 then ""
-                else "failed!")
+                else error "boo!") --"failed!")
   
