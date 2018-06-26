@@ -26,6 +26,7 @@ library
                      , Common.SetOps
   build-depends:       base >= 4.7 && < 5
                      , containers
+                     , time
                      , QuickCheck
   default-language:    Haskell2010
 
@@ -38,6 +39,7 @@ executable numeric-sst
                      , numeric-sst
                      , containers
                      , QuickCheck
+                     , time
   default-language:    Haskell2010
   other-modules: Common.Primitives
                , Common.SetOps

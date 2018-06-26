@@ -123,23 +123,28 @@ domTy t
 rngTy :: Ty -> Ty -> Maybe Ty
 rngTy fty@(Ty _ _ arrows) argty =
   case (domTy fty) of
-    (Just dom) | (subtype argty dom) -> Just res
+    (Just dom) | (subtype argty dom) -> Just $ loop arrows []
     _ -> Nothing
-  where res = aux arrows argty anyTy
-        aux :: (BDD Arrow) -> Ty -> Ty -> Ty
-        aux Bot arg rng = emptyTy
-        aux Top arg rng
-          | (isEmpty arg) = emptyTy
-          | otherwise = rng
-        aux (Node (Arrow s1 s2) l m r) arg rng
-          | isEmpty arg = emptyTy
-          | isEmpty rng = emptyTy
-          | otherwise = tyOr lty1 $ tyOr lty2 $ tyOr mty rty
-          where lty1 = aux l arg (tyAnd rng s2)
-                lty2 = aux l (tyDiff arg s1) rng
-                mty = aux m arg rng
-                rty = aux r arg rng
-
+  where loop :: (BDD Arrow) -> [Arrow] -> Ty
+        loop Bot p = emptyTy
+        loop Top p = aux p argty anyTy
+        loop (Node a@(Arrow s1 s2) l m r) p = tyOr tl $ tyOr tm tr
+          where tl = if (overlap s1 argty)
+                     then loop l $ a:p
+                     else loop l p
+                tm = loop m p
+                tr = loop r p
+        aux :: [Arrow] -> Ty -> Ty -> Ty
+        aux [] arg res = res
+        aux ((Arrow s1 s2):p) arg res = tyOr res1 res2
+          where res' = tyAnd res s2
+                arg' = tyDiff arg s1
+                res1 = if isEmpty res'
+                       then emptyTy
+                       else aux p arg res'
+                res2 = if isEmpty arg'
+                       then emptyTy
+                       else aux p arg' res
 
 inTy :: Ty -> Ty -> Maybe Ty
 inTy fty@(Ty _ _ arrows) out =
