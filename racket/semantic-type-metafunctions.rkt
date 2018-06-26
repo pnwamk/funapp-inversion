@@ -20,10 +20,13 @@
         [N : (Listof ATOM) '()])
        (match bdd
          [(== bot eq?) Empty-TYPE]
-         [_ #:when (or (empty? s1) (empty? s2)) Empty-TYPE]
          [(== top eq?) (prod-phi i s1 s2 N)]
          [(NODE: (and a (cons t1 t2)) l m r)
-          (define tl (loop l (type-and s1 t1) (type-and s2 t2) N))
+          (define s1* (type-and s1 t1))
+          (define s2* (type-and s2 t2))
+          (define tl (if (or (empty? s1*) (empty? s2*))
+                         Empty-TYPE
+                         (loop l s1* s2* N)))
           (define tm (loop m s1 s2 N))
           (define tr (loop r s1 s2 (cons a N)))
           (type-or tl (type-or tm tr))]))]))
@@ -31,11 +34,12 @@
 (: prod-phi (-> (U 1 2) TYPE TYPE (Listof ATOM) TYPE))
 (define (prod-phi i s1 s2 N)
   (match N
-    [_ #:when (or (empty? s1) (empty? s2)) Empty-TYPE]
     [(list) (if (eqv? i 1) s1 s2)]
     [(cons (cons t1 t2) N)
-     (type-or (prod-phi i (type-diff s1 t1) s2 N)
-              (prod-phi i s1 (type-diff s2 t2) N))]))
+     (define s1* (type-diff s1 t1))
+     (define s2* (type-diff s2 t2))
+     (type-or (if (empty? s1*) Empty-TYPE (prod-phi i s1* s2 N))
+              (if (empty? s2*) Empty-TYPE (prod-phi i s1 s2* N)))]))
 
 (: domain (-> TYPE (U TYPE False)))
 (define (domain t)
@@ -78,9 +82,14 @@
 (: funapp-helper (-> TYPE TYPE (Listof ATOM) TYPE))
 (define (funapp-helper arg res P)
   (match P
-    [_ #:when (or (empty? arg) (empty? res)) Empty-TYPE]
     [(cons (cons s1 s2) P)
-     (define res1 (funapp-helper arg (type-and res s2) P))
-     (define res2 (funapp-helper (type-diff arg s1) res P))
+     (define res1 (let ([res* (type-and res s2)])
+                    (if (empty? res*)
+                        Empty-TYPE
+                        (funapp-helper arg res* P))))
+     (define res2 (let ([arg* (type-diff arg s1)])
+                    (if (empty? arg*)
+                        Empty-TYPE
+                        (funapp-helper arg* res P))))
      (type-or res1 res2)]
     [_ res]))
