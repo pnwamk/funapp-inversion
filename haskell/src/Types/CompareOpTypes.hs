@@ -66,3 +66,13 @@ compareBinOpRes arg1 arg2 sem syn =
                  of
                    Nothing -> Nothing
                    Just (d1,d2,r) -> Just (parseTy r)
+
+
+-- compareBinPredRes ::
+--   Stx.Ty
+--   -> Stx.Ty
+--   -> [(Stx.Ty, Stx.Ty, Stx.Ty)]
+--   -> [(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)]
+--   -> Bool
+-- compareBinPredRes arg1 arg2 sem syn =
+  

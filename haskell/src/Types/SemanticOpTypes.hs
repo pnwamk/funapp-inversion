@@ -45,3 +45,44 @@ plusType = [ (byte, byte, index)
            , (nonpositiveReal, negativeReal, negativeReal)
            , (nonnegativeReal, nonnegativeReal, nonnegativeReal)
            , (nonpositiveReal, nonpositiveReal, nonpositiveReal)]
+
+-- types to help specify comparison types (i.e. signed types w/o NaN)
+someNaN = Or [singleFloatNaN, floatNaN]
+zeroNoNaN = And [realZero, (Not someNaN)]
+positiveRealNoNaN = And [positiveReal, (Not someNaN)]
+nonnegativeRealNoNaN = And [nonnegativeReal, (Not someNaN)]
+negativeRealNoNaN = And [negativeReal, (Not someNaN)]
+nonpositiveRealNoNaN = And [nonpositiveReal, (Not someNaN)]
+realNoNaN = And [real, (Not someNaN)]
+positiveIntegerNotByte = And [positiveInteger, (Not byte)]
+positiveIntegerNotIndex = And [positiveInteger, (Not index)]
+
+
+ltType :: [(Ty, Ty, Ty)]
+ltType = [ -- general cases --
+           -- -- -- -- -- -- -- -- --
+           (realNoNaN, realNoNaN, bool)
+         , (someNaN, real, F)
+         , (real, someNaN, F)
+           -- positive/nonpositive cases --
+         , (nonpositiveRealNoNaN, positiveRealNoNaN, T)
+         , (positiveRealNoNaN, nonpositiveRealNoNaN, F)
+           -- zero/negative cases --
+         , (negativeRealNoNaN, zeroNoNaN, T)
+         , (zeroNoNaN, negativeRealNoNaN, F)
+         -- bounded type cases --
+         , (negativeInfinity, And [realNoNaN, (Not negativeInfinity)], T)
+         , (realNoNaN, negativeInfinity, F)
+         , (negativeIntegerNotFixnum, fixnum, T)
+         , (fixnum, negativeIntegerNotFixnum, T)
+         , (zeroNoNaN, zeroNoNaN, F)
+         , (one, one, F)
+         , (byte, positiveIntegerNotByte, T)
+         , (positiveIntegerNotByte, byte, F)
+         , (index, positiveIntegerNotIndex, T)
+         , (positiveIntegerNotIndex, index, F)
+         , (fixnum, positiveIntegerNotFixnum, T)
+         , (positiveIntegerNotFixnum, fixnum, F)
+         , (And [realNoNaN, (Not positiveInfinity)], positiveInfinity, T)
+         , (positiveInfinity, realNoNaN, F)
+         ]

@@ -16,7 +16,7 @@ genMetafunctionSpec ::
   -> (Impl.Ty -> Maybe Impl.Ty)
   -> (Impl.Ty -> Maybe Impl.Ty)
   -> (Impl.Ty -> Impl.Ty -> Maybe Impl.Ty)
-  -> (Impl.Ty -> Impl.Ty -> Maybe Impl.Ty)
+  -> (Impl.Ty -> Impl.Ty -> Impl.Ty -> Maybe Impl.Ty)
   -> Spec
 genMetafunctionSpec
   parse
@@ -159,29 +159,49 @@ genMetafunctionSpec
         -- TODO add more
 
   describe "Input Type Tests" $ do
-    it "Simple Arrow1" $ do
-      (inTyEquiv (Arrow T F) F T `shouldBe` True)
-    it "Simple Arrow1" $ do
-      (inTyEquiv (Arrow T F) (Not F) (Or []) `shouldBe` True)
+    it "Simple Arrow 1a" $ do
+      (inTyEquiv (Arrow T F)
+       T F T `shouldBe` True)
+    it "Simple Arrow 1b" $ do
+      (inTyEquiv (Arrow T F)
+       T (Not F) (Or []) `shouldBe` True)
     it "Arrow Intersection 1" $ do
-      (inTyEquiv (And [(Arrow (Not F) F), (Arrow F T)]) T F `shouldBe` True)
+      (inTyEquiv (And [(Arrow (Not F) F), (Arrow F T)])
+       Any T F `shouldBe` True)
     it "Arrow Intersection 2" $ do
-      (inTyEquiv (And [(Arrow (Not F) F), (Arrow F T)]) (Not F) F `shouldBe` True)
+      (inTyEquiv (And [(Arrow (Not F) F), (Arrow F T)])
+       Any (Not F) F `shouldBe` True)
     it "Arrow Intersection 3" $ do
-      (inTyEquiv (And [(Arrow (Not F) F), (Arrow F T)]) F (Not F) `shouldBe` True)
-    it "Arrow Intersection 4" $ do
-      (inTyEquiv (And [(Arrow T F), (Arrow F T), (Arrow Zero One)]) (Not F) (Or [F, Zero]) `shouldBe` True)
+      (inTyEquiv (And [(Arrow (Not F) F), (Arrow F T)])
+       Any F (Not F) `shouldBe` True)
+    it "Arrow Intersection 4a" $ do
+      (inTyEquiv (And [(Arrow T F), (Arrow F T), (Arrow Zero One)])
+       (Or [T, F, Zero]) (Not F) (Or [F, Zero]) `shouldBe` True)
+    it "Arrow Intersection 4b" $ do
+      (inTyEquiv (And [(Arrow T F), (Arrow F T), (Arrow Zero One)])
+       (Or [T, F]) (Not F) F `shouldBe` True)
     it "Arrow Intersection 5" $ do
-      (inTyEquiv (And [(Arrow T F), (Arrow F T), (Arrow Zero One)]) F T `shouldBe` True)
-    it "Arrow Intersection 6" $ do
+      (inTyEquiv (And [(Arrow T F), (Arrow F T), (Arrow Zero One)])
+       (Or [T, F, Zero]) F T `shouldBe` True)
+    it "Arrow Intersection 6a" $ do
       (inTyEquiv (Or [(And [(Arrow T F), (Arrow F T), (Arrow Zero One)]),
                      (And [(Arrow F F), (Arrow T T), (Arrow Zero One)])])
-                  F (Or [T,F])
+                  (Or [T, F, Zero]) F (Or [T,F])
                   `shouldBe` True)
-    it "Arrow Intersection 7" $ do
+    it "Arrow Intersection 6b" $ do
       (inTyEquiv (Or [(And [(Arrow T F), (Arrow F T), (Arrow Zero One)]),
                      (And [(Arrow F F), (Arrow T T), (Arrow Zero One)])])
-                  (Not F) (Or [Zero, T, F])
+                  (Or [T,Zero]) F T
+                  `shouldBe` True)
+    it "Arrow Intersection 7a" $ do
+      (inTyEquiv (Or [(And [(Arrow T F), (Arrow F T), (Arrow Zero One)]),
+                     (And [(Arrow F F), (Arrow T T), (Arrow Zero One)])])
+                  (Or [T, F, Zero]) (Not F) (Or [Zero, T, F])
+                  `shouldBe` True)
+    it "Arrow Intersection 7b" $ do
+      (inTyEquiv (Or [(And [(Arrow T F), (Arrow F T), (Arrow Zero One)]),
+                     (And [(Arrow F F), (Arrow T T), (Arrow Zero One)])])
+                  (Or [T, F]) (Not F) (Or [T, F])
                   `shouldBe` True)
     it "inTyCases 1" $ property $
       \t1 t2 t3 -> (inTyCases (Arrow t1 t2) t3)
@@ -245,21 +265,22 @@ genMetafunctionSpec
                   t2 = (parse rawt2)
 
 
-          inTyEquiv :: Ty -> Ty -> Ty -> Bool
-          inTyEquiv rawt1 rawargty rawt2 =
-            case (rawInTy t1 argty) of
+          inTyEquiv :: Ty -> Ty -> Ty -> Ty -> Bool
+          inTyEquiv rawt1 rawargty rawoutty rawt2 =
+            case (rawInTy t1 argty outty) of
               Nothing  -> False
               Just t1' -> rawEquiv t1' t2
             where t1 = (parse rawt1)
                   argty = (parse rawargty)
+                  outty = (parse rawoutty)
                   t2 = (parse rawt2)
 
 
           inTyCases :: Ty -> Ty -> Bool
           inTyCases rawtfunty rawargty =
             case ((rawRngTy funty argty),
-                  (rawInTy funty nonFalseTy),
-                  (rawInTy funty falseTy)) of
+                  (rawInTy funty argty nonFalseTy),
+                  (rawInTy funty argty falseTy)) of
               (Just resty, Just posty, Just negty) ->
                 -- verify anything not covered by posty union negty
                 -- is mapped to empty

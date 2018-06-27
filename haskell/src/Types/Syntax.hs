@@ -200,6 +200,7 @@ negativeInfinity = Or [negativeFloatInfinity, negativeSingleFloatInfinity]
 
 realZero = Or [zero, inexactRealZero]
 realZeroNoNaN = Or [zero, inexactRealPositiveZero, inexactRealNegativeZero]
+
 positiveReal = Or [positiveRational, positiveInexactReal]
 nonnegativeReal = Or [nonnegativeRational, nonnegativeInexactReal]
 negativeReal = Or [negativeRational, negativeInexactReal]

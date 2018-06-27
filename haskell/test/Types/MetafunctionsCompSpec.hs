@@ -48,8 +48,13 @@ compDomTy = compUnMaybeOp N.domTy M.domTy
 compRngTy :: Ty -> Ty -> Bool
 compRngTy = compBinMaybeOp N.rngTy M.rngTy
 
-compInTy :: Ty -> Ty -> Bool
-compInTy = compBinMaybeOp N.inTy M.inTy
+compInTy :: Ty -> Ty -> Ty -> Bool
+compInTy rawfunty rawargty rawoutty = equivMaybeTy res1 res2
+  where funty = BDD.parseTy rawfunty
+        argty = BDD.parseTy rawargty
+        outty = BDD.parseTy rawoutty
+        res1 = N.inTy funty argty outty
+        res2 = M.inTy funty argty outty
 
 
 spec :: Spec

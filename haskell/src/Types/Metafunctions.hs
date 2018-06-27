@@ -148,27 +148,33 @@ rngTy fty@(Ty _ _ arrows) argty =
                        then emptyTy
                        else aux p arg' res
 
-inTy :: Ty -> Ty -> Maybe Ty
-inTy fty@(Ty _ _ arrows) out =
-  case (domTy fty) of
-    Nothing    -> Nothing
-    (Just dom) -> Just res
-      where res = input arrows dom out []
-            input :: (BDD Arrow) -> Ty -> Ty -> [Arrow] -> Ty
-            input Bot arg rng pos = emptyTy
-            input Top dom rng pos = tyDiff p n
-              where (p,n) = aux dom rng pos
-            input (Node a l m r) dom rng pos = tyOr lRes $ tyOr mRes rRes
-              where lRes = input l dom rng (a:pos)
-                    mRes = input m dom rng pos
-                    rRes = input r dom rng pos
-            aux :: Ty -> Ty -> [Arrow] -> (Ty , Ty)
-            aux dom rng []
-              | (isEmpty rng) = (emptyTy , dom)
-              | otherwise     = (dom , emptyTy)
-            aux dom rng ((Arrow t1 t2):pos) = (tyOr p1 p2 , tyOr n1 n2)
-              where (p1,n1) = aux (tyAnd t1 dom) (tyAnd t2 rng) pos
-                    (p2,n2) = aux dom rng pos
+inTy :: Ty -> Ty -> Ty -> Maybe Ty
+inTy fty@(Ty _ _ arrows) arg out
+  | not $ isFun fty = Nothing
+  | otherwise = Just $ input arrows []
+  where input :: (BDD Arrow) -> [Arrow] -> Ty
+        input Bot p = emptyTy
+        input Top p = tyDiff pos neg
+          where (pos,neg) = aux arg out p
+        input (Node a@(Arrow s1 _) l m r) p = tyOr lRes $ tyOr mRes rRes
+          where lRes = if (overlap s1 arg)
+                       then input l $ a:p
+                       else input l p
+                mRes = input m p
+                rRes = input r p
+        aux :: Ty -> Ty -> [Arrow] -> (Ty , Ty)
+        aux dom rng []
+          | (isEmpty rng) = (emptyTy , dom)
+          | otherwise     = (dom , emptyTy)
+        aux dom rng ((Arrow t1 t2):p) = (tyOr pos1 pos2 , tyOr neg1 neg2)
+          where dom' = (tyAnd t1 dom)
+                rng' = (tyAnd t2 rng)
+                (pos1,neg1) = if isEmpty dom'
+                              then (emptyTy, emptyTy)
+                              else if isEmpty rng'
+                                   then (emptyTy,dom')
+                                   else aux dom' rng' p
+                (pos2,neg2) = aux dom rng p
                   
 
   

@@ -139,27 +139,26 @@ calcRng p argty = foldl tyOr emptyTy ts
                            pos)
 
 
-inTy :: Ty -> Ty -> Maybe Ty
-inTy fty@(Ty _ _ arrows) out =
-  case (domTy fty) of
-    Nothing    -> Nothing
-    (Just dom) -> Just (tyAnd dom res)
-      where ps =  map fst (flattenBDD arrows)
-            res = (foldl
-                   (\t p -> tyOr t (tyDiff
-                                    (calcInTy p out (not . isEmpty))
-                                    (calcInTy p out isEmpty)))
-                   emptyTy
-                   ps)
+inTy :: Ty -> Ty -> Ty -> Maybe Ty
+inTy fty@(Ty _ _ arrows) arg out
+  | not $ isFun fty = Nothing
+  | otherwise = Just res
+  where ps =  map fst (flattenBDD arrows)
+        res = (foldl
+                (\t p -> tyOr t (tyDiff
+                                  (calcInTy p arg out (not . isEmpty))
+                                  (calcInTy p arg out isEmpty)))
+                emptyTy
+                ps)
 
 
-calcInTy :: [Arrow] -> Ty -> (Ty -> Bool) -> Ty
-calcInTy p out include = foldl tyOr emptyTy (map aux (nonEmptySubsets p))
+calcInTy :: [Arrow] -> Ty -> Ty -> (Ty -> Bool) -> Ty
+calcInTy p arg out include = foldl tyOr emptyTy (map aux (nonEmptySubsets p))
   where aux :: [Arrow] -> Ty
         aux p' = if (include rng)
                  then dom
                  else emptyTy
-          where dom = foldl tyAnd anyTy (map arrowDom p')
+          where dom = foldl tyAnd arg (map arrowDom p')
                 rng = foldl tyAnd out (map arrowRng p')
                 arrowDom (Arrow t1 _) = t1 
                 arrowRng (Arrow _ t2) = t2
