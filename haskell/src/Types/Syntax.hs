@@ -53,13 +53,14 @@ data Ty =
   deriving (Eq, Show, Ord)
 
 data Obj = ArgZero | ArgOne
+  deriving (Eq, Show, Ord)
 
 data Prop =
     TT
   | FF
   | IsA Obj Ty
-  | NotA Obj Ty
   | Conj Prop Prop
+  deriving (Eq, Show, Ord)
 
 baseTypes :: [Ty]
 baseTypes =
