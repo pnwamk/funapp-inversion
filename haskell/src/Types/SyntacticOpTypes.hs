@@ -162,21 +162,21 @@ ltType = [ (integer, one, (IsA ArgZero nonpositiveInteger), (IsA ArgZero positiv
          -- <-type-pattern integer
          , (integer, zero, (IsA ArgZero negativeInteger), (IsA ArgZero nonnegativeInteger))
          , (zero, integer, (IsA ArgOne positiveInteger), (IsA ArgOne nonpositiveInteger))
-         , (integer, positiveReal, TT, (IsA ArgZero positiveInteger))
-         , (integer, nonnegativeReal, TT, (IsA ArgZero nonnegativeInteger))
+         , (integer, positiveRealNoNaN, TT, (IsA ArgZero positiveInteger)) -- AMK added NoNaN
+         , (integer, nonnegativeRealNoNaN, TT, (IsA ArgZero nonnegativeInteger)) -- AMK added NoNaN
          , (nonnegativeReal, integer, (IsA ArgOne positiveInteger), TT)
          , (integer, nonpositiveReal, (IsA ArgZero negativeInteger), TT)
-         , (negativeReal, integer, TT, (IsA ArgOne negativeInteger))
-         , (nonpositiveReal, integer, TT, (IsA ArgOne nonpositiveInteger))
+         , (negativeRealNoNaN, integer, TT, (IsA ArgOne negativeInteger)) -- AMK added NoNaN
+         , (nonpositiveRealNoNaN, integer, TT, (IsA ArgOne nonpositiveInteger)) -- AMK added NoNaN
          -- <-type-pattern rational
          , (rational, zero, (IsA ArgZero negativeRational), (IsA ArgZero nonnegativeRational))
          , (zero, rational, (IsA ArgOne positiveRational), (IsA ArgOne nonpositiveRational))
-         , (rational, positiveReal, TT, (IsA ArgZero positiveRational))
-         , (rational, nonnegativeReal, TT, (IsA ArgZero nonnegativeRational))
+         , (rational, positiveRealNoNaN, TT, (IsA ArgZero positiveRational)) -- AMK added NoNaN
+         , (rational, nonnegativeRealNoNaN, TT, (IsA ArgZero nonnegativeRational)) -- AMK added NoNaN
          , (nonnegativeReal, rational, (IsA ArgOne positiveRational), TT)
          , (rational, nonpositiveReal, (IsA ArgZero negativeRational), TT)
-         , (negativeReal, rational, TT, (IsA ArgOne negativeRational))
-         , (nonpositiveReal, rational, TT, (IsA ArgOne nonpositiveRational))
+         , (negativeRealNoNaN, rational, TT, (IsA ArgOne negativeRational)) -- AMK added NoNaN
+         , (nonpositiveRealNoNaN, rational, TT, (IsA ArgOne nonpositiveRational)) -- AMK added NoNaN
          -- <-type-pattern float
          , (float, realZero, (IsA ArgZero negativeFloat), TT)
          , (realZero, float, (IsA ArgOne positiveFloat), TT)

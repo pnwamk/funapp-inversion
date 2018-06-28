@@ -302,6 +302,19 @@ numericTypes =
   , ("number", number)]
 
 
+-- types to help specify comparison types (i.e. signed types w/o NaN)
+someNaN = Or [singleFloatNaN, floatNaN]
+zeroNoNaN = And [realZero, (Not someNaN)]
+positiveRealNoNaN = And [positiveReal, (Not someNaN)]
+nonnegativeRealNoNaN = And [nonnegativeReal, (Not someNaN)]
+negativeRealNoNaN = And [negativeReal, (Not someNaN)]
+nonpositiveRealNoNaN = And [nonpositiveReal, (Not someNaN)]
+realNoNaN = And [real, (Not someNaN)]
+positiveIntegerNotByte = And [positiveInteger, (Not byte)]
+positiveIntegerNotIndex = And [positiveInteger, (Not index)]
+
+
+
 -- * * * * * * * * * * * * * * * * * * * * * * *
 -- QuickCheck related definitions
 -- * * * * * * * * * * * * * * * * * * * * * * *
