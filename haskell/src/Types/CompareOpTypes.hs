@@ -100,12 +100,12 @@ compareBinPredRes dom1 dom2 arg1 arg2 sem syn =
      Just negTy1,
      Just negTy2,
      Just (posProp,negProp)) ->
-      (subtype posTy1 (argType dom1 Stx.ArgZero posProp))
-      && (subtype posTy2 (argType dom2 Stx.ArgOne posProp))
-      && (subtype negTy1 (argType dom1 Stx.ArgZero negProp))
-      && (subtype negTy2 (argType dom2 Stx.ArgOne negProp))
+      (subtype posTy1 (tyAnd argTy1 (argType dom1 Stx.ArgZero posProp)))
+      && (subtype posTy2 (tyAnd argTy2 (argType dom2 Stx.ArgOne posProp)))
+      && (subtype negTy1 (tyAnd argTy1 (argType dom1 Stx.ArgZero negProp)))
+      && (subtype negTy2 (tyAnd argTy2 (argType dom2 Stx.ArgOne negProp)))
     (_,_,_,_,_) -> (not (subtype argTy1 domTy1))
-                   || (not (subtype argTy2 domTy2))  
+                   || (not (subtype argTy2 domTy2))
   where domTy1 = parseTy dom1
         domTy2 = parseTy dom2
         argTy1 = parseTy arg1
