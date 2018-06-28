@@ -10,25 +10,37 @@ import Data.Foldable
 
 main :: IO ()
 main = do
-  putStrLn "Comparing inc: "
-  forM_ numericTypes $ \(name, ty) -> do
-    putStr $ "  " ++ name ++ " ... "
-    start <- getCurrentTime
-    result <- pure $! compareUnOpRes number ty Sem.incType Syn.incType
-    end <- getCurrentTime
-    putStr $ "(" ++ (show (diffUTCTime end start)) ++ ")"
-    putStrLn (if result
-              then ""
-              else "failed!")
-  putStrLn "Comparing plus:"
+  -- putStrLn "Comparing inc: "
+  -- forM_ numericTypes $ \(name, ty) -> do
+  --   putStr $ "  " ++ name ++ " ... "
+  --   start <- getCurrentTime
+  --   result <- pure $! compareUnOpRes number ty Sem.incType Syn.incType
+  --   end <- getCurrentTime
+  --   putStr $ "(" ++ (show (diffUTCTime end start)) ++ ")"
+  --   putStrLn (if result
+  --             then ""
+  --             else "failed!")
+  -- putStrLn "Comparing plus:"
+  -- forM_ numericTypes $ \(name1, ty1) -> do
+  --   forM_ numericTypes $ \(name2, ty2) -> do
+  --     putStr $ "  " ++ name1 ++ " x " ++ name2 ++ " ... "
+  --     start <- getCurrentTime
+  --     result <- pure $! compareBinOpRes number number ty1 ty2 Sem.plusType Syn.plusType
+  --     end <- getCurrentTime
+  --     putStr $ "(" ++ (show (diffUTCTime end start)) ++ ")"
+  --     putStrLn (if result
+  --               then ""
+  --               else error "boo!") --"failed!")
+  putStrLn "Comparing less-than:"
   forM_ numericTypes $ \(name1, ty1) -> do
     forM_ numericTypes $ \(name2, ty2) -> do
       putStr $ "  " ++ name1 ++ " x " ++ name2 ++ " ... "
       start <- getCurrentTime
-      result <- pure $! compareBinOpRes number number ty1 ty2 Sem.plusType Syn.plusType
+      result <- pure $! compareBinPredRes real real ty1 ty2 Sem.ltType Syn.ltType
       end <- getCurrentTime
       putStr $ "(" ++ (show (diffUTCTime end start)) ++ ")"
       putStrLn (if result
                 then ""
                 else error "boo!") --"failed!")
+
   
