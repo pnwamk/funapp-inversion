@@ -55,18 +55,18 @@ ltType = [ -- general cases --
          , (real, someNaN, F)
            -- positive/nonpositive cases --
          , (nonpositiveRealNoNaN, positiveRealNoNaN, T)
-         , (positiveRealNoNaN, nonpositiveRealNoNaN, F)
+         , (positiveReal, nonpositiveReal, F)
            -- zero/negative cases --
-         , (negativeRealNoNaN, zeroNoNaN, T)
-         , (zeroNoNaN, negativeRealNoNaN, F)
+         , (negativeRealNoNaN, realZeroNoNaN, T)
+         , (realZero, negativeReal, F)
          -- bounded type cases --
          , (negativeInfinity, And [realNoNaN, (Not negativeInfinity)], T)
-         , (realNoNaN, negativeInfinity, F)
+         , (real, negativeInfinity, F)
          , (negativeIntegerNotFixnum, And [integer, (Not negativeIntegerNotFixnum)], T)
          , (And [integer, (Not negativeIntegerNotFixnum)], negativeIntegerNotFixnum, F)
-         , (zeroNoNaN, zeroNoNaN, F)
+         , (realZero, realZero, F)
          , (nonpositiveRealNoNaN, one, T)
-         , (one, nonpositiveRealNoNaN, F)
+         , (one, nonpositiveReal, F)
          , (one, one, F)
          , (one, And[positiveInteger, (Not one)], T)
          , (And[positiveInteger, (Not one)], one, F)
@@ -77,5 +77,5 @@ ltType = [ -- general cases --
          , (fixnum, positiveIntegerNotFixnum, T)
          , (positiveIntegerNotFixnum, fixnum, F)
          , (And [realNoNaN, (Not positiveInfinity)], positiveInfinity, T)
-         , (positiveInfinity, realNoNaN, F)
+         , (positiveInfinity, real, F)
          ]

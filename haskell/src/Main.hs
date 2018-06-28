@@ -1,12 +1,14 @@
 module Main where
 
 import Types.Syntax
+import Types.LazyBDD
+import Types.Subtype
 import qualified Types.SyntacticOpTypes as Syn
 import qualified Types.SemanticOpTypes as Sem
 import Types.CompareOpTypes
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import Data.Foldable
-
+import Control.Monad
 
 timeInc :: IO ()
 timeInc = do
@@ -54,14 +56,15 @@ timeLT = do
   ltStart <- getCurrentTime
   forM_ numericTypes $ \(name1, ty1) -> do
     forM_ numericTypes $ \(name2, ty2) -> do
-      putStr $ "  " ++ name1 ++ " x " ++ name2 ++ " ... "
-      start <- getCurrentTime
-      result <- pure $! compareBinPredRes real real ty1 ty2 Sem.ltType Syn.ltType
-      end <- getCurrentTime
-      putStr $ "(" ++ (show (diffUTCTime end start)) ++ ")"
-      putStrLn (if result
-                then ""
-                else error "failed!")
+      when ((subtype (parseTy ty1) (parseTy real)) && (subtype (parseTy ty2) (parseTy real))) $ do
+        putStr $ "  " ++ name1 ++ " x " ++ name2 ++ " ... "
+        start <- getCurrentTime
+        result <- pure $! compareBinPredRes real real ty1 ty2 Sem.ltType Syn.ltType
+        end <- getCurrentTime
+        putStr $ "(" ++ (show (diffUTCTime end start)) ++ ")"
+        putStrLn (if result
+                  then ""
+                  else error "failed!")
   ltEnd <- getCurrentTime
   putStrLn $ "less-than total time: " ++ (show (diffUTCTime ltEnd ltStart))
   putStrLn "* * * * * * * * * * * * * * * * * * * *"
@@ -70,8 +73,8 @@ timeLT = do
 
 main :: IO ()
 main = do
-  timeInc
-  timePlus
+  --timeInc
+  --timePlus
   timeLT
 
   
