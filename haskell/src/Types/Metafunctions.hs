@@ -7,6 +7,7 @@ module Types.Metafunctions
   , domTy
   , rngTy
   , inTy
+  , cInTy
   ) where
 
 import Types.Base
@@ -148,37 +149,37 @@ rngTy fty@(Ty _ _ arrows) argty =
                        then emptyTy
                        else aux p arg' res
 
--- inTy :: Ty -> Ty -> Ty -> Maybe Ty
--- inTy fty@(Ty _ _ arrows) arg out =
---   case (domTy fty) of
---     (Just dom) | (subtype arg dom) -> Just $ input arrows []
---     _ -> Nothing
---   where input :: (BDD Arrow) -> [Arrow] -> Ty
---         input Bot p = emptyTy
---         input Top p = tyDiff pos neg
---           where (pos,neg) = aux arg out p
---         input (Node a@(Arrow s1 _) l m r) p = tyOr lRes $ tyOr mRes rRes
---           where lRes = input l $ a:p
---                 mRes = input m p
---                 rRes = input r p
---         aux :: Ty -> Ty -> [Arrow] -> (Ty , Ty)
---         aux dom rng []
---           | (isEmpty rng) = (emptyTy , dom)
---           | otherwise     = (dom , emptyTy)
---         aux dom rng ((Arrow t1 t2):p) = (tyOr pos1 pos2 , tyOr neg1 neg2)
---           where dom' = (tyAnd t1 dom)
---                 rng' = (tyAnd t2 rng)
---                 (pos1,neg1) = if isEmpty dom'
---                               then (emptyTy, emptyTy)
---                               else if isEmpty rng'
---                                    then (emptyTy,dom')
---                                    else aux dom' rng' p
---                 (pos2,neg2) = aux dom rng p
+inTy :: Ty -> Ty -> Ty -> Maybe Ty
+inTy fty@(Ty _ _ arrows) arg out =
+  case (domTy fty) of
+    (Just dom) | (subtype arg dom) -> Just $ input arrows []
+    _ -> Nothing
+  where input :: (BDD Arrow) -> [Arrow] -> Ty
+        input Bot p = emptyTy
+        input Top p = tyDiff pos neg
+          where (pos,neg) = aux arg out p
+        input (Node a@(Arrow s1 _) l m r) p = tyOr lRes $ tyOr mRes rRes
+          where lRes = input l $ a:p
+                mRes = input m p
+                rRes = input r p
+        aux :: Ty -> Ty -> [Arrow] -> (Ty , Ty)
+        aux dom rng []
+          | (isEmpty rng) = (emptyTy , dom)
+          | otherwise     = (dom , emptyTy)
+        aux dom rng ((Arrow t1 t2):p) = (tyOr pos1 pos2 , tyOr neg1 neg2)
+          where dom' = (tyAnd t1 dom)
+                rng' = (tyAnd t2 rng)
+                (pos1,neg1) = if isEmpty dom'
+                              then (emptyTy, emptyTy)
+                              else if isEmpty rng'
+                                   then (emptyTy,dom')
+                                   else aux dom' rng' p
+                (pos2,neg2) = aux dom rng p
 
                   
 -- conservative version, linear instead of exponential search
-inTy :: Ty -> Ty -> Ty -> Maybe Ty
-inTy fty@(Ty _ _ arrows) arg out =
+cInTy :: Ty -> Ty -> Ty -> Maybe Ty
+cInTy fty@(Ty _ _ arrows) arg out =
   case (domTy fty) of
     (Just dom) | (subtype arg dom) -> Just $ input arrows emptyTy emptyTy
     _ -> Nothing

@@ -86,14 +86,15 @@ argType d o1 (Stx.Conj p1 p2) = tyAnd t1 t2
 
 
 compareBinPredRes ::
-  Stx.Ty
-  -> Stx.Ty
-  -> Stx.Ty
-  -> Stx.Ty
-  -> [(Stx.Ty, Stx.Ty, Stx.Ty)]
-  -> [(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)]
-  -> Bool
-compareBinPredRes dom1 dom2 arg1 arg2 sem syn =
+  (Ty -> Ty -> Ty -> Maybe Ty) ->
+  Stx.Ty ->
+  Stx.Ty ->
+  Stx.Ty ->
+  Stx.Ty ->
+  [(Stx.Ty, Stx.Ty, Stx.Ty)] ->
+  [(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)] ->
+  Bool
+compareBinPredRes inputTy dom1 dom2 arg1 arg2 sem syn =
     case (semPos1,semPos2,semNeg1,semNeg2,synRes) of
     (Just posTy1,
      Just posTy2,
@@ -112,12 +113,12 @@ compareBinPredRes dom1 dom2 arg1 arg2 sem syn =
         argTy2 = parseTy arg2
         argTy = prodTy argTy1 argTy2
         semTy = parseBinOpToSemantic sem
-        semPos = inTy semTy argTy $ parseTy (Stx.Not Stx.F)
+        semPos = inputTy semTy argTy $ parseTy (Stx.Not Stx.F)
         (semPos1,semPos2) =
           case semPos of
             Nothing -> (Nothing, Nothing)
             Just t -> (fstProj t, sndProj t)
-        semNeg = inTy semTy argTy $ parseTy Stx.F
+        semNeg = inputTy semTy argTy $ parseTy Stx.F
         (semNeg1,semNeg2) =
           case semNeg of
             Nothing -> (Nothing, Nothing)
@@ -130,3 +131,5 @@ compareBinPredRes dom1 dom2 arg1 arg2 sem syn =
                    Nothing -> Nothing
                    Just (_,_,pos,neg) -> Just (pos,neg)
   
+
+compareBinPredResIncomplete = compareBinPredRes inTy
