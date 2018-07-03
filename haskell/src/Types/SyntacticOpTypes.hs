@@ -28,6 +28,30 @@ incType = [ (zero, one)
           , (inexactComplex, inexactComplex)
           , (number, number)]
 
+decType :: [(Ty, Ty)]
+decType = []
+
+-- [sub1 (from-cases
+--        (-> -One -Zero)
+--        (-> -PosByte -Byte)
+--        (-> -PosIndex -Index)
+--        (-> -Index -Fixnum)
+--        (-> -PosFixnum -NonNegFixnum)
+--        (-> -NonNegFixnum -Fixnum)
+--        (-> -Pos -Nat)
+--        (-> -NonPosInt -NegInt)
+--        (unop -Int)
+--        (-> -NonPosRat -NegRat)
+--        (unop -Rat)
+--        (-> -NonPosFlonum -NegFlonum)
+--        (unop -Flonum)
+--        (-> -NonPosSingleFlonum -NegSingleFlonum)
+--        (unop -SingleFlonum)
+--        (-> -NonPosInexactReal -NegInexactReal)
+--        (unop -InexactReal)
+--        (-> -NonPosReal -NegReal)
+--        (map unop (list -Real -FloatComplex -SingleFlonumComplex -InexactComplex N)))]
+
 plusType :: [(Ty, Ty, Ty)]
 plusType = [ (positiveByte, positiveByte, positiveIndex)
            , (byte, byte, index)
@@ -114,6 +138,150 @@ plusType = [ (positiveByte, positiveByte, positiveIndex)
            , (inexactComplex, (Or [rational, inexactReal, inexactComplex]), inexactComplex)
            , ((Or [rational, inexactReal, inexactComplex]), inexactComplex, inexactComplex)
            , (number, number, number)]
+
+
+multType :: [(Ty, Ty, Ty)]
+multType = []
+
+-- [* (from-cases
+--     (-> -One)
+--     (-> N N : -true-propset : (-arg-path 0))
+--     (commutative-case -Zero N -Zero)
+--     (-> N -One N : -true-propset : (-arg-path 0))
+--     (-> -One N N : -true-propset : (-arg-path 1))
+--     (-> -PosByte -PosByte -PosIndex)
+--     (-> -Byte -Byte -Index)
+--     (-> -PosByte -PosByte -PosByte -PosFixnum)
+--     (-> -Byte -Byte -Byte -NonNegFixnum)
+--     (varop -PosInt)
+--     (varop -Nat)
+--     (-> -NegInt -NegInt)
+--     (-> -NonPosInt -NonPosInt)
+--     (-> -NegInt -NegInt -PosInt)
+--     (commutative-binop -NegInt -PosInt -NegInt)
+--     (-> -NonPosInt -NonPosInt -Nat)
+--     (commutative-binop -NonPosInt -Nat -NonPosInt)
+--     (-> -NegInt -NegInt -NegInt -NegInt)
+--     (-> -NonPosInt -NonPosInt -NonPosInt -NonPosInt)
+--     (map varop (list -Int -PosRat -NonNegRat))
+--     (-> -NegRat -NegRat)
+--     (-> -NonPosRat -NonPosRat)
+--     (-> -NegRat -NegRat -PosRat)
+--     (commutative-binop -NegRat -PosRat -NegRat)
+--     (-> -NonPosRat -NonPosRat -NonNegRat)
+--     (commutative-binop -NonPosRat -NonNegRat -NonPosRat)
+--     (-> -NegRat -NegRat -NegRat -NegRat)
+--     (-> -NonPosRat -NonPosRat -NonPosRat -NonPosRat)
+--     (varop -Rat)
+--     (varop-1+ -FlonumZero)
+--     ; no pos * -> pos, possible underflow
+--     (varop-1+ -NonNegFlonum)
+--     ;; can't do NonPos NonPos -> NonNeg: (* -1.0 0.0) -> NonPos!
+--     (-> -NegFlonum -NegFlonum -NonNegFlonum) ; possible underflow, so no neg neg -> pos
+--     (-> -NegFlonum -NegFlonum -NegFlonum -NonPosFlonum) ; see above
+--     ;; limited flonum contagion rules
+--     ;; (* <float> 0) is exact 0 (i.e. not a float)
+--     (commutative-case -NonNegFlonum -PosReal) ; real args don't include 0
+--     (commutative-case -Flonum (Un -PosReal -NegReal) -Flonum)
+--     (map varop-1+ (list -Flonum -SingleFlonumZero -NonNegSingleFlonum))
+--     ;; we could add contagion rules for negatives, but we haven't for now
+--     (-> -NegSingleFlonum -NegSingleFlonum -NonNegSingleFlonum) ; possible underflow, so no neg neg -> pos
+--     (-> -NegSingleFlonum -NegSingleFlonum -NegSingleFlonum -NonPosSingleFlonum)
+--     (commutative-case -NonNegSingleFlonum (Un -PosRat -NonNegSingleFlonum))
+--     (commutative-case -SingleFlonum (Un -PosRat -NegRat -SingleFlonum) -SingleFlonum)
+--     (map varop-1+ (list -SingleFlonum -InexactRealZero -NonNegInexactReal))
+--     (-> -NegInexactReal -NegInexactReal -NonNegInexactReal)
+--     (-> -NegInexactReal -NegInexactReal -NegInexactReal -NonPosInexactReal)
+--     (commutative-case -NonNegInexactReal (Un -PosRat -NonNegInexactReal))
+--     (commutative-case -InexactReal (Un -PosRat -NegRat -InexactReal) -InexactReal)
+--     (varop-1+ -InexactReal)
+--     ;; reals
+--     (varop -NonNegReal) ; (* +inf.0 0.0) -> +nan.0
+--     (-> -NonPosReal -NonPosReal -NonNegReal)
+--     (commutative-binop -NonPosReal -NonNegReal -NonPosReal)
+--     (-> -NonPosReal -NonPosReal -NonPosReal -NonPosReal)
+--     (varop -Real)
+--     ;; complexes
+--     (commutative-case -FloatComplex (Un -InexactComplex -InexactReal -PosRat -NegRat) -FloatComplex)
+--     (commutative-case -SingleFlonumComplex (Un -SingleFlonumComplex -SingleFlonum -PosRat -NegRat) -SingleFlonumComplex)
+--     (commutative-case -InexactComplex (Un -InexactComplex -InexactReal -PosRat -NegRat) -InexactComplex)
+--     (varop N))]
+
+
+
+divType :: [(Ty, Ty, Ty)]
+divType = []
+
+-- [/ (from-cases ; very similar to multiplication, without closure properties for integers
+--     (commutative-case -Zero N -Zero)
+--     (unop -One)
+--     (-> N -One N : -true-propset : (-arg-path 0))
+--     (varop-1+ -PosRat)
+--     (varop-1+ -NonNegRat)
+--     (-> -NegRat -NegRat)
+--     (-> -NonPosRat -NonPosRat)
+--     (-> -NegRat -NegRat -PosRat)
+--     (commutative-binop -NegRat -PosRat -NegRat)
+--     (-> -NonPosRat -NonPosRat -NonNegRat)
+--     (commutative-binop -NonPosRat -NonNegRat -NonPosRat)
+--     (-> -NegRat -NegRat -NegRat -NegRat)
+--     (-> -NonPosRat -NonPosRat -NonPosRat -NonPosRat)
+--     (varop-1+ -Rat)
+--     (-> -FlonumZero (Un -PosFlonum -NegFlonum)) ; one of the infinities
+--     ;; No (-> -NonNegFlonum -NonNegFlonum -NonNegFlonum), (/ 0.1 -0.0) => -inf.0
+--     ;; No (-> -NonPosFlonum -NonPosFlonum), (/ 0.0) => +inf.0
+--     (-> -NegFlonum -NegFlonum -NonNegFlonum)
+--     (-> -NegFlonum -NegFlonum -NegFlonum -NonPosFlonum)
+--     ;; limited flonum contagion rules
+--     ;; (/ 0 <float>) is exact 0 (i.e. not a float)
+--     (commutative-case -PosFlonum -PosReal -NonNegFlonum)
+--     (->* (list (Un -PosReal -NegReal -Flonum) -Flonum) -Flonum -Flonum)
+--     (->* (list -Flonum) -Real -Flonum) ; if any argument after the first is exact 0, not a problem
+--     (varop-1+ -Flonum)
+--     (-> -SingleFlonumZero (Un -PosSingleFlonum -NegSingleFlonum)) ; one of the infinities
+--     ;; we could add contagion rules for negatives, but we haven't for now
+--     (-> -NegSingleFlonum -NegSingleFlonum -NonNegSingleFlonum) ; possible underflow, so no neg neg -> pos
+--     (-> -NegSingleFlonum -NegSingleFlonum -NegSingleFlonum -NonPosSingleFlonum)
+--     (commutative-case -PosSingleFlonum (Un -PosRat -PosSingleFlonum) -NonNegSingleFlonum)
+--     (commutative-case -SingleFlonum (Un -PosRat -NegRat -SingleFlonum) -SingleFlonum)
+--     (varop-1+ -SingleFlonum)
+--     (-> -InexactRealZero (Un -PosInexactReal -NegInexactReal))
+--     (-> -NegInexactReal -NegInexactReal -NonNegInexactReal)
+--     (-> -NegInexactReal -NegInexactReal -NegInexactReal -NonPosInexactReal)
+--     (commutative-case -PosInexactReal (Un -PosRat -PosInexactReal) -NonNegInexactReal)
+--     (commutative-case -InexactReal (Un -PosRat -NegRat -InexactReal) -InexactReal)
+--     (varop-1+ -InexactReal)
+--     ;; reals
+--     (varop-1+ -PosReal -NonNegReal)
+--     (-> -NonPosReal -NonPosReal)
+--     (-> -NegReal -NegReal -NonNegReal) ; 0.0 is non-neg, but doesn't preserve sign
+--     (-> -NegReal -PosReal -NonPosReal) ; idem
+--     (-> -PosReal -NegReal -NonPosReal) ; idem
+--     (-> -NegReal -NegReal -NegReal -NonPosReal) ; idem
+--     (varop-1+ -Real)
+--     ;; complexes
+--     (varop-1+ -FloatComplex)
+--     (commutative-case -FloatComplex (Un -InexactComplex -InexactReal -PosRat -NegRat) -FloatComplex)
+--     (->* (list -FloatComplex) N -FloatComplex) ; if any argument after the first is exact 0, not a problem
+--     (varop-1+ -SingleFlonumComplex)
+--     (commutative-case -SingleFlonumComplex (Un -SingleFlonumComplex -SingleFlonum -PosRat -NegRat) -SingleFlonumComplex)
+--     (varop-1+ -InexactComplex)
+--     (commutative-case -InexactComplex (Un -InexactComplex -InexactReal -PosRat -NegRat) -InexactComplex)
+--     (varop-1+ N))]
+
+modType :: [(Ty, Ty, Ty)]
+modType = []
+
+-- [modulo ; result has same sign as second arg
+--  (from-cases
+--   (-One -One . -> . -Zero)
+--   (map (lambda (t) (list (-> -Int t t)
+--                          (-> t -Nat t)))
+--        (list -Byte -Index -NonNegFixnum -Nat))
+--   (-Int -NonPosFixnum . -> . -NonPosFixnum)
+--   (-Int -NonPosInt . -> . -NonPosInt)
+--   (commutative-binop -Fixnum -Int)
+--   (binop -Int))]
 
 ltType :: [(Ty, Ty, Prop, Prop)]
 ltType = [ (integer, one, (IsA ArgZero nonpositiveInteger), (IsA ArgZero positiveInteger))
@@ -215,3 +383,77 @@ ltType = [ (integer, one, (IsA ArgZero nonpositiveInteger), (IsA ArgZero positiv
          , (nonpositiveReal, real, TT, TT)
          -- end of <-type-pattern
          , (real, real, TT, TT)]
+
+
+leqType :: [(Ty, Ty, Prop, Prop)]
+leqType = []
+
+-- [<= (from-cases
+--      (-> -Int -One B : (-PS (-is-type 0 (Un -NonPosInt -One)) (-is-type 0 -PosInt)))
+--      (-> -One -Int B : (-PS (-is-type 1 -PosInt) (-is-type 1 -NonPosInt)))
+--      (-> -Real -Zero B : (-PS (-is-type 0 -NonPosReal) (-is-type 0 -PosReal)))
+--      (-> -Zero -Real B : (-PS (-is-type 1 -NonNegReal) (-is-type 1 -NegReal)))
+--      (-> -Real -RealZero B : (-PS (-is-type 0 -NonPosReal) -tt)) ;; False says nothing because of NaN
+--      (-> -RealZero -Real B : (-PS (-is-type 0 -NonNegReal) -tt)) ;; False says nothing because of NaN
+--      (-> -PosByte -Byte B : (-PS (-is-type 1 -PosByte) -tt))
+--      (-> -Byte -Byte B : (-PS -tt (-is-type 0 -PosByte)))
+--      (-> -PosInt -Byte B : (-PS (-and (-is-type 0 -PosByte) (-is-type 1 -PosByte)) -tt))
+--      (-> -PosReal -Byte B : (-PS (-is-type 1 -PosByte) -tt))
+--      (-> -Byte -PosInt B : (-PS -tt (-and (-is-type 0 -PosByte) (-is-type 1 -PosByte))))
+--      (-> -Byte -PosRat B : (-PS -tt (-is-type 0 -PosByte)))
+--      (-> -Nat -Byte B : (-PS (-is-type 0 -Byte) -tt))
+--      (-> -Byte -Nat B : (-PS -tt (-and (-is-type 0 -PosByte) (-is-type 1 -Byte))))
+--      (-> -Byte -NonNegRat B : (-PS -tt (-is-type 0 -PosByte)))
+--      (-> -PosIndex -Index B : (-PS (-is-type 1 -PosIndex) -tt))
+--      (-> -Index -Index B : (-PS -tt (-is-type 0 -PosIndex)))
+--      (-> -Pos -Index B : (-PS (-and (-is-type 0 -PosIndex) (-is-type 1 -PosIndex)) -tt))
+--      (-> -PosReal -Index B : (-PS (-is-type 1 -PosIndex) -tt))
+--      (-> -Index -Pos B : (-PS -tt (-and (-is-type 0 -PosIndex) (-is-type 1 -PosIndex))))
+--      (-> -Index -PosRat B : (-PS -tt (-is-type 0 -PosIndex)))
+--      (-> -Nat -Index B : (-PS (-is-type 0 -Index) -tt))
+--      (-> -Index -Nat B : (-PS -tt (-and (-is-type 0 -PosIndex) (-is-type 1 -Index))))
+--      (-> -Index -NonNegRat B : (-PS -tt (-is-type 0 -PosIndex)))
+--      (-> -PosInt -Fixnum B : (-PS (-and (-is-type 0 -PosFixnum) (-is-type 1 -PosFixnum)) -tt))
+--      (-> -PosReal -Fixnum B : (-PS (-is-type 1 -PosFixnum) -tt))
+--      (-> -Nat -Fixnum B : (-PS (-and (-is-type 0 -NonNegFixnum) (-is-type 1 -NonNegFixnum)) -tt))
+--      (-> -NonNegReal -Fixnum B : (-PS (-is-type 1 -NonNegFixnum) -tt))
+--      (-> -Fixnum -Nat B : (-PS -tt (-and (-is-type 0 -PosFixnum) (-is-type 1 -NonNegFixnum))))
+--      (-> -Fixnum -NonNegRat B : (-PS -tt (-is-type 0 -PosFixnum)))
+--      (-> -NonPosInt -Fixnum B : (-PS -tt (-and (-is-type 0 -NonPosFixnum) (-is-type 1 -NegFixnum))))
+--      (-> -NonPosRat -Fixnum B : (-PS -tt (-is-type 1 -NegFixnum)))
+--      (-> -Fixnum -NegInt B : (-PS (-and (-is-type 0 -NegFixnum) (-is-type 1 -NegFixnum)) -tt))
+--      (-> -Fixnum -NegReal B : (-PS (-is-type 0 -NegFixnum) -tt))
+--      (-> -Fixnum -NonPosInt B : (-PS (-and (-is-type 0 -NonPosFixnum) (-is-type 1 -NonPosFixnum)) -tt))
+--      (-> -Fixnum -NonPosReal B : (-PS (-is-type 0 -NonPosFixnum) -tt))
+--      (-> -Real -PosInfinity B : (-PS (-not-type 0 -InexactRealNan) (-is-type 0 -InexactRealNan)))
+--      (-> -NegInfinity -Real B : (-PS (-not-type 1 -InexactRealNan) (-is-type 1 -InexactRealNan)))
+--      (-> -PosInfinity -Real B : (-PS (-is-type 1 -PosInfinity) (-not-type 1 -PosInfinity)))
+--      (-> -Real -NegInfinity B : (-PS (-is-type 0 -NegInfinity) (-not-type 0 -NegInfinity)))
+--      (<=-type-pattern -Int -PosInt -Nat -NegInt -NonPosInt -Zero)
+--      (<=-type-pattern -Rat -PosRat -NonNegRat -NegRat -NonPosRat -Zero)
+--      (<=-type-pattern -Flonum -PosFlonum -NonNegFlonum -NegFlonum -NonPosFlonum #:no-false-props? #t)
+--      (<=-type-pattern -SingleFlonum -PosSingleFlonum -NonNegSingleFlonum -NegSingleFlonum -NonPosSingleFlonum #:no-false-props? #t)
+--      (<=-type-pattern -InexactReal -PosInexactReal -NonNegInexactReal -NegInexactReal -NonPosInexactReal #:no-false-props? #t)
+--      (<=-type-pattern -Real -PosReal -NonNegReal -NegReal -NonPosReal #:no-false-props? #t)
+--      (->* (list R R) R B))]
+
+eqType :: [(Ty, Ty, Prop, Prop)]
+eqType = []
+
+
+-- [=
+--  (from-cases
+--    (-> -Real -RealZero B : (-PS (-is-type 0 -RealZeroNoNan) (-not-type 0 -RealZeroNoNan)))
+--    (-> -RealZero -Real B : (-PS (-is-type 1 -RealZeroNoNan) (-not-type 1 -RealZeroNoNan)))
+--   (map (lambda (t) (commutative-equality/prop -ExactNumber t))
+--        (list -One -PosByte -Byte -PosIndex -Index
+--              -PosFixnum -NonNegFixnum -NegFixnum -NonPosFixnum -Fixnum
+--              -PosInt -Nat -NegInt -NonPosInt -Int
+--              -PosRat -NonNegRat -NegRat -NonPosRat -Rat
+--              -ExactNumber))
+--   ;; For all real types: the props give sign information, and the exactness information is preserved
+--   ;; from the original types.
+--   (map (lambda (t) (commutative-equality/prop -Real t))
+--        (list -RealZero -PosReal -NonNegReal -NegReal -NonPosReal -Real))
+--   (->* (list N N) N B))]
+
