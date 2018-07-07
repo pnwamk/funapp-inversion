@@ -31,6 +31,12 @@ Ltac applyH :=
   | [H : _ -> _ |- _] => progress (apply H)
   end.
 
+Ltac applyHinH :=
+  match goal with
+  | [H1 : _ -> _ , H2 : _ |- _] => apply H1 in H2
+  end.
+
+
 Ltac smash := solve [crush].
 
 
