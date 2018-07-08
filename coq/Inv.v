@@ -237,12 +237,7 @@ Proof with crush.
   apply (Inhabited_intro _ _ v'). unfold tyAnd... crush.
 Qed.
 
-(* TODO I think we need to add pos\neg and perhaps redo
-   the previous proof.
 
-   ALSO! Perhaps we just do pos/neg at each arrow after
-   calculating the powerset instead of after unioning
-   the arrows? They're probably equivalent, TODO double check *)
 Theorem a_inv_complete : forall a outT inT,
     a_inv a outT = inT ->
     forall inT',
