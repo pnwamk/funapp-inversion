@@ -21,7 +21,7 @@ Open Scope list_scope.
 Axiom V : Type.
 Axiom V_eq_dec : forall (v1 v2: V), {v1 = v2} + {v1 <> v2}.
 Notation Ty := (Ensemble V).
-Definition IsEmpty : Ty -> Prop := Inhabited V.
+Definition IsEmpty (t:Ty) : Prop := ~ (Inhabited V t).
 Axiom IsEmpty_dec : forall (t: Ty), {IsEmpty t} + {~ IsEmpty t}.
 Notation IsA v T := (In V T v).
 Axiom IsA_dec : forall (v:V) (t: Ty), {IsA v t} + {~ IsA v t}.
@@ -33,6 +33,13 @@ Definition tyOr : Ty -> Ty -> Ty := Union V.
 Definition tyAnd : Ty -> Ty -> Ty := Intersection V.
 Definition tyDiff : Ty -> Ty -> Ty := Setminus V.
 Definition tyNot : Ty -> Ty := tyDiff anyTy.
+
+Hint Unfold emptyTy.
+Hint Unfold anyTy.
+Hint Unfold tyOr.
+Hint Unfold tyAnd.
+Hint Unfold tyDiff.
+Hint Unfold tyNot.
 
 (* A single function arrow *)
 Inductive arrow : Type :=
@@ -90,17 +97,6 @@ Fixpoint FnInterface (f : fn) (i : interface) : Prop :=
 
 Hint Unfold FnInterface.
 
-
-Definition InterfaceInv
-           (i:interface)
-           (outT inT : Ty) : Prop :=
-forall (f:fn),
-  FnInterface f i ->
-  forall (v v':V),
-    IsA v (i_dom i) ->
-    f v = Res v' ->
-    IsA v' outT ->
-    IsA v inT.
 
 Fixpoint i_app (i1 i2 : interface) : interface :=
   match i1 with
@@ -180,7 +176,128 @@ Proof with crush.
   apply i_app_i...
   apply a_meet_i...
 Qed.
-    
+
+
+
+Definition overlap (t1 t2:Ty) : bool :=
+  if (IsEmpty_dec (tyAnd t1 t2)) then false else true.
+                 
+
+Definition a_inv (a:arrow) (out:Ty) : Ty :=
+  if overlap (a_rng a) out
+  then (a_dom a)
+  else emptyTy.
+
+
+
+Definition ArrowInv
+           (a:arrow)
+           (outT inT : Ty) : Prop :=
+forall (f:fn),
+  FnArrow f a ->
+  forall (v v':V),
+    IsA v (a_dom a) ->
+    f v = Res v' ->
+    IsA v' outT ->
+    IsA v inT.
+
+
+Lemma no_overlap_empty : forall t1 t2,
+    false = overlap t1 t2 ->
+    IsEmpty (tyAnd t1 t2).
+Proof.
+  intros.
+  unfold overlap in *.
+  destruct (IsEmpty_dec (tyAnd t1 t2)); crush.
+Qed.
+
+
+Theorem a_inv_sound : forall a outT inT,
+    a_inv a outT = inT ->
+    ArrowInv a outT inT.
+Proof with crush.
+  unfold ArrowInv.
+  intros.
+  destruct_arrows...
+  unfold a_inv.
+  remember (overlap (a_rng (Arrow e e0)) outT) as Happ.
+  destruct Happ. crush.
+  simpl in *.  
+  applyHinH...
+  match goal with
+  | [H : _ _ = Res ?v |- _] => rewrite H in *
+  end.
+  match goal with
+  | [H : Res ?v1 = Res ?v2 |- _] => inversion H; subst
+  end.
+  forwards: no_overlap_empty. eauto.
+  unfold IsEmpty in *.
+  crush.
+  assert (Inhabited V (tyAnd e0 outT)).
+  apply (Inhabited_intro _ _ v'). unfold tyAnd... crush.
+Qed.
+
+(* TODO I think we need to add pos\neg and perhaps redo
+   the previous proof.
+
+   ALSO! Perhaps we just do pos/neg at each arrow after
+   calculating the powerset instead of after unioning
+   the arrows? They're probably equivalent, TODO double check *)
+Theorem a_inv_complete : forall a outT inT,
+    a_inv a outT = inT ->
+    forall inT',
+      ArrowInv a inT' outT ->
+      inT <: inT'.
+Proof.
+  Admitted.
+
+
+
+
+Fixpoint i_inv_aux (p: interface) (out:Ty) : Ty :=
+  match p with
+  | IBase a => (a_inv a out)
+  | ICons a p' => tyOr (a_inv a out) (i_inv_aux p' out)
+  end.
+
+Definition i_inv (i:interface) (out:Ty) : Ty :=
+  let p := (i_powerset i) in
+  let pos := i_inv_aux p out in
+  let neg := i_inv_aux p (tyNot out) in
+  tyDiff pos neg.
+
+
+
+Definition InterfaceInv
+           (i:interface)
+           (outT inT : Ty) : Prop :=
+forall (f:fn),
+  FnInterface f i ->
+  forall (v v':V),
+    IsA v (i_dom i) ->
+    f v = Res v' ->
+    IsA v' outT ->
+    IsA v inT.
+
+
+Theorem i_inv_sound : forall i f,
+    FnInterface f i ->
+    forall outT inT,
+      i_inv i outT = inT ->
+      InterfaceInv i inT outT.
+Proof.
+  
+  
+
+Theorem i_inv_complete : forall i f outT inT,
+    FnInterface f i ->
+    i_inv i outT = inT ->
+    forall inT',
+      InterfaceInv i inT' outT ->
+      inT <: inT'.
+Proof.
+  Admitted.
+
     
 (* A disjunction of interfaces *)
 Inductive dnf : Type :=
@@ -200,6 +317,12 @@ Fixpoint FnDnf (f : fn) (d : dnf) : Prop :=
   end.
 
 
+Fixpoint d_inv (d:dnf) (out:Ty) : Ty :=
+  match d with
+  | DBase i => i_inv i out
+  | DCons i d' => tyOr (i_inv i out) (d_inv d' out)
+  end. 
+
 Definition DnfInv
            (d:dnf)
            (outT inT : Ty) : Prop :=
@@ -212,35 +335,8 @@ forall (f:fn),
     IsA v inT.
 
 
-Definition overlap (t1 t2:Ty) : bool :=
-  boolean (IsEmpty_dec (tyAnd t1 t2)).
-                 
 
-Definition a_inv (a:arrow) (out:Ty) : Ty :=
-  if overlap (a_rng a) out
-  then (a_dom a)
-  else emptyTy.
-
-Fixpoint i_inv_aux (p: interface) (out:Ty) : Ty :=
-  match p with
-  | IBase a => (a_inv a out)
-  | ICons a p' => tyOr (a_inv a out) (i_inv_aux p' out)
-  end.
-
-Definition i_inv (i:interface) (out:Ty) : Ty :=
-  let p := (i_powerset i) in
-  let pos := i_inv_aux p out in
-  let neg := i_inv_aux p (tyNot out) in
-  tyDiff pos neg.
-
-Fixpoint d_inv (d:dnf) (out:Ty) : Ty :=
-  match d with
-  | DBase i => i_inv i out
-  | DCons i d' => tyOr (i_inv i out) (d_inv d' out)
-  end. 
-
-
-Theorem InvSound : forall d f,
+Theorem d_inv_sound : forall d f,
     FnDnf f d ->
     forall outT inT,
       d_inv d outT = inT ->
@@ -249,7 +345,7 @@ Proof.
   Admitted.
 
 
-Theorem InvComplete : forall d f outT inT,
+Theorem d_inv_complete : forall d f outT inT,
     FnDnf f d ->
     d_inv d outT = inT ->
     forall inT',
