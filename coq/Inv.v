@@ -38,17 +38,17 @@ Definition tyNot : Ty -> Ty := tyDiff anyTy.
 Inductive arrow : Type :=
 | Arrow : Ty -> Ty -> arrow.
 
-Definition ameet (a1 a2 : arrow) : arrow :=
+Definition a_meet (a1 a2 : arrow) : arrow :=
   match a1, a2 with
   | Arrow d1 r1, Arrow d2 r2 => Arrow (tyAnd d1 d2) (tyAnd r1 r2)
   end.
 
-Definition dom (a : arrow) : Ty :=
+Definition a_dom (a : arrow) : Ty :=
   match a with
   | Arrow t1 _ => t1
   end.
 
-Definition rng (a : arrow) : Ty :=
+Definition a_rng (a : arrow) : Ty :=
   match a with
   | Arrow _ t2 => t2
   end.
@@ -60,7 +60,7 @@ Inductive res : Type :=
 
 Definition fn := (V -> res).
 
-Definition FnArrow (a : arrow) (f : fn) : Prop :=
+Definition FnArrow (f : fn) (a : arrow) : Prop :=
   match a with
   | Arrow T1 T2 =>
     forall v,
@@ -68,119 +68,118 @@ Definition FnArrow (a : arrow) (f : fn) : Prop :=
       (f v = Bot \/ exists v', IsA v' T2 /\ f v = Res v')
   end.
 
+Hint Unfold FnArrow.
 
 Inductive interface : Type :=
 | IBase : arrow -> interface
 | ICons : arrow -> interface -> interface.
 
 
-Fixpoint idom (i : interface) : Ty :=
+Fixpoint i_dom (i : interface) : Ty :=
   match i with
-  | IBase a => dom a
-  | ICons a i' => tyOr (dom a) (idom i')
+  | IBase a => a_dom a
+  | ICons a i' => tyOr (a_dom a) (i_dom i')
   end.
 
 
-Fixpoint FnInterface (i : interface) (f : fn) : Prop :=
+Fixpoint FnInterface (f : fn) (i : interface) : Prop :=
   match i with
-  | IBase a  => FnArrow a f
-  | ICons a i' => (FnArrow a f) /\ (FnInterface i' f)
+  | IBase a  => FnArrow f a
+  | ICons a i' => (FnArrow f a) /\ (FnInterface f i')
   end.
 
+Hint Unfold FnInterface.
 
-Definition InterfaceInput
+
+Definition InterfaceInv
            (i:interface)
-           (inT outT : Ty) : Prop :=
+           (outT inT : Ty) : Prop :=
 forall (f:fn),
-  FnInterface i f ->
+  FnInterface f i ->
   forall (v v':V),
-    IsA v (idom i) ->
+    IsA v (i_dom i) ->
     f v = Res v' ->
     IsA v' outT ->
     IsA v inT.
 
-Fixpoint iapp (i1 i2 : interface) : interface :=
+Fixpoint i_app (i1 i2 : interface) : interface :=
   match i1 with
   | IBase a => ICons a i2
-  | ICons a i1' => ICons a (iapp i1' i2)
+  | ICons a i1' => ICons a (i_app i1' i2)
   end.
 
-Fixpoint imap (f : arrow -> arrow) (i : interface) : interface :=
+Fixpoint i_map (f : arrow -> arrow) (i : interface) : interface :=
   match i with
   | IBase a => IBase (f a)
-  | ICons a i' => ICons (f a) (imap f i')
+  | ICons a i' => ICons (f a) (i_map f i')
   end.
 
 (* non-empty subsets of an interface, as arrows with
    pointwise intersected domain and codomains *)
-Fixpoint ipowerset (i : interface) : interface :=
+Fixpoint i_powerset (i : interface) : interface :=
   match i with
   | IBase a => IBase a
-  | ICons a i' => let p := ipowerset i' in
-                  iapp p (imap (ameet a) p)
+  | ICons a i' => let p := i_powerset i' in
+                  i_app p (i_map (a_meet a) p)
   end.
 
-Lemma interface_app : forall i i' f,
-    FnInterface i f ->
-    FnInterface i' f ->
-    FnInterface (iapp i i') f.
+Lemma i_app_i : forall i i' f,
+    FnInterface f i ->
+    FnInterface f i' ->
+    FnInterface f (i_app i i').
 Proof.
   intro i.
   induction i; crush.
 Qed.
 
-
-Lemma ameet_arrow_fn : forall a a' f,
-    FnArrow a f ->
-    FnArrow a' f ->
-    FnArrow (ameet a a') f.
-Proof.
-  intros a a' f. intros.
-  destruct a as [d r]. destruct a' as [d' r'].
-  simpl. intros.
+Ltac destruct_arrows :=
   match goal with
-  | [H : IsA _ _ |- _] => inversion H
+  | [a : arrow |- _] => destruct a
   end.
-  repeat
-    (match goal with
-     | [H1 : FnArrow _ _ , H2 : IsA _ _ |- _] => apply H1 in H2
-     end).
-  crush.
+
+Ltac destruct_IsA :=
+  match goal with
+  | [H : IsA _ _ |- _] => destruct H
+  end.
+
+
+Lemma a_meet_arrow_fn : forall a a' f,
+    FnArrow f a  ->
+    FnArrow f a' ->
+    FnArrow f (a_meet a a').
+Proof with crush.
+  intros a a' f Ha Ha'.
+  repeat destruct_arrows...
+  destruct_IsA.
+  repeat applyHinH...
   right.
   match goal with
   | [H : _ _ = Res ?v |- _] => exists v; rewrite H in *
-  end.
-  crush.
+  end...
   constructor; auto.
 Qed.
   
-Lemma ameet_preserves_interface : forall i f a,
-    FnInterface i f ->
-    FnArrow a f ->
-    FnInterface (imap (ameet a) i) f.
-Proof.
+Lemma a_meet_i : forall i f a,
+    FnInterface f i ->
+    FnArrow f a ->
+    FnInterface f (i_map (a_meet a) i).
+Proof with crush.
   intro i.
-  induction i as [a' | a' i']; intros.
-  simpl.
-  apply ameet_arrow_fn; crush.
-  simpl. split.
-  apply ameet_arrow_fn; crush.
-  crush.
+  induction i as [a' | a' i']; intros; simpl; crush;
+  apply a_meet_arrow_fn...
 Qed.  
 
-Lemma ipowerset_preserves_interface : forall i i' f,
-    FnInterface i f ->
-    ipowerset i = i' ->
-    FnInterface i' f.
+Lemma i_powerset_interface : forall i i' f,
+    FnInterface f i ->
+    i_powerset i = i' ->
+    FnInterface f i'.
 Proof with crush.
   intro i.
   induction i...
-  assert (FnInterface (ipowerset i) f) as Hp...
-  apply interface_app...
-  apply ameet_preserves_interface...
+  assert (FnInterface f (i_powerset i)) as Hp...
+  apply i_app_i...
+  apply a_meet_i...
 Qed.
-    
-    
     
     
 (* A disjunction of interfaces *)
@@ -188,26 +187,26 @@ Inductive dnf : Type :=
 | DBase : interface -> dnf
 | DCons : interface -> dnf -> dnf.
 
-Fixpoint ddom (d : dnf) : Ty :=
+Fixpoint d_dom (d : dnf) : Ty :=
   match d with
-  | DBase i => idom i
-  | DCons i d' => tyAnd (idom i) (ddom d')
+  | DBase i => i_dom i
+  | DCons i d' => tyAnd (i_dom i) (d_dom d')
   end.
 
-Fixpoint DnfFn (d : dnf) (f : fn) : Prop :=
+Fixpoint FnDnf (f : fn) (d : dnf) : Prop :=
   match d with
-  | DBase i  => InterfaceFn i f
-  | DCons i d' => (InterfaceFn i f) \/ (DnfFn d' f)
+  | DBase i  => FnInterface f i
+  | DCons i d' => (FnInterface f i) \/ (FnDnf f d')
   end.
 
 
-Definition DnfInput
+Definition DnfInv
            (d:dnf)
-           (inT outT : Ty) : Prop :=
+           (outT inT : Ty) : Prop :=
 forall (f:fn),
-  DnfFn d f ->
+  FnDnf f d ->
   forall (v v':V),
-    IsA v (ddom d) ->
+    IsA v (d_dom d) ->
     f v = Res v' ->
     IsA v' outT ->
     IsA v inT.
@@ -217,40 +216,44 @@ Definition overlap (t1 t2:Ty) : bool :=
   boolean (IsEmpty_dec (tyAnd t1 t2)).
                  
 
-Definition ainput (a:arrow) (out:Ty) : Ty :=
-  if overlap (rng a) out
-  then (dom a)
+Definition a_inv (a:arrow) (out:Ty) : Ty :=
+  if overlap (a_rng a) out
+  then (a_dom a)
   else emptyTy.
 
-Fixpoint iinput_aux (p: interface) (out:Ty) : Ty :=
+Fixpoint i_inv_aux (p: interface) (out:Ty) : Ty :=
   match p with
-  | IBase a => (ainput a out)
-  | ICons a p' => tyOr (ainput a out) (iinput_aux p' out)
+  | IBase a => (a_inv a out)
+  | ICons a p' => tyOr (a_inv a out) (i_inv_aux p' out)
   end.
 
-Definition iinput (i:interface) (out:Ty) : Ty :=
-  iinput_aux (ipowerset i) out.
+Definition i_inv (i:interface) (out:Ty) : Ty :=
+  let p := (i_powerset i) in
+  let pos := i_inv_aux p out in
+  let neg := i_inv_aux p (tyNot out) in
+  tyDiff pos neg.
 
-(* TODO actual definition *)
-Fixpoint dinput (d:dnf) (out:Ty) : Ty :=
+Fixpoint d_inv (d:dnf) (out:Ty) : Ty :=
   match d with
-  | DBase i => iinput i out
-  | DCons i d' => tyOr (iinput i out) (dinput d' out)
+  | DBase i => i_inv i out
+  | DCons i d' => tyOr (i_inv i out) (d_inv d' out)
   end. 
 
 
-Theorem InputSound : forall d f outT inT,
-    DnfFn d f ->
-    dinput d outT = inT ->
-    DnfInput d inT outT.
+Theorem InvSound : forall d f,
+    FnDnf f d ->
+    forall outT inT,
+      d_inv d outT = inT ->
+      DnfInv d inT outT.
 Proof.
   Admitted.
 
 
-Theorem InputComplete : forall d f outT inT inT',
-    DnfFn d f ->
-    dinput d outT = inT ->
-    DnfInput d inT' outT ->
-    Subtype inT inT'.
+Theorem InvComplete : forall d f outT inT,
+    FnDnf f d ->
+    d_inv d outT = inT ->
+    forall inT',
+      DnfInv d inT' outT ->
+      inT <: inT'.
 Proof.
   Admitted.
