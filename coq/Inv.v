@@ -45,6 +45,8 @@ Hint Unfold tyNot.
 Inductive arrow : Type :=
 | Arrow : Ty -> Ty -> arrow.
 
+Hint Constructors arrow.
+
 Definition a_meet (a1 a2 : arrow) : arrow :=
   match a1, a2 with
   | Arrow d1 r1, Arrow d2 r2 => Arrow (tyAnd d1 d2) (tyAnd r1 r2)
@@ -65,22 +67,25 @@ Inductive res : Type :=
 | Bot : res (* non-termination *)
 | Res : V -> res. (* a value result *)
 
+Hint Constructors res.
+
 Definition fn := (V -> res).
 
-Definition FnArrow (f : fn) (a : arrow) : Prop :=
-  match a with
-  | Arrow T1 T2 =>
-    forall v,
-      (IsA v T1) ->
-      (f v = Bot \/ exists v', IsA v' T2 /\ f v = Res v')
-  end.
+Inductive FnArrow : fn -> arrow -> Prop :=
+| FnA : forall T1 T2 f,
+    (forall v,
+        IsA v T1 ->
+        (f v = Bot
+         \/ (exists v', IsA v' T2 /\ f v = Res v'))) ->
+    FnArrow f (Arrow T1 T2).
 
-Hint Unfold FnArrow.
+Hint Constructors FnArrow.
 
 Inductive interface : Type :=
 | IBase : arrow -> interface
 | ICons : arrow -> interface -> interface.
 
+Hint Constructors interface.
 
 Fixpoint i_dom (i : interface) : Ty :=
   match i with
@@ -88,14 +93,16 @@ Fixpoint i_dom (i : interface) : Ty :=
   | ICons a i' => tyOr (a_dom a) (i_dom i')
   end.
 
+Inductive FnInterface : fn -> interface -> Prop :=
+| FnIBase : forall f a,
+    FnArrow f a ->
+    FnInterface f (IBase a)
+| FnICons : forall f a i',
+    FnArrow f a ->
+    FnInterface f i' ->
+    FnInterface f (ICons a i').
 
-Fixpoint FnInterface (f : fn) (i : interface) : Prop :=
-  match i with
-  | IBase a  => FnArrow f a
-  | ICons a i' => (FnArrow f a) /\ (FnInterface f i')
-  end.
-
-Hint Unfold FnInterface.
+Hint Constructors FnInterface.
 
 
 Fixpoint i_app (i1 i2 : interface) : interface :=
@@ -124,8 +131,8 @@ Lemma i_app_i : forall i i' f,
     FnInterface f i' ->
     FnInterface f (i_app i i').
 Proof.
-  intro i.
-  induction i; crush.
+  intros i i' f Hi Hi'.
+  induction Hi; crush.
 Qed.
 
 Ltac destruct_arrows :=
@@ -145,7 +152,10 @@ Lemma a_meet_arrow_fn : forall a a' f,
     FnArrow f (a_meet a a').
 Proof with crush.
   intros a a' f Ha Ha'.
-  repeat destruct_arrows...
+  repeat (match goal with
+          | [H : FnArrow _ _ |- _] => destruct H
+          end).
+  constructor. intros.
   destruct_IsA.
   repeat applyHinH...
   right.
@@ -154,41 +164,46 @@ Proof with crush.
   end...
   constructor; auto.
 Qed.
+
+Hint Resolve a_meet_arrow_fn.
+
   
 Lemma a_meet_i : forall i f a,
     FnInterface f i ->
     FnArrow f a ->
     FnInterface f (i_map (a_meet a) i).
 Proof with crush.
-  intro i.
-  induction i as [a' | a' i']; intros; simpl; crush;
-  apply a_meet_arrow_fn...
-Qed.  
+  intros i f a Hfi Hfa.
+  induction Hfi...
+Qed.
 
-Lemma i_powerset_interface : forall i i' f,
+
+Lemma i_powerset_interface : forall i f,
     FnInterface f i ->
-    i_powerset i = i' ->
-    FnInterface f i'.
+    FnInterface f (i_powerset i).
 Proof with crush.
-  intro i.
-  induction i...
+  intros i f Hfi.
+  induction i... 
   assert (FnInterface f (i_powerset i)) as Hp...
+  inversion Hfi; crush.
   apply i_app_i...
   apply a_meet_i...
+  inversion Hfi...
 Qed.
 
 
 
 Definition overlap (t1 t2:Ty) : bool :=
   if (IsEmpty_dec (tyAnd t1 t2)) then false else true.
-                 
+
+Hint Unfold overlap.
 
 Definition a_inv (a:arrow) (out:Ty) : Ty :=
   if overlap (a_rng a) out
   then (a_dom a)
   else emptyTy.
 
-
+Hint Unfold a_inv.
 
 Definition ArrowInv
            (a:arrow)
@@ -201,6 +216,7 @@ forall (f:fn),
     IsA v' outT ->
     IsA v inT.
 
+Hint Unfold ArrowInv.
 
 Lemma no_overlap_empty : forall t1 t2,
     false = overlap t1 t2 ->
@@ -211,6 +227,17 @@ Proof.
   destruct (IsEmpty_dec (tyAnd t1 t2)); crush.
 Qed.
 
+Ltac same_Res :=
+  match goal with
+  | [H1 : ?f ?v = Res ?x , H2 : ?f ?v = Res ?y |- _] =>
+    rewrite H1 in H2; inversion H2; subst; clear H2
+  end.
+
+Ltac inv_FnArrow :=
+  match goal with
+  | [H : FnArrow _ _ |- _] => inversion H; subst
+  end.
+
 
 Theorem a_inv_sound : forall a outT inT,
     a_inv a outT = inT ->
@@ -218,34 +245,68 @@ Theorem a_inv_sound : forall a outT inT,
 Proof with crush.
   unfold ArrowInv.
   intros.
-  destruct_arrows...
-  unfold a_inv.
-  remember (overlap (a_rng (Arrow e e0)) outT) as Happ.
-  destruct Happ. crush.
-  simpl in *.  
+  destruct a as [T1 T2].
+  simpl in *.
+  unfold a_inv in *.
+  remember (overlap (a_rng (Arrow T1 T2)) outT) as Hover.
+  ifcaseH...
+  inv_FnArrow.
   applyHinH...
-  match goal with
-  | [H : _ _ = Res ?v |- _] => rewrite H in *
-  end.
-  match goal with
-  | [H : Res ?v1 = Res ?v2 |- _] => inversion H; subst
-  end.
+  same_Res.
   forwards: no_overlap_empty. eauto.
   unfold IsEmpty in *.
-  crush.
-  assert (Inhabited V (tyAnd e0 outT)).
-  apply (Inhabited_intro _ _ v'). unfold tyAnd... crush.
+  assert (Inhabited V (tyAnd T2 outT)).
+  apply (Inhabited_intro _ _ x). unfold tyAnd... crush.
 Qed.
 
-
-Theorem a_inv_complete : forall a outT inT,
-    a_inv a outT = inT ->
-    forall inT',
-      ArrowInv a inT' outT ->
-      inT <: inT'.
+Lemma no_empty_val : forall v,
+    ~ IsA v emptyTy.
 Proof.
   Admitted.
 
+Lemma empty_no_overlap_l : forall T T',
+    IsEmpty T -> overlap T T' = false.
+Proof.
+Admitted.
+
+Lemma not_empty_exists : forall T,
+    ~ IsEmpty T ->
+    exists v, IsA v T.
+Proof.
+  Admitted.
+  
+Theorem a_inv_complete : forall a outT inT,
+    a_inv a outT = inT ->
+    forall inT',
+      ArrowInv a outT inT' ->
+      inT <: inT'.
+Proof.
+  intros a outT intT Hinveq inT' Hinv.
+  destruct a as [T1 T2].
+  unfold a_inv in *. simpl in *.
+  unfold overlap in *.
+  remember (IsEmpty_dec (tyAnd T2 outT)) as Hmt.
+  destruct Hmt as [Hmt | Hnmt].
+  {
+    subst. unfold Included; intros.
+    assert False. eapply no_empty_val. eassumption. crush.
+  }
+  {
+    assert (exists v, IsA v (tyAnd T2 outT)) as Hex.
+    apply not_empty_exists. auto. destruct Hex as [v Hv].
+    remember (fun (_:V) => Res v) as f.
+    assert (FnArrow f (Arrow T1 T2)) as Hf.
+    {
+     constructor; intros.
+     right. exists v. crush.
+     inversion Hv. crush.
+    }
+    unfold Included. intros.
+    unfold ArrowInv in *.
+    apply (Hinv f Hf x v); crush.
+    inversion Hv; crush.
+  }
+Qed.
 
 
 
