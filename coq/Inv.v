@@ -3,6 +3,7 @@ Require Import List.
 Require Import Omega.
 Require Import Ensembles.
 Require Import Classical_sets.
+Require Import Coq.Logic.Classical_Prop.
 Require Import Powerset.
 Require Import Image.
 Require Import Relations.
@@ -239,6 +240,7 @@ Ltac inv_FnArrow :=
   end.
 
 
+(* Arrow Inversion Soundness *)
 Theorem a_inv_sound : forall a outT inT,
     a_inv a outT = inT ->
     ArrowInv a outT inT.
@@ -248,7 +250,7 @@ Proof with crush.
   destruct a as [T1 T2].
   simpl in *.
   unfold a_inv in *.
-  remember (overlap (a_rng (Arrow T1 T2)) outT) as Hover.
+  remember (overlap (a_rng (Arrow T1 T2)) outT) as Hoverlap.
   ifcaseH...
   inv_FnArrow.
   applyHinH...
@@ -262,19 +264,40 @@ Qed.
 Lemma no_empty_val : forall v,
     ~ IsA v emptyTy.
 Proof.
-  Admitted.
-
+  intros v Hmt. inversion Hmt.
+Qed.
+  
 Lemma empty_no_overlap_l : forall T T',
     IsEmpty T -> overlap T T' = false.
 Proof.
-Admitted.
-
+  intros T T' Hmt.
+  unfold overlap.
+  ifcase. auto.
+  assert False.
+  intuition.
+  applyH.
+  unfold IsEmpty in *.
+  intros Hin.
+  inversion Hin as [v Hv].
+  inversion Hv; subst.
+  apply Hmt. apply (Inhabited_intro V T v).
+  auto.
+  crush.
+Qed.
+  
 Lemma not_empty_exists : forall T,
     ~ IsEmpty T ->
     exists v, IsA v T.
 Proof.
-  Admitted.
+  intros T HTmt.
+  unfold IsEmpty in *.
+  apply NNPP in HTmt.
+  inversion HTmt.
+  eexists. eauto.
+Qed.
   
+  
+(* Arrow Inversion Completeness *)
 Theorem a_inv_complete : forall a outT inT,
     a_inv a outT = inT ->
     forall inT',
@@ -287,14 +310,19 @@ Proof.
   unfold overlap in *.
   remember (IsEmpty_dec (tyAnd T2 outT)) as Hmt.
   destruct Hmt as [Hmt | Hnmt].
+  (* IsEmpty (tyAnd T2 outT) *)
   {
     subst. unfold Included; intros.
     assert False. eapply no_empty_val. eassumption. crush.
   }
+  (* ~ IsEmpty (tyAnd T2 outT) *)
   {
     assert (exists v, IsA v (tyAnd T2 outT)) as Hex.
     apply not_empty_exists. auto. destruct Hex as [v Hv].
     remember (fun (_:V) => Res v) as f.
+    (* f is a function that maps all T1 to 
+       some value in (T2 ∩ outT) 
+      *)
     assert (FnArrow f (Arrow T1 T2)) as Hf.
     {
      constructor; intros.
@@ -336,20 +364,19 @@ forall (f:fn),
     IsA v inT.
 
 
-Theorem i_inv_sound : forall i f,
-    FnInterface f i ->
-    forall outT inT,
+(* Interface Inversion Soundness *)
+Theorem i_inv_sound : forall i outT inT,
       i_inv i outT = inT ->
       InterfaceInv i inT outT.
 Proof.
-  
+  Admitted.
   
 
-Theorem i_inv_complete : forall i f outT inT,
-    FnInterface f i ->
+(* Interface Inversion Completeness *)
+Theorem i_inv_complete : forall i outT inT,
     i_inv i outT = inT ->
     forall inT',
-      InterfaceInv i inT' outT ->
+      InterfaceInv i outT inT' ->
       inT <: inT'.
 Proof.
   Admitted.
@@ -366,11 +393,16 @@ Fixpoint d_dom (d : dnf) : Ty :=
   | DCons i d' => tyAnd (i_dom i) (d_dom d')
   end.
 
-Fixpoint FnDnf (f : fn) (d : dnf) : Prop :=
-  match d with
-  | DBase i  => FnInterface f i
-  | DCons i d' => (FnInterface f i) \/ (FnDnf f d')
-  end.
+Inductive FnDnf : fn -> dnf -> Prop :=
+| FnDBase : forall f i,
+    FnInterface f i ->
+    FnDnf f (DBase i)
+| FnDCons : forall f i d,
+    FnInterface f i -> 
+    FnDnf f (DCons i d)
+| FnDRest : forall f i d,
+    FnDnf f d -> 
+    FnDnf f (DCons i d).
 
 
 Fixpoint d_inv (d:dnf) (out:Ty) : Ty :=
@@ -391,21 +423,19 @@ forall (f:fn),
     IsA v inT.
 
 
-
-Theorem d_inv_sound : forall d f,
-    FnDnf f d ->
-    forall outT inT,
+(* Dnf Inversion Soundness *)
+Theorem d_inv_sound : forall d outT inT,
       d_inv d outT = inT ->
-      DnfInv d inT outT.
+      DnfInv d outT inT.
 Proof.
   Admitted.
 
 
-Theorem d_inv_complete : forall d f outT inT,
-    FnDnf f d ->
+(* Dnf Inversion Completeness *)
+Theorem d_inv_complete : forall d outT inT,
     d_inv d outT = inT ->
     forall inT',
-      DnfInv d inT' outT ->
+      DnfInv d outT inT' ->
       inT <: inT'.
 Proof.
   Admitted.
