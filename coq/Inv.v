@@ -126,7 +126,8 @@ forall (f:fn),
   FnArrow f a ->
   forall (v v':V),
     f v = Res v' ->
-    ~ (IsA v' outT /\ IsA v inT).
+    IsA v' outT ->
+    ~ IsA v inT.
 
 Hint Unfold ArrowInvPos ArrowInvNeg.
 
@@ -219,59 +220,34 @@ Theorem a_inv_neg_complete : forall a outT inT,
     a_inv_neg a outT = inT ->
     forall inT',
       ArrowInvNeg a outT inT'  ->
+      inT' <: (a_dom a) ->
       inT' <: inT.
 Proof.
-  intros [T1 T2] outT inT Hinv inT' H' x Hx.
+  intros [T1 T2] outT inT Hinv inT' H' Hdom x Hx.
   unfold a_inv_neg in Hinv. simpl in *.
   unfold ArrowInvNeg in *.
-  (* BOOKMARK STUCK *)
-
-  destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt]; subst.
+  destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt]; crush.
+  assert False as impossible.
   {
-    destruct (IsEmpty_dec outT) as [Homt | Honmt]; subst.
-    
-  }
-  
-  destruct (IsA_dec x inT); auto.
-  assert False.
-  {
-    
-  }
-  {
-    eapply H'.
-    (* we need a v in inT' s.t. (x)
-       f v = Res v' and
-       v' in outT  *)
-    unfold a_inv_neg in Hinv.
-    simpl in *.
-    destruct (IsEmpty_dec (tyAnd T2 outT)); subst.
-    simpl in *.
-  } 
-  ; crush.  
-  {
-    destruct (IsEmpty_dec outT).
-    {
-      (* if outT is empty...  *)
-    }
-    (* we need an f s.t. 
-       f : inT -> T2 *)
-    destruct (IsA_dec x inT); auto.
-    remember (fun (_:V) => Res x) as f.
-    
-
-    (* BOOKMARK *)
-    destruct (IsEmpty_dec T2); crush.
-    remember (fun (_:V) => Res x) as f.
-    assert (FnArrow f (Arrow inT T2)) as Hf.
+    inversion Hnmt; subst.
+    remember (fun (_:V) => Res x0) as f.
+    assert (FnArrow f (Arrow T1 T2)) as Hf.
     {
       constructor. intros v Hv.
-      crush.
+      right. exists x0; crush.
+      match goal with
+      | [H :  IsA _ (tyAnd T2 outT) |- _ ] => inversion H
+      end; crush.
     }
+    apply (H' f Hf x x0); crush.
+    match goal with
+      | [H :  IsA _ (tyAnd T2 outT) |- _ ] => inversion H
+    end; crush.
   }
-  {
+  crush.
+Qed.  
 
-  }
-  
+
 Inductive interface : Type :=
 | IBase : arrow -> interface
 | ICons : arrow -> interface -> interface.
