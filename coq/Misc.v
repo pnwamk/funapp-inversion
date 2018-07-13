@@ -36,6 +36,11 @@ Ltac applyHinH :=
   | [H1 : _ -> _ , H2 : _ |- _] => apply H1 in H2
   end.
 
+Ltac applyIn H :=
+  match goal with
+  | [H1 : _ -> _ |- _] => apply H1 in H
+  end.
+
 
 Ltac smash := solve [crush].
 
