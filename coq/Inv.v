@@ -272,17 +272,21 @@ Inductive FnInterface : fn -> interface -> Prop :=
 Hint Constructors FnInterface.
 
 
+(* Append for interfaces *)
 Fixpoint i_app (i1 i2 : interface) : interface :=
   match i1 with
   | IBase a => ICons a i2
   | ICons a i1' => ICons a (i_app i1' i2)
   end.
+Hint Unfold i_app.
 
+(* Map for interfaces *)
 Fixpoint i_map (f : arrow -> arrow) (i : interface) : interface :=
   match i with
   | IBase a => IBase (f a)
   | ICons a i' => ICons (f a) (i_map f i')
   end.
+Hint Unfold i_map.
 
 (* non-empty subsets of an interface, as arrows with
    pointwise intersected domain and codomains *)
@@ -292,8 +296,9 @@ Fixpoint i_powerset (i : interface) : interface :=
   | ICons a i' => let p := i_powerset i' in
                   i_app p (i_map (a_meet a) p)
   end.
+Hint Unfold i_powerset.
 
-Lemma i_app_i : forall i i' f,
+Lemma i_app_valid_i : forall i i' f,
     FnInterface f i ->
     FnInterface f i' ->
     FnInterface f (i_app i i').
@@ -340,7 +345,7 @@ Proof with crush.
   induction i... 
   assert (FnInterface f (i_powerset i)) as Hp...
   inversion Hfi; crush.
-  apply i_app_i...
+  apply i_app_valid_i...
   apply a_meet_i...
   inversion Hfi...
 Qed.
@@ -351,18 +356,20 @@ Fixpoint i_inv_pos (p: interface) (out:Ty) : Ty :=
   | IBase a => (a_inv_pos a out)
   | ICons a p' => tyOr (a_inv_pos a out) (i_inv_pos p' out)
   end.
+Hint Unfold i_inv_pos.
 
 Fixpoint i_inv_neg (p: interface) (out:Ty) : Ty :=
   match p with
   | IBase a => (a_inv_neg a out)
   | ICons a p' => tyOr (a_inv_neg a out) (i_inv_neg p' out)
   end.
+Hint Unfold i_inv_neg.
+
+
 Definition i_inv (i:interface) (out:Ty) : Ty :=
-  let p := (i_powerset i) in
-  let pos := i_inv_pos p out in
-  let neg := i_inv_neg p (tyNot out) in
-  tyDiff pos neg.
-Hint Unfold i_inv i_inv_aux i_app i_map i_powerset.
+  tyDiff (i_inv_pos (i_powerset i) out)
+         (i_inv_neg (i_powerset i) out).
+Hint Unfold i_inv.
 
 
 Definition InterfaceInv
@@ -389,15 +396,14 @@ Proof.
   crush.
 Qed.
 
-
-(* Interface Inversion Soundness *)
-Lemma i_inv_sound : forall i outT inT,
-      i_inv i outT = inT ->
-      InterfaceInv i outT inT.
+Lemma i_inv_pos_sound : forall i outT inT,
+    i_inv_pos i outT = inT ->
+    InterfaceInv i outT inT.
 Proof with crush.
   intros i; induction i.
-  (* i =  (IBase a) *)
+  (* Case (IBase a) *)
   {
+    unfold InterfaceInv.
     intros outT inT Hinv f Hint v v' Hv Hf Hv'.
     destruct a as [T1 T2].
     inv_FnInterface...
@@ -405,62 +411,75 @@ Proof with crush.
     assert (IsA v T1) as temp; auto.
     applyIn temp...
     same_Res.
-    unfold i_inv. unfold i_powerset. unfold i_inv_aux.
-    apply in_tyDiff.
-    (* Goal:  IsA v (a_inv (Arrow T1 T2) outT) *)
-    {
-      eapply a_inv_sound; eauto.
-    }
-    (* Goal: ~ IsA v (a_inv (Arrow T1 T2) (tyNot outT)) *)
-    {
-      unfold a_inv in *. simpl in *.
-      intro Hv''.
-      destruct (IsEmpty_dec (tyAnd T2 (tyNot outT))).
-      {
-        eapply no_empty_val. eassumption.
-      }
-      {
-        assert ().
-        match goal with
-        | [H : IsInhabited _ |- _] => inversion H
-        end.
-        inv_FnArrow.
-        assert (f v = Bot \/ (exists v' : V, IsA v' T2 /\ f v = Res v'))
-          as Habsurd. auto.
-        inversion Habsurd; subst. crush.
-        match goal with
-        | [H : IsInhabited _ |- _] => inversion H
-        end.
-        
-      }
-      eapply a_inv_sound in H1; eauto.
-      eapply H1 in Hv'.
-    }
-    
-    unfold Setminus.
-    unfold a_inv. simpl in *.
-    ifcase. crush.
-    ifcase.
-    cbv.
-    intros.
-    
+    eapply a_inv_pos_sound; eauto.
+  }
+  (* Case (ICons a i) *)
+  {
+    unfold InterfaceInv.
+    intros outT inT Hinv f Hint v v' Hv Hf Hv'.
     crush.
-    
-     (@a_inv_sound (Arrow T1 T2) outT).
-    simpl in *.
-  }
-  (* i =  (ICons a i') *)
-  {
-  }
-  intros i outT inT Hinv f Hint v v' Hv Hf Hv'...
-  inv_FnInterface...
-  (* FnInterface f (IBase a) *)
-  {
-    
-  }
-  (* FnInterface f (ICons a) *)
-  {
+    inv_FnInterface.
+    inversion Hv; subst.
+    (* IsA V (a_dom a) *)
+    {
+      inv_FnArrow.
+      simpl in *.
+      assert (IsA v T1) as H' by assumption.
+      applyHinH...
+      same_Res.
+      left.
+      unfold a_inv_pos.
+      simpl.
+      destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt].
+      {
+        (* BOOKMARK *)
+      }
+      {
 
+      }
+    }
+    (* IsA V (i_dom i) *)
+    {
+      
+    }
+
+  }
+  
+(* Interface Inversion Soundness *)
+Lemma i_inv_sound : forall i outT inT,
+      i_inv i outT = inT ->
+      InterfaceInv i outT inT.
+Proof with crush.
+  intros i; induction i.
+  (* Case (IBase a) *)
+  {
+    unfold InterfaceInv.
+    intros outT inT Hinv f Hint v v' Hv Hf Hv'.
+    destruct a as [T1 T2].
+    inv_FnInterface...
+    inv_FnArrow.
+    assert (IsA v T1) as temp; auto.
+    applyIn temp...
+    same_Res.
+    unfold i_inv. simpl.
+    apply in_tyDiff.
+    (* Goal:  IsA v (a_inv_pos (Arrow T1 T2) outT) *)
+    {
+      eapply a_inv_pos_sound; eauto.
+    }
+    (* Goal:  ~ IsA v (a_inv_neg (Arrow T1 T2) (tyNot outT)) *)
+    {
+      eapply a_inv_neg_sound; eauto.
+    }
+  }
+  (* Case (ICons a i) *)
+  {
+    unfold InterfaceInv.
+    intros outT inT Hinv f Hint v v' Hv Hf Hv'.
+    subst.
+    unfold i_inv. unfold i_powerset. fold i_powerset. unfold i_inv_pos. fold i_inv_pos.
+    unfold i_map in *. fold i_map in *.
+    
   }
   Admitted.
   
