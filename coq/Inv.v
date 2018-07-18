@@ -108,7 +108,7 @@ Definition a_inv_neg (a:arrow) (out:Ty) : Ty :=
 
 Hint Unfold a_inv_pos a_inv_neg.
 
-Definition ArrowInvPos 
+Definition ArrowInv 
            (a:arrow)
            (outT inT : Ty) : Prop :=
 forall (f:fn),
@@ -121,15 +121,15 @@ forall (f:fn),
 
 Definition ArrowInvNeg 
            (a:arrow)
-           (outT inT : Ty) : Prop :=
+           (outT notInT : Ty) : Prop :=
 forall (f:fn),
   FnArrow f a ->
   forall (v v':V),
     f v = Res v' ->
     IsA v' outT ->
-    ~ IsA v inT.
+    ~ IsA v notInT.
 
-Hint Unfold ArrowInvPos ArrowInvNeg.
+Hint Unfold ArrowInv ArrowInvNeg.
 
 Ltac same_Res :=
   match goal with
@@ -146,9 +146,9 @@ Ltac inv_FnArrow :=
 (* Arrow Inversion Soundness *)
 Lemma a_inv_pos_sound : forall a outT inT,
     a_inv_pos a outT = inT ->
-    ArrowInvPos a outT inT.
+    ArrowInv a outT inT.
 Proof with crush.
-  unfold ArrowInvPos.
+  unfold ArrowInv.
   intros [T1 T2] outT inT Hinv f Hf v v' Hin Hfv Hout.
   unfold a_inv_pos in *. simpl in *. 
   destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt]...
@@ -159,12 +159,12 @@ Proof with crush.
   exists x...
 Qed.
 
-Lemma a_inv_neg_sound : forall a outT inT,
-    a_inv_neg a outT = inT ->
-    ArrowInvNeg a outT inT.
+Lemma a_inv_neg_sound : forall a outT notInT,
+    a_inv_neg a outT = notInT ->
+    ArrowInvNeg a outT notInT.
 Proof with crush.
   unfold ArrowInvNeg.
-  intros [T1 T2] outT inT Hinv f Hf v v' Hfv.
+  intros [T1 T2] outT notInT Hinv f Hf v v' Hfv.
   unfold a_inv_neg in *. simpl in *. 
   destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt]...
   (* ~ IsInhabited (tyAnd T2 outT) *)
@@ -184,7 +184,7 @@ Qed.
 Theorem a_inv_pos_complete : forall a outT inT,
     a_inv_pos a outT = inT ->
     forall inT',
-      ArrowInvPos a outT inT' ->
+      ArrowInv a outT inT' ->
       inT <: inT'.
 Proof.
   intros [T1 T2] outT inT Hinveq inT' Hinv.
@@ -211,19 +211,19 @@ Proof.
     inversion Hv. crush.
   }
   unfold Included. intros.
-  unfold ArrowInvPos in *.
+  unfold ArrowInv in *.
   apply (Hinv f Hf x v); crush.
   inversion Hv; crush.
 Qed.
 
-Theorem a_inv_neg_complete : forall a outT inT,
-    a_inv_neg a outT = inT ->
-    forall inT',
-      ArrowInvNeg a outT inT'  ->
-      inT' <: (a_dom a) ->
-      inT' <: inT.
+Theorem a_inv_neg_complete : forall a outT notInT,
+    a_inv_neg a outT = notInT ->
+    forall notInT',
+      ArrowInvNeg a outT notInT' ->
+      notInT' <: (a_dom a) ->
+      notInT' <: notInT.
 Proof.
-  intros [T1 T2] outT inT Hinv inT' H' Hdom x Hx.
+  intros [T1 T2] outT notInT Hinv notInT' H' Hdom x Hx.
   unfold a_inv_neg in Hinv. simpl in *.
   unfold ArrowInvNeg in *.
   destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt]; crush.
@@ -383,6 +383,17 @@ forall (f:fn),
     IsA v' outT ->
     IsA v inT.
 
+Definition InterfaceInvNeg
+           (i:interface)
+           (outT notInT : Ty) : Prop :=
+forall (f:fn),
+  FnInterface f i ->
+  forall (v v':V),
+    f v = Res v' ->
+    IsA v' outT ->
+    ~ IsA v notInT.
+
+
 Ltac inv_FnInterface :=
   match goal with
   | [H : FnInterface _ _ |- _] => inversion H; subst
@@ -459,44 +470,56 @@ Proof with crush.
   }
 Qed.
 
-(* Interface Inversion Soundness *)
-Lemma i_inv_sound : forall i outT inT,
-      i_inv i outT = inT ->
-      InterfaceInv i outT inT.
+Lemma i_inv_neg_sound : forall i outT notInT,
+    i_inv_neg i outT = notInT ->
+    InterfaceInvNeg i outT notInT.
 Proof with crush.
-  intros i; induction i.
+  intros i; induction i as [[T1 T2] | [T1 T2] i IHi].
   (* Case (IBase a) *)
   {
-    unfold InterfaceInv.
-    intros outT inT Hinv f Hint v v' Hv Hf Hv'.
-    destruct a as [T1 T2].
-    inv_FnInterface...
-    inv_FnArrow.
-    assert (IsA v T1) as temp; auto.
-    applyIn temp...
-    same_Res.
-    unfold i_inv. simpl.
-    apply in_tyDiff.
-    (* Goal:  IsA v (a_inv_pos (Arrow T1 T2) outT) *)
-    {
-      eapply a_inv_pos_sound; eauto.
-    }
-    (* Goal:  ~ IsA v (a_inv_neg (Arrow T1 T2) (tyNot outT)) *)
-    {
-      eapply a_inv_neg_sound; eauto.
-    }
+    unfold InterfaceInvNeg.
+    intros outT notInT Hinv f Hint v v' hf Hv' Hcontra.
+    subst. simpl in *.
+    inv_FnInterface.
+    eapply (a_inv_neg_sound outT); eauto.
   }
   (* Case (ICons a i) *)
   {
-    unfold InterfaceInv.
-    intros outT inT Hinv f Hint v v' Hv Hf Hv'.
-    subst.
-    unfold i_inv. unfold i_powerset. fold i_powerset. unfold i_inv_pos. fold i_inv_pos.
-    unfold i_map in *. fold i_map in *.
-    
+    unfold InterfaceInvNeg.
+    intros outT notInT Hinv f Hint v v' hf Hv' Hcontra.
+    simpl in *. subst.
+    inv_FnInterface.
+    destruct Hcontra.
+    (* IsA v (a_inv_neg (Arrow T1 T2) outT) *)
+    {
+      unfold a_inv_neg in *. simpl in *.
+      destruct (IsEmpty_dec (tyAnd T2 outT))
+        as [Hmt | Hnmt].
+      (* IsEmpty (tyAnd (a_rng (Arrow T1 T2)) outT) *)
+      {
+        inv_FnArrow.
+        assert (IsA x T1) as HT1 by assumption.
+        applyHinH...
+        same_Res.
+        eauto.
+      }
+      (* IsInhabited (tyAnd (a_rng (Arrow T1 T2)) outT) *)
+      {
+        eapply no_empty_val; eassumption.
+      }
+    }
+    (* IsA v (i_inv_neg i outT)  *)
+    {
+      (* BOOKMARK *)
+    }
   }
-  Admitted.
   
+(* Interface Inversion Soundness *)
+Lemma i_inv_sound : forall i outT inT,
+    i_inv i outT = inT ->
+    InterfaceInv i outT inT.
+Proof with crush.
+Admitted.
 
 (* Interface Inversion Completeness *)
 Lemma i_inv_complete : forall i outT inT,
