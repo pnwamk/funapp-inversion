@@ -201,9 +201,7 @@ Proof.
   }
   destruct Hex as [v Hv].
   remember (fun (_:V) => Res v) as f.
-  (* f is a function that maps all T1 to 
-     som e value in (T2 ∩ outT) 
-   *)
+  (* i.e., f is a constant function to (T2 ∩ outT) *)
   assert (FnArrow f (Arrow inT T2)) as Hf.
   {
     constructor; intros.
@@ -249,7 +247,7 @@ Qed.
 
 
 Inductive interface : Type :=
-| IBase : arrow -> interface
+| IBase: arrow -> interface
 | ICons : arrow -> interface -> interface.
 Hint Constructors interface.
 
@@ -294,7 +292,7 @@ Fixpoint i_powerset (i : interface) : interface :=
   match i with
   | IBase a => IBase a
   | ICons a i' => let p := i_powerset i' in
-                  i_app p (i_map (a_meet a) p)
+                  (ICons a (i_app (i_map (a_meet a) p) p))
   end.
 Hint Unfold i_powerset.
 
@@ -336,15 +334,93 @@ Proof with crush.
   induction Hfi...
 Qed.
 
+Lemma tyOr_assoc : forall T1 T2 T3,
+    tyOr T1 (tyOr T2 T3) = tyOr (tyOr T1 T2) T3.
+Proof.
+  intros T1 T2 T3.
+  apply Extensionality_Ensembles.
+  constructor.
+  {
+    intros x Hx.
+    destruct Hx as [x Hx | x Hx]; crush.
+    destruct Hx as [x Hx | x Hx]; crush.
+  }
+  {
+    intros x Hx.
+    destruct Hx as [x Hx | x Hx]; crush.
+    destruct Hx as [x Hx | x Hx]; crush.
+  }
+Qed.        
 
-Lemma i_powerset_interface : forall i f,
-    FnInterface f i ->
-    FnInterface f (i_powerset i).
+
+Lemma i_app_dom : forall i i',
+    i_dom (i_app i i') = tyOr (i_dom i) (i_dom i').
+Proof.
+  intros i i'. induction i; crush.
+Qed.
+
+Lemma i_meet_dom : forall a i,
+    i_dom (i_map (a_meet a) i)
+    = tyAnd (a_dom a) (i_dom i).
+Proof.
+  intros [T1 T2] i.
+  induction i as [[T3 T4] | [T3 T4] i' IH]; crush.
+  apply Extensionality_Ensembles.
+  constructor.
+  {
+    intros x Hx.
+    destruct Hx as [x Hx | x Hx]; destruct Hx; crush.
+  }
+  {
+    intros x Hx.
+    destruct Hx as [x Hx1 Hx2].
+    destruct Hx2 as [x Hx2 | x Hx2]; crush.
+  }
+Qed.  
+  
+  
+Lemma i_powerset_dom : forall i,
+    i_dom i = i_dom (i_powerset i).
 Proof with crush.
-  intros i f Hfi.
+  intros i.
+  induction i...
+  rewrite <- IHi.
+  rewrite i_app_dom.
+  rewrite <- IHi.
+  apply Extensionality_Ensembles.
+  constructor.
+  (* _ <: _ direction *)
+  {
+    unfold Included.
+    intros x Hx.
+    inversion Hx; eauto.
+  }
+  (* _ :> _ direction *)
+  {
+    unfold Included.
+    intros x Hx.
+    destruct Hx as [x Hx | x Hx].
+    left; auto.
+    right.
+    destruct Hx as [x Hx | x Hx]; auto.
+    {
+      rewrite i_meet_dom in Hx.
+      inversion Hx; crush.
+    }
+  }
+Qed.
+
+Lemma i_powerset_interface : forall i i' f,
+    FnInterface f i ->
+    (i_powerset i) = i' -> 
+    FnInterface f i'.
+Proof with crush.
+  intros i i' f Hfi Heq. subst.
   induction i... 
   assert (FnInterface f (i_powerset i)) as Hp...
   inversion Hfi; crush.
+  constructor.
+  inversion Hfi; auto.
   apply i_app_valid_i...
   apply a_meet_i...
   inversion Hfi...
@@ -510,17 +586,48 @@ Proof with crush.
     }
     (* IsA v (i_inv_neg i outT)  *)
     {
-      (* BOOKMARK *)
+      assert (InterfaceInvNeg i outT (i_inv_neg i outT)) as Hi; auto.
+      destruct Hi with f x v'; auto.
     }
   }
-  
+Qed.
+
 (* Interface Inversion Soundness *)
 Lemma i_inv_sound : forall i outT inT,
     i_inv i outT = inT ->
     InterfaceInv i outT inT.
 Proof with crush.
-Admitted.
+  unfold InterfaceInv.
+  intros i outT inT Hinv f Hint v v' Hv Hf Hv'.
+  unfold i_inv in *.
+  remember (i_powerset i) as i'.
+  assert (FnInterface f i') as Hi' by (eapply i_powerset_interface; eauto).
+  clear Hint.
+  rewrite <- Hinv. constructor.
+  (* Show: IsA v (i_inv_pos i' outT) *)
+  {
+    assert (InterfaceInv i' outT (i_inv_pos i' outT)) as Hpos.
+    {
+      specialize i_inv_pos_sound with i' outT (i_inv_pos i' outT); eauto.
+    }
+    eapply Hpos; eauto.
+    subst.
+    rewrite <- (i_powerset_dom i).
+    assumption.
+  }
+  (* Show: ~ IsA v (i_inv_neg i' outT) *)
+  {
+    intros Hcontra.
+    assert (InterfaceInvNeg i' outT (i_inv_neg i' outT)) as Hneg.
+    {
+      specialize i_inv_neg_sound with i' outT (i_inv_neg i' outT); eauto.
+    }
+    eapply Hneg; eauto.
+  }
+Qed.
 
+
+  
 (* Interface Inversion Completeness *)
 Lemma i_inv_complete : forall i outT inT,
     i_inv i outT = inT ->
@@ -528,7 +635,100 @@ Lemma i_inv_complete : forall i outT inT,
       InterfaceInv i outT inT' ->
       inT <: inT'.
 Proof.
-  Admitted.
+  intros i. induction i as [[T1 T2] | [T1 T2] i'].
+  (* (IBase (Arrow T1 T2)) *)
+  {
+    intros outT inT Hinv inT' Hint x Hx.
+    unfold InterfaceInv in *.
+    unfold i_inv in *.
+    rewrite <- Hinv in Hx.
+    destruct Hx as [HxIn HxNotIn].
+    simpl in *.
+    assert (forall inT',
+               ArrowInv (Arrow T1 T2) outT inT' ->
+               (a_inv_pos (Arrow T1 T2) outT) <: inT')
+      as HPCom
+        by (eapply a_inv_pos_complete; auto).
+    assert (forall notInT',
+               ArrowInvNeg (Arrow T1 T2) outT notInT' ->
+               (notInT' <: (a_dom (Arrow T1 T2)) ->
+                           notInT' <: (a_inv_neg (Arrow T1 T2) outT)))
+      as HNCom
+        by (eapply a_inv_neg_complete; auto).
+    unfold a_inv_pos in *.
+    unfold a_inv_neg in *.
+    destruct (IsEmpty_dec (tyAnd (a_rng (Arrow T1 T2)) outT)) as [Hmt | Hex].
+    {
+      assert False as impossible by (eapply no_empty_val; eauto).
+      contradiction.
+    }
+    {
+      simpl in *.
+      destruct Hex as [y Hy].
+      destruct Hy as [y Hy1 Hy2].
+      remember (fun (_:V) => Res y) as f.
+      (* i.e., f is a constant function to (T2 ∩ outT) *)
+      assert (FnInterface f (IBase (Arrow T1 T2))) as  Hf.
+      {
+        constructor. constructor.
+        intros v Hv.
+        right. exists y. crush.
+      }
+      eapply Hint; eauto. crush. 
+    }
+  }
+  (* (ICons (Arrow T1 T2)) *)
+  {
+    unfold InterfaceInv.
+    intros outT intT Hinv inT' Hint x Hx.
+    unfold i_inv in *. simpl in *.
+    rewrite <- Hinv in Hx.
+    clear Hinv.
+    destruct Hx as [HxIn HxNotIn].
+    destruct HxIn as [x HxIn | x HxIn].
+    (* IsA x (a_inv_pos (Arrow T1 T2) outT) *)
+    {
+    assert (forall inT',
+               ArrowInv (Arrow T1 T2) outT inT' ->
+               (a_inv_pos (Arrow T1 T2) outT) <: inT')
+      as HPCom
+        by (eapply a_inv_pos_complete; auto).
+    assert (forall notInT',
+               ArrowInvNeg (Arrow T1 T2) outT notInT' ->
+               (notInT' <: (a_dom (Arrow T1 T2)) ->
+                           notInT' <: (a_inv_neg (Arrow T1 T2) outT)))
+      as HNCom
+        by (eapply a_inv_neg_complete; auto).
+    unfold a_inv_pos in *.
+    unfold a_inv_neg in *.
+    destruct (IsEmpty_dec (tyAnd (a_rng (Arrow T1 T2)) outT)) as [Hmt | Hex].
+    {
+      assert False as impossible by (eapply no_empty_val; eauto).
+      contradiction.
+    }
+    {
+      simpl in *.
+      destruct Hex as [y Hy].
+      destruct Hy as [y Hy1 Hy2].
+      remember (fun (_:V) => Res y) as f.
+      (* i.e., f is a constant function to (T2 ∩ outT) *)
+      assert (FnInterface f (IBase (Arrow T1 T2))) as  Hf.
+      {
+        constructor. constructor.
+        intros v Hv.
+        right. exists y. crush.
+      }
+      eapply Hint; eauto. crush. 
+    }
+
+    (* BOOKMARK *)
+    }
+    (* IsA x (i_inv_pos
+                 (i_app (i_map (a_meet (Arrow T1 T2)) (i_powerset i'))
+                    (i_powerset i')) outT) *)
+
+  
+Admitted.
 
     
 (* A disjunction of interfaces *)
