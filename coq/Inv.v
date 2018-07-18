@@ -396,16 +396,23 @@ Proof.
   crush.
 Qed.
 
+Lemma empty_counterexample : forall v T,
+    IsA v T ->
+    ~ IsEmpty T.
+Proof.
+  eauto.
+Qed.
+
+
 Lemma i_inv_pos_sound : forall i outT inT,
     i_inv_pos i outT = inT ->
     InterfaceInv i outT inT.
 Proof with crush.
-  intros i; induction i.
+  intros i; induction i as [[T1 T2] | [T1 T2] i IHi].
   (* Case (IBase a) *)
   {
     unfold InterfaceInv.
     intros outT inT Hinv f Hint v v' Hv Hf Hv'.
-    destruct a as [T1 T2].
     inv_FnInterface...
     inv_FnArrow.
     assert (IsA v T1) as temp; auto.
@@ -422,29 +429,36 @@ Proof with crush.
     inversion Hv; subst.
     (* IsA V (a_dom a) *)
     {
+      left.
       inv_FnArrow.
       simpl in *.
       assert (IsA v T1) as H' by assumption.
-      applyHinH...
-      same_Res.
-      left.
+      applyHinH... same_Res.
       unfold a_inv_pos.
       simpl.
-      destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt].
+      destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt]; auto.
+      (* IsEmpty (tyAnd T2 outT) *)
       {
-        (* BOOKMARK *)
-      }
-      {
-
+        assert False as impossible.
+        {
+          eapply (empty_counterexample x _ Hmt); auto.
+        }
+        contradiction.
       }
     }
     (* IsA V (i_dom i) *)
     {
-      
+      right.
+      specialize IHi with outT (i_inv_pos i outT).
+      intuition.
+      unfold InterfaceInv in *.
+      eauto.
+      Unshelve.
+      crush.
     }
-
   }
-  
+Qed.
+
 (* Interface Inversion Soundness *)
 Lemma i_inv_sound : forall i outT inT,
       i_inv i outT = inT ->
