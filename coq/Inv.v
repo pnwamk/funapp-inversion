@@ -273,20 +273,19 @@ Inductive InInterface : arrow -> interface -> Prop :=
 | InConsFirst : forall a i, InInterface a (ICons a i)
 | InConsRest : forall a i, InInterface a i ->
                            InInterface a (ICons a i).
-
+Hint Constructors InInterface.
 
 (* Similar to `exists_FnArrow`, we cannot prove
    `exists_FnInterface` but it is safe to assume. *)
 Axiom exists_FnInterface : forall i outT,
     exists f,
+      FnInterface f i /\
       forall T1 T2,
-        InInterface (Arrow T1 T2) i ->
-        FnArrow f (Arrow T1 T2)
-        /\ (IsInhabited (tyAnd T2 outT) ->
-            forall v, IsA v T1 ->
-                      exists v', IsA v' (tyAnd T2 outT)
-                                 /\ f v = Res v').
-(* BOOKMARK *)
+        FnArrow f (Arrow T1 T2) ->
+        (IsInhabited (tyAnd T2 outT) ->
+         forall v, IsA v T1 ->
+                   exists v', IsA v' (tyAnd T2 outT) /\
+                              f v = Res v').
 
 (* Append for interfaces *)
 Fixpoint i_app (i1 i2 : interface) : interface :=
@@ -443,7 +442,6 @@ Proof with crush.
   apply a_meet_i...
   inversion Hfi...
 Qed.
-
 
 Fixpoint i_inv_pos (p: interface) (out:Ty) : Ty :=
   match p with
@@ -644,6 +642,15 @@ Proof with crush.
   }
 Qed.
 
+Lemma tyOr_empty_l : forall t,
+    tyOr emptyTy t = t.
+Proof.
+  Admitted.
+
+Lemma tyOr_empty_r : forall t,
+    tyOr t emptyTy = t.
+Proof.
+  Admitted.
 
   
 (* Interface Inversion Completeness *)
@@ -660,6 +667,7 @@ Proof.
     unfold InterfaceInv in *.
     unfold i_inv in *.
     rewrite <- Hinv in Hx.
+    clear Hinv.
     destruct Hx as [HxIn HxNotIn].
     simpl in *.
     assert (forall inT',
@@ -675,24 +683,21 @@ Proof.
         by (eapply a_inv_neg_complete; auto).
     unfold a_inv_pos in *.
     unfold a_inv_neg in *.
-    destruct (IsEmpty_dec (tyAnd (a_rng (Arrow T1 T2)) outT)) as [Hmt | Hex].
+    destruct (IsEmpty_dec (tyAnd (a_rng (Arrow T1 T2)) outT))
+      as [Hmt | Hnmt].
     {
       assert False as impossible by (eapply no_empty_val; eauto).
       contradiction.
     }
     {
       simpl in *.
-      destruct Hex as [y Hy].
-      destruct Hy as [y Hy1 Hy2].
-      remember (fun (_:V) => Res y) as f.
-      (* i.e., f is a constant function to (T2 ∩ outT) *)
-      assert (FnInterface f (IBase (Arrow T1 T2))) as  Hf.
-      {
-        constructor. constructor.
-        intros v Hv.
-        right. exists y. crush.
-      }
-      eapply Hint; eauto. crush. 
+      destruct (exists_FnArrow T1 Hnmt)
+        as [f [Hf Hex]].
+      specialize Hex with x.
+      destruct (Hex HxIn) as [v' [Hv' Hres]]. 
+      assert (FnInterface f (IBase (Arrow T1 T2))) as  Hf' by crush.
+      eapply Hint; eauto.
+      inversion Hv'; auto.
     }
   }
   (* (ICons (Arrow T1 T2)) *)
@@ -706,44 +711,49 @@ Proof.
     destruct HxIn as [x HxIn | x HxIn].
     (* IsA x (a_inv_pos (Arrow T1 T2) outT) *)
     {
-    assert (forall inT',
-               ArrowInv (Arrow T1 T2) outT inT' ->
-               (a_inv_pos (Arrow T1 T2) outT) <: inT')
-      as HPCom
-        by (eapply a_inv_pos_complete; auto).
-    assert (forall notInT',
-               ArrowInvNeg (Arrow T1 T2) outT notInT' ->
-               (notInT' <: (a_dom (Arrow T1 T2)) ->
-                           notInT' <: (a_inv_neg (Arrow T1 T2) outT)))
-      as HNCom
-        by (eapply a_inv_neg_complete; auto).
-    unfold a_inv_pos in *.
-    unfold a_inv_neg in *.
-    destruct (IsEmpty_dec (tyAnd (a_rng (Arrow T1 T2)) outT)) as [Hmt | Hex].
-    {
-      assert False as impossible by (eapply no_empty_val; eauto).
-      contradiction.
-    }
-    {
+      assert (forall inT',
+                 ArrowInv (Arrow T1 T2) outT inT' ->
+                 (a_inv_pos (Arrow T1 T2) outT) <: inT')
+        as HPCom
+          by (eapply a_inv_pos_complete; auto).
+      assert (forall notInT',
+                 ArrowInvNeg (Arrow T1 T2) outT notInT' ->
+                 (notInT' <: (a_dom (Arrow T1 T2)) ->
+                             notInT' <: (a_inv_neg (Arrow T1 T2) outT)))
+        as HNCom
+          by (eapply a_inv_neg_complete; auto).
+      unfold a_inv_pos in *.
+      unfold a_inv_neg in *.
       simpl in *.
-      destruct Hex as [y Hy].
-      destruct Hy as [y Hy1 Hy2].
-      remember (fun (_:V) => Res y) as f.
-      (* i.e., f is a constant function to (T2 ∩ outT) *)
-      assert (FnInterface f (IBase (Arrow T1 T2))) as  Hf.
+      destruct (IsEmpty_dec (tyAnd T2 outT))
+        as [Hmt | Hnmt].
+      (* Hmt: IsEmpty  (* (tyAnd T2 outT) *) *)
       {
-        constructor. constructor.
-        intros v Hv.
-        right. exists y. crush.
+        assert False as impossible by (eapply no_empty_val; eauto).
+        contradiction.
       }
-      eapply Hint; eauto. crush. 
-    }
-
-    (* BOOKMARK *)
+      (* Hnmt: IsInhabited  (* (tyAnd T2 outT) *) *)
+      {
+        rewrite tyOr_empty_l in HxNotIn.
+        destruct (exists_FnInterface (ICons (Arrow T1 T2) i') outT)
+          as [f [Hfi Hf]].
+        assert (exists v' : V, IsA v' (tyAnd T2 outT) /\ f x = Res v')
+          as Hex.
+        {
+          inversion Hfi; subst.
+          eapply Hf; eauto.
+        }
+        destruct Hex as [y [Hy Hres]].
+        eapply Hint; eauto.
+        destruct Hy; auto.
+      }
     }
     (* IsA x (i_inv_pos
                  (i_app (i_map (a_meet (Arrow T1 T2)) (i_powerset i'))
                     (i_powerset i')) outT) *)
+    {
+      (* BOOKMARK *)
+    }
 
   
 Admitted.
