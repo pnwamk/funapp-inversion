@@ -90,6 +90,22 @@ Inductive FnArrow : fn -> arrow -> Prop :=
     FnArrow f (Arrow T1 T2).
 Hint Constructors FnArrow.
 
+(* We cannot prove the axiom `exists_FnArrow` becase we are
+   not including any defails about how fn's are constructed
+   internally (i.e. we're not actually talking about the
+   specific operational semantics) but it is trivial to see
+   that this is true, since the language in Frisch et
+   al. has a typecase and thus could check for input of type
+   T1 and return the witness of type (T2 ∩ outT) when seeing
+   a T1. *)
+Axiom exists_FnArrow : forall T1 T2 outT,
+    IsInhabited (tyAnd T2 outT) ->
+    exists f,
+      FnArrow f (Arrow T1 T2)
+      /\ forall v, IsA v T1 ->
+                   exists v', IsA v' (tyAnd T2 outT)
+                              /\ f v = Res v'.
+
 
 Ltac destruct_IsA :=
   match goal with
@@ -167,7 +183,7 @@ Proof with crush.
   intros [T1 T2] outT notInT Hinv f Hf v v' Hfv.
   unfold a_inv_neg in *. simpl in *. 
   destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt]...
-  (* ~ IsInhabited (tyAnd T2 outT) *)
+  (* ~ IsEmpty (tyAnd T2 outT) *)
   {
     apply Hmt. exists v'. split; crush.
     inv_FnArrow.
@@ -189,26 +205,15 @@ Theorem a_inv_pos_complete : forall a outT inT,
 Proof.
   intros [T1 T2] outT inT Hinveq inT' Hinv.
   unfold a_inv_pos in *. simpl in *.
-  destruct (IsEmpty_dec (tyAnd T2 outT)); subst; crush.
-  assert (exists v, IsA v (tyAnd T2 outT)) as Hex.
-  {
-    match goal with
-    | [H : IsInhabited _ |- _] => inversion i
-    end.
-    match goal with
-    | [H : IsA ?x (tyAnd T2 outT) |- _] => exists x; crush
-    end.
-  }
-  destruct Hex as [v Hv].
-  remember (fun (_:V) => Res v) as f.
-  (* i.e., f is a constant function to (T2 ∩ outT) *)
-  assert (FnArrow f (Arrow inT T2)) as Hf.
-  {
-    constructor; intros.
-    right. exists v. crush.
-    inversion Hv. crush.
-  }
-  unfold Included. intros.
+  destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt]; subst; crush.
+  (* note T1 = inT *)
+  intros x Hx.
+  destruct (exists_FnArrow inT Hnmt)
+    as [f [Hf Hex]].
+  specialize Hex with x.
+  assert (IsA x inT) as Hex' by assumption.
+  apply Hex in Hex'. clear Hex.
+  destruct Hex' as [v [Hv Hres]].
   unfold ArrowInv in *.
   apply (Hinv f Hf x v); crush.
   inversion Hv; crush.
@@ -227,20 +232,14 @@ Proof.
   destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt]; crush.
   assert False as impossible.
   {
-    inversion Hnmt; subst.
-    remember (fun (_:V) => Res x0) as f.
-    assert (FnArrow f (Arrow T1 T2)) as Hf.
-    {
-      constructor. intros v Hv.
-      right. exists x0; crush.
-      match goal with
-      | [H :  IsA _ (tyAnd T2 outT) |- _ ] => inversion H
-      end; crush.
-    }
-    apply (H' f Hf x x0); crush.
-    match goal with
-      | [H :  IsA _ (tyAnd T2 outT) |- _ ] => inversion H
-    end; crush.
+    destruct (exists_FnArrow T1 Hnmt)
+      as [f [Hf Hex]].
+    specialize Hex with x.
+    assert (IsA x T1) as Hex' by crush.
+    apply Hex in Hex'. clear Hex.
+    destruct Hex' as [v [Hv Hres]].
+    apply (H' f Hf x v); crush.
+    inversion Hv; crush.
   }
   crush.
 Qed.  
@@ -269,6 +268,25 @@ Inductive FnInterface : fn -> interface -> Prop :=
 
 Hint Constructors FnInterface.
 
+Inductive InInterface : arrow -> interface -> Prop :=
+| InBase : forall a, InInterface a (IBase a)
+| InConsFirst : forall a i, InInterface a (ICons a i)
+| InConsRest : forall a i, InInterface a i ->
+                           InInterface a (ICons a i).
+
+
+(* Similar to `exists_FnArrow`, we cannot prove
+   `exists_FnInterface` but it is safe to assume. *)
+Axiom exists_FnInterface : forall i outT,
+    exists f,
+      forall T1 T2,
+        InInterface (Arrow T1 T2) i ->
+        FnArrow f (Arrow T1 T2)
+        /\ (IsInhabited (tyAnd T2 outT) ->
+            forall v, IsA v T1 ->
+                      exists v', IsA v' (tyAnd T2 outT)
+                                 /\ f v = Res v').
+(* BOOKMARK *)
 
 (* Append for interfaces *)
 Fixpoint i_app (i1 i2 : interface) : interface :=
