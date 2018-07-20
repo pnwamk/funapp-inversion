@@ -54,25 +54,6 @@ Inductive arrow : Type :=
 | Arrow : Ty -> Ty -> arrow.
 Hint Constructors arrow.
 
-Definition a_meet (a1 a2 : arrow) : arrow :=
-  match a1, a2 with
-  | Arrow d1 r1, Arrow d2 r2 => Arrow (tyAnd d1 d2) (tyAnd r1 r2)
-  end.
-Hint Unfold a_meet.
-
-Definition a_dom (a : arrow) : Ty :=
-  match a with
-  | Arrow t1 _ => t1
-  end.
-Hint Unfold a_dom.
-
-Definition a_rng (a : arrow) : Ty :=
-  match a with
-  | Arrow _ t2 => t2
-  end.
-Hint Unfold a_rng.
-
-
 Inductive res : Type :=
 | Err : res (* invalid argument/type error *)
 | Bot : res (* non-termination *)
@@ -102,8 +83,8 @@ Hint Constructors interface.
 
 Fixpoint i_dom (i : interface) : Ty :=
   match i with
-  | IBase a => a_dom a
-  | ICons a i' => tyOr (a_dom a) (i_dom i')
+  | IBase (Arrow T1 _) => T1
+  | ICons (Arrow T1 _) i' => tyOr T1 (i_dom i')
   end.
 Hint Unfold i_dom.
 
@@ -335,7 +316,6 @@ Proof with crush.
 Qed.
 
 
-(* Interface Inversion Soundness (negative only) *)
 Lemma i_neg_sound : forall i outT,
     InvNot i outT (i_neg i outT).
 Proof with crush.
@@ -344,26 +324,20 @@ Proof with crush.
   eapply in_i_neg; eauto.
 Qed.
 
+(* Interface Inversion Soundness *)
 Lemma i_inv_sound : forall i outT,
-    InterfaceInv i outT (i_inv i outT).
+    Inv i outT (i_inv i outT).
 Proof with crush.
-  (* BOOKMARK *)
-  unfold InterfaceInv.
-  intros i outT inT Hinv f Hint v v' Hv Hf Hv'.
+  unfold Inv.
+  intros i outT f Hint v v' Hv Hf Hv'.
   unfold i_inv in *.
-  remember (i_powerset i) as i'.
-  assert (FnInterface f i') as Hi' by (eapply i_powerset_interface; eauto).
-  clear Hint.
-  rewrite <- Hinv. constructor; auto.
-  (* Show: ~ IsA v (i_inv_neg i' outT) *)
-  intros Hcontra.
-  assert (InterfaceInvNeg i' outT (i_inv_neg i' outT)) as Hneg.
-  {
-    specialize i_inv_neg_sound with i' outT (i_inv_neg i' outT); eauto.
-  }
-  eapply Hneg; eauto.
+ constructor; auto.
+ (* Show: ~ IsA v (i_neg i outT) *)
+ intros Hcontra.
+ eapply i_neg_sound; eauto.
 Qed.
 
+(* BOOKMARK *)
 
 (*****************************************************************)
 (*****************************************************************)
