@@ -282,6 +282,31 @@ forall v T,
   i_result i v = Some T ->
   (f v = Bot \/ exists v', f v = Res v' /\ IsA v' T).
 
+Lemma FnInterface_rest : forall f a i,
+    FnInterface f (ICons a i) ->
+    FnInterface f i.
+Proof.
+  intros f [T1 T2] i Hfi.
+  unfold FnInterface in Hfi.
+  unfold FnInterface.
+  intros v T Hir.
+  remember (Hfi v) as H'.
+  simpl in *. clear HeqH'.
+  destruct (IsA_dec v T1).
+  destruct (i_result i v).
+  assert (f v = Bot \/ (exists v' : V, f v = Res v'
+                                       /\ IsA v' (tyAnd T2 e)))
+    as Hopt.
+  apply H'. crush.
+  destruct Hopt as [Hbot | [v' [Hres Hv']]]; auto.
+  right. exists v'; crush. inversion Hv'; crush.
+  inversion Hir.
+  remember (H' T) as H''.
+  clear HeqH''.
+  rewrite Hir in H''.
+  crush.
+Qed.
+
 Ltac inv_FnInterface :=
   match goal with
   | [H : FnInterface _ _ |- _] => inversion H; subst
@@ -349,66 +374,15 @@ Proof with crush.
   {
     unfold InterfaceInvNot.
     intros f Hfi v v' Hres Hv' Hcontra.
+    assert (FnInterface f i') as Hf by (eapply FnInterface_rest; eauto).
     unfold InterfaceInvNot in *.
     simpl in *.
-    unfold FnInterface in Hfi.
     destruct Hcontra as [v Hv | v Hv].
     (* IsA v (i_neg i' outT) *)
     {
-      
+      eapply IH; eauto.
     }
-    (* (tyAnd T1 (i_neg i' (tyAnd T2 outT))) *)
-    {
-
-    }
-  }
-    assert (forall (T : Ty),
-               (if IsA_dec v T1 then Some T2 else None) = Some T ->
-               f v = Bot \/ (exists v' : V, f v = Res v' /\ IsA v' T)) as H'.
-    eauto. clear Hint.
-    destruct (IsA_dec v T1) as [Hin | Hnin].
     
-    remember (Hint v) as Hi.
-    inv_FnInterface; crush.
-    destruct (IsA_dec v0 T1); crush.
-    destruct (IsEmpty_dec (tyAnd T outT)) as [Hmt | Hnmt]; crush.
-    apply Hmt. exists v'. split.
-    inversion Hint.
-    eapply (a_neg_sound outT); eauto; crush.
-  }
-  (* Case (ICons a i) *)
-  {
-    unfold InterfaceInvNeg.
-    intros outT notInT Hinv f Hint v v' Hdom Hf Hv' Hcontra.
-    simpl in *. subst.
-    inv_FnInterface.
-    destruct Hcontra.
-    (* IsA v (a_neg (Arrow T1 T2) outT) *)
-    {
-      unfold a_neg in *. simpl in *.
-      destruct (IsEmpty_dec (tyAnd T2 outT))
-        as [Hmt | Hnmt].
-      (* IsEmpty (tyAnd (a_rng (Arrow T1 T2)) outT) *)
-      {
-        inv_FnArrow.
-        assert (IsA x T1) as HT1 by assumption.
-        applyHinH...
-        same_Res.
-        eauto.
-      }
-      (* IsInhabited (tyAnd (a_rng (Arrow T1 T2)) outT) *)
-      {
-        eapply no_empty_val; eassumption.
-      }
-    }
-    (* IsA v (i_inv_neg i outT)  *)
-    {
-      assert (InterfaceInvNeg i outT (i_neg i outT)) as Hi; auto.
-      destruct Hi with f x v'; crush.
-      shelve.
-      unfold i_neg.
-    }
-  }
 Qed.
 
 (* Interface Inversion Soundness *)
