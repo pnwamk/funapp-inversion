@@ -206,20 +206,16 @@ Fixpoint i_neg (i : interface) (outT : Ty) : Ty :=
 Definition i_inv (i : interface) (outT : Ty) : Ty :=
   tyDiff (i_dom i) (i_neg i outT).
 
-(* A type is a valid inversion if any input of that
-   type either produces bottom or a type not in outT. *)
 Definition Inv
            (i:interface)
            (outT inT : Ty) : Prop :=
 forall (f:fn),
   FnI f i ->
-  forall (v:V),
-    IsA v inT ->
-    (f v = Bot \/
-     exists v', f v = Res v'
-                /\ IsA v' (tyNot outT)).
-(* BOOKMARK *)
-
+  forall (v v':V),
+    IsA v (i_dom i) ->
+    f v = Res v' ->
+    IsA v' outT ->
+    IsA v inT.
 
 Definition InvNot
            (i:interface)
