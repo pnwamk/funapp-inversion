@@ -206,16 +206,20 @@ Fixpoint i_neg (i : interface) (outT : Ty) : Ty :=
 Definition i_inv (i : interface) (outT : Ty) : Ty :=
   tyDiff (i_dom i) (i_neg i outT).
 
+(* A type is a valid inversion if any input of that
+   type either produces bottom or a type not in outT. *)
 Definition Inv
            (i:interface)
            (outT inT : Ty) : Prop :=
 forall (f:fn),
   FnI f i ->
-  forall (v v':V),
-    IsA v (i_dom i) ->
-    f v = Res v' ->
-    IsA v' outT ->
-    IsA v inT.
+  forall (v:V),
+    IsA v inT ->
+    (f v = Bot \/
+     exists v', f v = Res v'
+                /\ IsA v' (tyNot outT)).
+(* BOOKMARK *)
+
 
 Definition InvNot
            (i:interface)
@@ -260,6 +264,10 @@ Ltac solve_IsA :=
      HFnA : FnI ?f (ICons (Arrow ?T1 ?T2) _)
      |- IsA ?y ?T2]
     => apply (FnA_res_ty x Hx Hfy (FnI_first HFnA))
+  | [H : IsA ?x (tyAnd ?T1 ?T2) |- IsA ?x ?T1]
+    => destruct H; assumption
+  | [H : IsA ?x (tyAnd ?T1 ?T2) |- IsA ?x ?T2]
+    => destruct H; assumption
   | [H1 : IsA ?x ?T1, H2 : IsA ?x ?T2 |- IsA ?x (tyAnd ?T1 ?T2)]
     => constructor; assumption
   | [H1 : IsA ?x ?T1 |- IsA ?x (tyOr ?T1 _)]
@@ -289,11 +297,13 @@ Proof with crush.
   intros i. induction i as [[T1 T2] | [T1 T2] i' IH]; crush.
   (* IBase (Arrow T1 T2) *)
   {
-    destruct (IsEmpty_dec (tyAnd T2 T))
-      as [Hmt | Hnmt].
+    ifcaseH; crush.
     (* IsEmpty (tyAnd T2 T) *)
     {
-      apply Hmt. exists v'.
+      applyH.
+      match goal with
+      | [H : ?f ?v = Res ?v' |- _] => exists v'
+      end.
       apply_fun...
     }
     (* IsInhabited (tyAnd T2 T) *)
@@ -303,7 +313,7 @@ Proof with crush.
   }
   (* ICons (Arrow T1 T2) i' *)
   {
-    assert (FnI f i') by (eapply FnI_rest; eauto).
+    forwards: FnI_rest; eauto.
     match goal with
     | [H : IsA _ (tyOr _ _) |- _] => destruct H
     end.
@@ -324,7 +334,8 @@ Proof with crush.
   eapply in_i_neg; eauto.
 Qed.
 
-(* Interface Inversion Soundness *)
+(* Interface Inversion Soundness 
+   i.e. the input type we predict is correct *)
 Lemma i_inv_sound : forall i outT,
     Inv i outT (i_inv i outT).
 Proof with crush.
@@ -337,6 +348,178 @@ Proof with crush.
  eapply i_neg_sound; eauto.
 Qed.
 
+
+Definition MapsTo (f : fn) (i : interface) (outT : Ty) : Prop :=
+  forall v T,
+    i_result i v = Some T ->
+    IsInhabited (tyAnd T outT) ->
+    exists v', f v = Res v'
+               /\ IsA v' (tyAnd T outT).
+
+(* We assume for any function specification, there exist
+   functions which always produce output in outT when given
+   input if the (tyAnd T2 outT) is inhabited. *)
+Axiom exists_fn : forall i outT,
+    exists f, FnI f i /\ MapsTo f i outT.
+
+
+Lemma not_IsA_tyOr : forall x T1 T2,
+    ~ IsA x (tyOr T1 T2) ->
+    ~ IsA x T1 /\ ~ IsA x T2.
+Proof. Admitted.
+Lemma not_IsA_tyAnd : forall x T1 T2,
+    ~ IsA x (tyAnd T1 T2) ->
+    ~ IsA x T1 \/ ~ IsA x T2.
+Proof. Admitted.
+
+
+(* Interface Inversion Soundness 
+   i.e. the input type we predict is minimal *)
+Lemma i_inv_complete : forall i outT inT,
+    Inv i outT inT ->
+    (inT <: (i_dom i)) ->
+    (i_inv i outT) <: inT.
+Proof with crush.
+  intros i. induction i as [[T1 T2] | [T1 T2] i' IH].
+  (* (IBase (Arrow T1 T2)) *)
+  {
+    intros outT inT Hinv Hdom x Hx.
+    simpl in *.
+    unfold Inv in *.
+    unfold i_inv in *.
+    destruct Hx as [HxIn HxNot].
+    simpl in *.
+    ifcaseH...
+    clear HxNot.
+    destruct (exists_fn (IBase (Arrow T1 T2)) outT)
+      as [f [Hfi Hmaps]].
+    assert (exists y : V, f x = Res y /\ IsA y (tyAnd T2 outT))
+      as [y [Hy1 Hy2]] by (apply Hmaps; crush; ifcase; crush).
+    eauto.
+  }
+  (* (ICons (Arrow T1 T2) i') *)
+  {
+    intros outT inT Hinv Hdom x Hx.
+    destruct Hx as [Hx1 Hx2].
+    simpl in *.
+    apply not_IsA_tyOr in Hx2. destruct Hx2 as [Hx2 Hx3].
+    apply not_IsA_tyAnd in Hx3.
+    destruct Hx1 as [x Hx1 | x Hx1].
+    (* IsA x T1 *)
+    {
+      destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt2 | Hnmt2].
+      {
+        unfold Inv in Hinv.
+        
+      }
+      {
+      }
+    }
+    (* IsA x (i_dom i') (and ~ IsA x T1) *)
+    {
+
+    }
+    
+
+    (* Inv (ICons (Arrow T1 T2) i') outT inT *)
+    destruct (IsA_dec x T1) as [HxIs1 | HxNot1].
+    {
+      clear Hx1.
+      assert (~ IsA x (i_neg i' (tyAnd T2 outT))) as Hx4 by crush.
+      clear Hx3.
+    }
+    {
+    }
+    
+    
+    destruct Hx1. crush.
+    destruct (exists_fn (ICons (Arrow T1 T2) i') outT)
+      as [f [Hfi Hmaps]].
+    assert (FnA f (Arrow T1 T2)) as Hf12 by (eapply FnI_first; eauto).
+    assert (FnI f i') as Hfi' by (eapply FnI_rest; eauto).
+    unfold MapsTo in Hmaps.
+    assert (forall (T : Ty),
+               i_result (ICons (Arrow T1 T2) i') x = Some T ->
+               IsInhabited (tyAnd T outT) ->
+               exists y : V, f x = Res y
+                              /\ IsA y (tyAnd T outT))
+      as Hxmaps by eauto. clear Hmaps.
+    remember (i_result (ICons (Arrow T1 T2) i') x) as Hxres.
+
+    
+    
+    unfold i_result in *. unfold a_result in *.
+    destruct (IsA_dec x T1); fold a_result in *; fold i_result in *.
+    (* IsA x T1 *)
+    {
+      clear Hx1.
+      assert (~ IsA x (i_neg i' (tyAnd T2 outT))) as HxNot by crush.
+      clear Hx3.
+
+      unfold Inv in Hinv.
+      eapply Hinv. exact Hfi. crush.
+      remember (i_result i' x) as Hxres'.
+      destruct Hxres' as [T' | ]; subst.
+      {
+        
+        rewrite <- HeqHxres' in HxNot.
+        assert (exists y : V, f x = Res y
+                              /\ IsA y (tyAnd (tyAnd T2 T') outT)).
+        {
+          eapply Hxmaps. reflexivity.
+        }
+        eauto.
+      }
+      {
+        
+      }
+
+
+
+
+      
+      destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt2 | Hnmt2].
+      (* IsEmpty (tyAnd T2 outT) *)
+      {
+        
+      }
+      (* IsInhabited (tyAnd T2 outT) *)
+      {
+
+      }
+      unfold i_neg in HxNot.
+      destruct Hx3. crush.
+      remember (i_result i' x) as Hxres'.
+      destruct Hxres' as [T' | ]; subst.
+      {
+        assert (exists y : V, f x = Res y
+                              /\ IsA y (tyAnd (tyAnd T2 T') outT)).
+        {
+          eapply Hxmaps. reflexivity.
+        }
+        eauto.
+      }
+      {
+
+      }
+      (* BOOKMARK *)
+    }
+    (* ~ IsA x T1 *)
+    {
+
+    }
+    assert (exists y : V, f x = Res y /\ IsA y (tyAnd T2 outT))
+      as [y [Hy1 Hy2]].
+    {
+      apply Hmaps. simpl.
+    }
+    clear Hfi.
+
+    assert (~ IsA x T1 \/ ~ IsA x (i_neg i' (tyAnd T2 outT)))
+    forwards: FnI_first; eauto.
+    destruct Hx2.
+  }
+  
 (* BOOKMARK *)
 
 (*****************************************************************)
@@ -384,8 +567,9 @@ Definition MapsTo (f : fn) (outT : Ty) : Prop :=
                exists v', IsA v' (tyAnd T2 outT) /\
                           f v = Res v').
 
-(* Similar to `exists_FnArrow`, we cannot prove
-   `exists_FnInterface` but it is safe to assume. *)
+(* We assume for any function specification, there exist
+   functions which always produce output in outT when given
+   input if the (tyAnd T2 outT) is inhabited. *)
 Axiom exists_FnInterface : forall i outT,
     exists f, FnInterface f i /\ MapsTo f outT.
         
