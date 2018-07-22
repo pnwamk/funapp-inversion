@@ -68,7 +68,6 @@ Ltac destruct_IsA :=
   | [H : IsA _ _ |- _] => destruct H
   end.
 
-
 Ltac same_Res :=
   match goal with
   | [H1 : ?f ?v = Res ?x , H2 : ?f ?v = Res ?y |- _] =>
@@ -100,7 +99,7 @@ Hint Unfold a_result.
 Definition FnA (f : fn) (a : arrow) : Prop :=
 forall x T,
   a_result a x = Some T ->
-  (f x = Bot \/ IsInhabited T /\ exists y, f x = Res y /\ IsA y T).
+  (f x = Bot \/ exists y, f x = Res y /\ IsA y T).
 Hint Unfold FnA.
 
 Fixpoint i_result (i : interface) (v : V) : option Ty :=
@@ -119,7 +118,7 @@ Hint Unfold i_result.
 Definition FnI (f : fn) (i : interface) : Prop :=
   forall x T,
     i_result i x = Some T ->
-    f x = Bot \/ (IsInhabited T /\ exists y, (f x = Res y /\ IsA y T)).
+    f x = Bot \/ (exists y, (f x = Res y /\ IsA y T)).
 Hint Unfold FnI.
 
 Lemma FnI_base : forall f a,
@@ -130,9 +129,7 @@ Proof.
   intros f [T1 T2] H x T Har.
   simpl in *.
   specialize H with x T2.
-  ifcaseH. crush.
-  right. split; crush. eexists. eauto. 
-  inversion Har.
+  ifcaseH; inversion Har; subst; auto.
 Qed.
 
 Ltac inv_IsA_tyAnd :=
@@ -155,21 +152,12 @@ Proof.
   assert (forall (T : Ty),
              i_result (ICons (Arrow T1 T2) i) x = Some T ->
              f x = Bot \/
-             IsInhabited T /\ (exists y : V, f x = Res y /\ IsA y T))
+             (exists y : V, f x = Res y /\ IsA y T))
     as H' by auto. clear H.
   unfold a_result in *. simpl in *.
-  ifcaseH; crush.
-  destruct (i_result i x); crush.
-  specialize H' with (tyAnd T e).
-  intuition.
-  right.
-  split.
-  crush.
-  exists x0.
-  inv_IsA_tyAnd; crush.
-  inv_exists; crush.
-  eexists; split; eauto.
-  inv_IsA_tyAnd; crush.
+  ifcaseH; matchcaseH; crush.
+  specialize H' with (tyAnd T e); crush.
+  inv_IsA_tyAnd; crush; eauto.
 Qed.
   
 Lemma FnI_rest : forall f a i,
@@ -182,22 +170,12 @@ Proof.
   assert (forall (T : Ty),
              i_result (ICons (Arrow T1 T2) i) x = Some T ->
              f x = Bot \/
-             IsInhabited T /\ (exists y : V, f x = Res y /\ IsA y T))
+             (exists y : V, f x = Res y /\ IsA y T))
     as Hfi' by auto. clear Hfi.
   simpl in *.
-  destruct (IsA_dec x T1).
-  {
-    destruct (i_result i x) as [T' |]; crush.
-    specialize Hfi' with (tyAnd T2 T).
-    intuition.
-    crush. right. split.
-    inv_IsA_tyAnd; subst. eauto.
-    inv_IsA_tyAnd. eexists; eauto.
-  }
-  {
-    rewrite Hres in Hfi'.
-    crush.
-  }
+  ifcaseH; matchcaseH; inversion Hres; subst; eauto.
+  specialize Hfi' with (tyAnd T2 T);
+    intuition; crush; inv_IsA_tyAnd; eauto.
 Qed.
 
 Ltac inv_FnI :=
@@ -228,8 +206,7 @@ Lemma FnA_res_ty : forall T1 T2 f x y,
     IsA y T2.
 Proof.
   intros T1 T2 f x y Hx Hfx Hfa.
-  assert (f x = Bot \/ (IsInhabited T2 /\
-                        exists y, (f x = Res y /\ IsA y T2)))
+  assert (f x = Bot \/ (exists y, (f x = Res y /\ IsA y T2)))
     as Hex.
   eapply Hfa; crush.
   ifcase; crush.
@@ -348,8 +325,7 @@ Definition MapsTo (f : fn) (i : interface) : Prop :=
   forall v T,
     i_result i v = Some T ->
     IsInhabited T ->
-    exists v', f v = Res v'
-               /\ IsA v' T.
+    exists v', f v = Res v' /\ IsA v' T.
 
 
 Definition MapsToTarget (f : fn) (i : interface) (tgt : Ty) : Prop :=
@@ -380,6 +356,11 @@ Lemma i_neg_empty : forall i,
 Proof.
 Admitted.
 
+Lemma i_inv_empty : forall i,
+    i_inv i emptyTy = emptyTy.
+Proof.
+Admitted.
+  
 Lemma IsEmpty_eq : forall t,
     IsEmpty t ->
     t = emptyTy.
@@ -390,19 +371,16 @@ Proof.
   contradiction. intros v Hv. inversion Hv.
 Qed.
 
-(* BOOKMARK *)
-
 (* Interface Inversion Minimality
    i.e. the input type we predict is minimal *)
 Lemma i_inv_minimal : forall i outT x,
-    IsInhabited outT ->
     IsA x (i_inv i outT) ->
     exists f y, FnI f i /\ f x = Res y /\ IsA y outT.
 Proof with crush.
   intros i. induction i as [[T1 T2] | [T1 T2] i' IH].
   (* (IBase (Arrow T1 T2)) *)
   {
-    intros outT x Ho Hx.
+    intros outT x Hx.
     unfold i_inv in *.
     destruct Hx as [HxIn HxNot].
     simpl in *.
@@ -416,11 +394,12 @@ Proof with crush.
   }
   (* (ICons (Arrow T1 T2) i') *)
   {
-    intros outT x Ho Hx.
+    intros outT x Hx.
     unfold i_inv in Hx.
     destruct Hx as [Hx1 Hx2]. simpl in *.
     apply not_IsA_tyOr in Hx2. destruct Hx2 as [Hx2 Hx3].
     apply not_IsA_tyAnd in Hx3.
+    (* BOOKMARK *)
     destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt2o | Hnmt2o].
     {
       rewrite (IsEmpty_eq Hmt2o) in Hx3.

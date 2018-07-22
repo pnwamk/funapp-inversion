@@ -11,14 +11,14 @@ Ltac ifcaseH :=
   | [ H : context[if ?X then _ else _] |- _ ] => destruct X
   end.
 
-Ltac match_case :=
+Ltac matchcase :=
   match goal with
   | [ |- context[match ?term with
                  | _ => _
                  end] ] => destruct term
   end.
 
-Ltac H_match_case :=
+Ltac matchcaseH :=
   match goal with
   | [ H: context[match ?term with
                  | _ => _
