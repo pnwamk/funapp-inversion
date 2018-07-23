@@ -45,7 +45,6 @@
   - thanks to Georges Gonthier for the implementation trick in [rapply]
 *)
 
-
 Set Implicit Arguments.
 
 Require Import List.
@@ -56,7 +55,6 @@ Require Import List.
   time eauto 7. (* takes over 4 seconds  to fail! *) *)
 
 Remove Hints Bool.trans_eq_bool.
-
 
 (* ################################################################# *)
 (** * Tools for Programming with Ltac *)
@@ -4564,6 +4562,15 @@ Ltac skip_with_existential :=
     let H := fresh in evar(H:G); eexact H end.
 
 (* TO BE DEPRECATED: *)
+Parameter skip_axiom : False.
+  (* To obtain a safe development, change to [skip_axiom : True] *)
+Ltac skip_with_axiom :=
+  elimtype False; apply skip_axiom.
+
+Tactic Notation "skip" :=
+   skip_with_axiom.
+Tactic Notation "skip'" :=
+   skip_with_existential.
 
 (* SF DOES NOT NEED THIS
 (* For backward compatibility *)
@@ -4571,6 +4578,101 @@ Tactic Notation "admit" :=
   skip.
 *) 
 
+(** [demo] is like [admit] but it documents the fact that admit is intended *)
+
+Tactic Notation "demo" := 
+  skip. 
+
+(** [skip H: T] adds an assumption named [H] of type [T] to the
+    current context, blindly assuming that it is true.
+    [skip: T] and [skip H_asserts: T] and [skip_asserts: T]
+    are other possible syntax.
+    Note that H may be an intro pattern.
+    The syntax [skip H1 .. HN: T] can be used when [T] is a
+    conjunction of [N] items. *)
+
+Tactic Notation "skip" simple_intropattern(I) ":" constr(T) :=
+  asserts I: T; [ skip | ].
+Tactic Notation "skip" ":" constr(T) :=
+  let H := fresh in skip H: T.
+Tactic Notation "skip" "~" ":" constr(T) :=
+  skip: T; auto_tilde.
+Tactic Notation "skip" "*" ":" constr(T) :=
+  skip: T; auto_star.
+
+Tactic Notation "skip" simple_intropattern(I1)
+ simple_intropattern(I2) ":" constr(T) :=
+  skip [I1 I2]: T.
+Tactic Notation "skip" simple_intropattern(I1)
+ simple_intropattern(I2) simple_intropattern(I3) ":" constr(T) :=
+  skip [I1 [I2 I3]]: T.
+Tactic Notation "skip" simple_intropattern(I1)
+ simple_intropattern(I2) simple_intropattern(I3)
+ simple_intropattern(I4) ":" constr(T) :=
+  skip [I1 [I2 [I3 I4]]]: T.
+Tactic Notation "skip" simple_intropattern(I1)
+ simple_intropattern(I2) simple_intropattern(I3)
+ simple_intropattern(I4) simple_intropattern(I5) ":" constr(T) :=
+  skip [I1 [I2 [I3 [I4 I5]]]]: T.
+Tactic Notation "skip" simple_intropattern(I1)
+ simple_intropattern(I2) simple_intropattern(I3)
+ simple_intropattern(I4) simple_intropattern(I5)
+ simple_intropattern(I6) ":" constr(T) :=
+  skip [I1 [I2 [I3 [I4 [I5 I6]]]]]: T.
+
+Tactic Notation "skip_asserts" simple_intropattern(I) ":" constr(T) :=
+  skip I: T.
+Tactic Notation "skip_asserts" ":" constr(T) :=
+  skip: T.
+
+(** [skip_cuts T] simply replaces the current goal with [T]. *)
+
+Tactic Notation "skip_cuts" constr(T) :=
+  cuts: T; [ skip | ].
+
+(** [skip_goal H] applies to any goal. It simply assumes
+    the current goal to be true. The assumption is named "H".
+    It is useful to set up proof by induction or coinduction.
+    Syntax [skip_goal] is also accepted.*)
+
+Tactic Notation "skip_goal" ident(H) :=
+  match goal with |- ?G => skip H: G end.
+
+Tactic Notation "skip_goal" :=
+  let IH := fresh "IH" in skip_goal IH.
+
+(** [skip_rewrite T] can be applied when [T] is an equality.
+    It blindly assumes this equality to be true, and rewrite it in
+    the goal. *)
+
+Tactic Notation "skip_rewrite" constr(T) :=
+  let M := fresh in skip_asserts M: T; rewrite M; clear M.
+
+(** [skip_rewrite T in H] is similar as [rewrite_skip], except that
+    it rewrites in hypothesis [H]. *)
+
+Tactic Notation "skip_rewrite" constr(T) "in" hyp(H) :=
+  let M := fresh in skip_asserts M: T; rewrite M in H; clear M.
+
+(** [skip_rewrites_all T] is similar as [rewrite_skip], except that
+    it rewrites everywhere (goal and all hypotheses). *)
+
+Tactic Notation "skip_rewrite_all" constr(T) :=
+  let M := fresh in skip_asserts M: T; rewrite_all M; clear M.
+
+(** [skip_induction E] applies to any goal. It simply assumes
+    the current goal to be true (the assumption is named "IH" by
+    default), and call [destruct E] instead of [induction E].
+    It is useful to try and set up a proof by induction
+    first, and fix the applications of the induction hypotheses
+    during a second pass on the Proof using.  *)
+(* TODO: deprecated *)
+
+Tactic Notation "skip_induction" constr(E) :=
+  let IH := fresh "IH" in skip_goal IH; destruct E.
+
+Tactic Notation "skip_induction" constr(E) "as" simple_intropattern(I) :=
+  let IH := fresh "IH" in skip_goal IH; destruct E as I.
 
 
 (* ################################################################# *)
@@ -4591,4 +4693,4 @@ End LibTacticsCompatibility.
 
 Open Scope nat_scope.
 
-(** $Date: 2017-08-24 17:13:02 -0400 (Thu, 24 Aug 2017) $ *)
+(** $Date$ *)

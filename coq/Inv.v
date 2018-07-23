@@ -47,6 +47,27 @@ Proof.
   intros v P Hmt. inversion Hmt.
 Qed.
 
+Lemma tyOr_empty_l : forall t,
+    tyOr emptyTy t = t.
+Proof.
+  Admitted.
+
+Lemma tyOr_empty_r : forall t,
+    tyOr t emptyTy = t.
+Proof.
+  Admitted.
+
+Lemma tyAnd_empty_l : forall t,
+    tyAnd emptyTy t = emptyTy.
+Proof.
+  Admitted.
+
+Lemma tyAnd_empty_r : forall t,
+    tyAnd t emptyTy = emptyTy.
+Proof.
+  Admitted.
+
+Hint Rewrite tyOr_empty_l tyOr_empty_r tyAnd_empty_l tyAnd_empty_r.
 
 
 (* A single function arrow *)
@@ -134,14 +155,18 @@ Qed.
 
 Ltac inv_IsA_tyAnd :=
   match goal with
-  | [H : IsA _ (tyAnd _ _) |- _] => inversion H
+  | [H : IsA _ (tyAnd _ _) |- _] => destruct H
+  end.
+
+Ltac inv_IsA_tyOr :=
+  match goal with
+  | [H : IsA _ (tyOr _ _) |- _] => destruct H
   end.
 
 Ltac inv_exists :=
   match goal with
-  | [H : exists x, _ |- _] => inversion H
+  | [H : exists x, _ |- _] => destruct H
   end.
-
 
 Lemma FnI_first : forall f a i,
     FnI f (ICons a i) ->
@@ -178,22 +203,51 @@ Proof.
     intuition; crush; inv_IsA_tyAnd; eauto.
 Qed.
 
+Lemma FnI_cons : forall f a i,
+    FnA f a ->
+    FnI f i ->
+    FnI f (ICons a i).
+Proof.
+  intros f [T1 T2] i Ha Hi.
+  unfold FnI in *. unfold FnA in *.
+  intros x T Hres.
+  specialize (Ha x). specialize (Hi x).
+  simpl in *.
+  destruct (IsA_dec x T1) as [Hx1 | Hx1].
+  remember (i_result i x) as Hxr.
+  destruct Hxr as [T'|]; inversion Hres; subst.
+  destruct (Ha T2 eq_refl). left; assumption.
+  destruct (Hi T' eq_refl). left; assumption.
+  repeat inv_exists. crush.
+  same_Res.
+  right. exists x0. split; auto.
+  destruct (Ha T eq_refl); crush; eauto.
+  remember (i_result i x) as Hxr.
+  destruct Hxr as [T'|]; inversion Hres; subst.
+  apply Hi; auto.
+Qed.
+
+
 Ltac inv_FnI :=
   match goal with
   | [H : FnI _ _ |- _] => inversion H; subst
   end.
 
+Definition a_neg (a : arrow) (outT : Ty) : Ty :=
+  match a with
+  | Arrow T1 T2 => if IsEmpty_dec (tyAnd T2 outT)
+                   then T1
+                   else emptyTy
+  end.
 
 Fixpoint i_neg (i : interface) (outT : Ty) : Ty :=
   match i with
-  | IBase (Arrow T1 T2) =>
-    if IsEmpty_dec (tyAnd T2 outT)
-    then T1
-    else emptyTy
-  | ICons (Arrow T1 T2) i' =>
-    let T := i_neg i' outT in
-    let T' := tyAnd T1 (i_neg i' (tyAnd T2 outT)) in
-    tyOr T T'
+  | IBase a => a_neg a outT
+  | ICons a i' =>
+    let T1 := a_neg a outT in
+    let T2 := i_neg i' outT in
+    let T3 := tyAnd T1 (i_neg i' (tyAnd T2 outT)) in
+    tyOr T1 (tyOr T2 T3)
   end.
 
 Fixpoint i_pos (i : interface) (outT : Ty) : Ty :=
@@ -341,15 +395,31 @@ Proof with crush.
   }
   (* ICons (Arrow T1 T2) i' *)
   {
+    forwards: FnI_first; eauto.
     forwards: FnI_rest; eauto.
-    match goal with
-    | [H : IsA _ (tyOr _ _) |- _] => destruct H
-    end.
-    eapply IH; eauto. 
-    match goal with
-    | [H : IsA _ (tyAnd _ _) |- _] => destruct H
-    end.
-    eapply IH; eauto. 
+    destruct (IsEmpty_dec (tyAnd T2 T)) as [Hmt | Hnmt].
+    {
+      inv_IsA_tyOr.
+      {
+        apply_fun. apply Hmt; eauto.
+      }
+      {
+        inv_IsA_tyOr.
+        {
+          eapply IH; eauto. 
+        }
+        {
+          inv_IsA_tyAnd.
+          apply_fun. apply Hmt; eauto.
+        }
+      }
+    }
+    {
+      rewrite tyAnd_empty_l in *.
+      rewrite tyOr_empty_l in *.
+      rewrite tyOr_empty_r in *.
+      eapply IH; eauto.
+    }
   }
 Qed.
 
@@ -378,8 +448,8 @@ Proof with crush.
   unfold i_inv in *.
   constructor; auto.
   eapply in_i_pos; eauto.
- intros Hcontra.
- eapply in_i_neg; eauto.
+  intros Hcontra.
+  eapply in_i_neg; eauto.
 Qed.
 
 Definition MapsTo (f : fn) (i : interface) : Prop :=
@@ -427,7 +497,9 @@ Lemma i_inv_empty : forall i,
     i_inv i emptyTy = emptyTy.
 Proof.
 Admitted.
-  
+
+Hint Rewrite i_neg_empty i_pos_empty i_inv_empty.
+
 Lemma IsEmpty_eq : forall t,
     IsEmpty t ->
     t = emptyTy.
@@ -438,41 +510,60 @@ Proof.
   contradiction. intros v Hv. inversion Hv.
 Qed.
 
-Lemma i_pos_result : forall i x T,
-    IsA x (i_pos i T) ->
-    exists T', i_result i x = Some T'
-               /\ IsInhabited (tyAnd T' T).
-Proof.
-  intros i. induction i as [[T1 T2] | [T1 T2] i' IH].
-  {
-    intros x T HxIs.
-    simpl in *.
-    destruct (IsEmpty_dec (tyAnd T2 T)).
-    eapply no_empty_val; eauto.
-    destruct (IsA_dec x T1).
-    exists T2; crush.
-    contradiction.
-  }
-  {
-    intros x T HxIs.
-    unfold i_pos in HxIs.
-    destruct (IsEmpty_dec (tyAnd T2 T)).
-    fold i_pos in HxIs.
-    destruct HxIs as [x impossible | x HxIs];
-      try solve[eapply no_empty_val; eauto].
-    destruct (IH x T HxIs) as [T' [Hres Hinhab]].
-    (* BOOKMARK -- I THINK THIS IS TOO STRONG
-       e.g. assume x ∈ T1 but x ∉ T4, T = (∪ T2 T5),
-        and
-        i = (∩ (→ T1 (∪ T2 T3))  
-               (→ T1 (∪ T5 T6)))
+(* Lemma i_pos_result : forall i x T, *)
+(*     IsA x (i_pos i T) -> *)
+(*     exists T', i_result i x = Some T' *)
+(*                /\ (IsInhabited T' -> IsInhabited (tyAnd T' T)). *)
+(* Proof. *)
+(*   intros i. induction i as [[T1 T2] | [T1 T2] i' IH]. *)
+(*   { *)
+(*     intros x T HxIs. *)
+(*     simpl in *. *)
+(*     destruct (IsEmpty_dec (tyAnd T2 T)). *)
+(*     eapply no_empty_val; eauto. *)
+(*     destruct (IsA_dec x T1); try solve[contradiction]. *)
+(*     exists T2; crush. *)
+(*   } *)
+(*   { *)
+(*     intros x T HxIs. *)
+(*     unfold i_pos in HxIs. *)
+(*     destruct (IsEmpty_dec (tyAnd T2 T)). *)
+(*     { *)
+(*       fold i_pos in HxIs. *)
+(*       rewrite tyOr_empty_l in *. *)
+(*       simpl in *. *)
+(*       destruct (IsA_dec x T1) as [Hx1 | Hxn1]. *)
+(*       { *)
+(*         remember (i_result i' x) as res'. *)
+(*         destruct res' as [T' |]. *)
+(*         { *)
+(*           exists (tyAnd T2 T'); split; auto. *)
+(*           intros Hex. *)
+(*           Admitted *)
+(*         } *)
+(*         { *)
+          
+(*         } *)
+(*       } *)
+(*       { *)
+        
+(*       } *)
+(*     } *)
+(*     destruct HxIs as [x impossible | x HxIs]; *)
+(*       try solve[eapply no_empty_val; eauto]. *)
+(*     destruct (IH x T HxIs) as [T' [Hres Hinhab]]. *)
+(*     (* BOOKMARK -- I THINK THIS IS TOO STRONG *)
+(*        e.g. assume x ∈ T1 but x ∉ T4, T = (∪ T2 T5), *)
+(*         and *)
+(*         i = (∩ (→ T1 (∪ T2 T3))   *)
+(*                (→ T1 (∪ T5 T6))) *)
       
-        then  IsA x (i_pos i T),
-              i_result i x = Some (∩ (∪ T2 T3) (∪ T5 T6)) = ∅ 
-              /\ IsInhabited (tyAnd T' T) is FALSE! 
+(*         then  IsA x (i_pos i T), *)
+(*               i_result i x = Some (∩ (∪ T2 T3) (∪ T5 T6)) = ∅  *)
+(*               /\ IsInhabited (tyAnd T' T) is FALSE!  *)
              
-       FIX? Add precondition that (i_result i x) is not empty?*)
-Admitted.
+(*        FIX? Add precondition that (i_result i x) is not empty?*) *)
+(* Admitted. *)
 
 
 
@@ -509,64 +600,48 @@ Proof with crush.
   {
     simpl in *.
     apply not_IsA_tyOr in HxNot. destruct HxNot as [HxNot1 HxNot2].
-    apply not_IsA_tyAnd in HxNot2.
+    apply not_IsA_tyOr in HxNot2. destruct HxNot2 as [HxNot2 HxNot3].
+    apply not_IsA_tyAnd in HxNot3.
     destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt2o | Hnmt2o].
     (* IsEmpty (tyAnd T2 outT), ∴ ~ IsA x T1 *)
     {
-      rewrite (IsEmpty_eq Hmt2o) in HxNot2.
-      rewrite i_neg_empty in *.
-      destruct HxIn as [x HxIn | x HxIn];
-        try (solve[eapply no_empty_val; eauto]).
+      rewrite tyOr_empty_l in *.
+      destruct (IH outT x HxIn HxNot2) as [f [y [Hf [Hfx Hy]]]].
+      remember (fun (v:V) =>
+                  if (IsA_dec v T1)
+                  then Bot
+                  else (f v))
+        as f'.      
+      assert (FnA f' (Arrow T1 T2)) as Hfa.
       {
-        assert (~ IsA x T1) as HxNotT1.
-        {
-          intros Hcontra. intuition.
-          match goal with
-          | [H : IsA _ (i_dom _) -> False |- _] => apply H
-          end.
-          eapply i_pos_dom. eassumption.
-        }
-        clear HxNot2.
-        destruct (exists_target_fn (ICons (Arrow T1 T2) i') outT)
-          as [f [Hfi Hmaps]].
-        destruct (i_pos_result i' x outT HxIn) as [T' [Hres Hinv]].
-        unfold MapsToTarget in Hmaps.
-        assert (exists v' : V, f x = Res v' /\ IsA v' (tyAnd T' outT))
-          as Hex by (eapply Hmaps; eauto; simpl; ifcase; crush).
-        destruct Hex as [y [Hyres Hy]].
-        exists f y. crush.
-      }
-    }
-    {
-      destruct HxIn as [x HxIn | x HxIn].
-      (* IsA x T1 *)
-      {
-        destruct (exists_target_fn (ICons (Arrow T1 T2) i') outT)
-          as [f [Hfi Hmaps]].
-        assert (FnA f (Arrow T1 T2)) as Hfa by (eapply FnI_first; eauto).
-        unfold MapsToTarget in Hmaps.
-        assert (forall (T : Ty),
-                   i_result (ICons (Arrow T1 T2) i') x = Some T ->
-                   IsInhabited (tyAnd T outT) ->
-                   exists y : V, f x = Res y
-                                  /\ IsA y (tyAnd T outT))
-          as Hxmap by (eapply Hmaps; eauto). clear Hmaps.
+        unfold FnA.
+        intros v T Hares.
         simpl in *.
-        destruct (IsA_dec x T1); try solve[contradiction].
-        remember (i_result i' x) as Hres'.
-        (* BOOKMARK! *)
-        destruct (i_result i' x).
-        {
-        }
-        {
-          
-        }
+        subst.
+        destruct (IsA_dec v T1); inversion Hares; subst.
+        left; reflexivity.
       }
-      (* IsA x (i_pos i' outT) *)
+      assert (FnI f' i') as Hfi'.
       {
-
+        unfold FnI.
+        intros v T Hres.
+        subst.
+        destruct (IsA_dec v T1).
+        left; reflexivity.
+        specialize (Hf v T Hres).
+        assumption.
       }
+      assert (FnI f' (ICons (Arrow T1 T2) i')) as Hfai by
+          (eapply FnI_cons; eauto).
+      exists f' y; split. assumption.
+      split. subst.
+      destruct (IsA_dec x T1); try solve[contradiction].
+      assumption.
+      assumption.
     }
+    admit. (* BOOKMARK / TODO!*)
+  }
+Qed.
       
 
 
@@ -908,15 +983,6 @@ Proof with crush.
   eapply Hneg; eauto.
 Qed.
 
-Lemma tyOr_empty_l : forall t,
-    tyOr emptyTy t = t.
-Proof.
-  Admitted.
-
-Lemma tyOr_empty_r : forall t,
-    tyOr t emptyTy = t.
-Proof.
-  Admitted.
 
 
 (*
