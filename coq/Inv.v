@@ -442,7 +442,37 @@ Lemma i_pos_result : forall i x T,
     IsA x (i_pos i T) ->
     exists T', i_result i x = Some T'
                /\ IsInhabited (tyAnd T' T).
-Proof. Admitted.
+Proof.
+  intros i. induction i as [[T1 T2] | [T1 T2] i' IH].
+  {
+    intros x T HxIs.
+    simpl in *.
+    destruct (IsEmpty_dec (tyAnd T2 T)).
+    eapply no_empty_val; eauto.
+    destruct (IsA_dec x T1).
+    exists T2; crush.
+    contradiction.
+  }
+  {
+    intros x T HxIs.
+    unfold i_pos in HxIs.
+    destruct (IsEmpty_dec (tyAnd T2 T)).
+    fold i_pos in HxIs.
+    destruct HxIs as [x impossible | x HxIs];
+      try solve[eapply no_empty_val; eauto].
+    destruct (IH x T HxIs) as [T' [Hres Hinhab]].
+    (* BOOKMARK -- I THINK THIS IS TOO STRONG
+       e.g. assume x ∈ T1 but x ∉ T4, T = (∪ T2 T5),
+        and
+        i = (∩ (→ T1 (∪ T2 T3))  
+               (→ T1 (∪ T5 T6)))
+      
+        then  IsA x (i_pos i T),
+              i_result i x = Some (∩ (∪ T2 T3) (∪ T5 T6)) = ∅ 
+              /\ IsInhabited (tyAnd T' T) is FALSE! 
+             
+       FIX? Add precondition that (i_result i x) is not empty?*)
+Admitted.
 
 
 
