@@ -41,10 +41,10 @@ Hint Unfold Included Setminus.
 Hint Constructors Union Intersection Inhabited.
 
 
-Lemma no_empty_val : forall v,
-    ~ IsA v emptyTy.
+Lemma no_empty_val : forall v P,
+    IsA v emptyTy -> P.
 Proof.
-  intros v Hmt. inversion Hmt.
+  intros v P Hmt. inversion Hmt.
 Qed.
 
 
@@ -481,15 +481,12 @@ Proof with crush.
     apply not_IsA_tyOr in HxNot. destruct HxNot as [HxNot1 HxNot2].
     apply not_IsA_tyAnd in HxNot2.
     destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt2o | Hnmt2o].
-    (* IsEmpty (tyAnd T2 outT) *)
+    (* IsEmpty (tyAnd T2 outT), ∴ ~ IsA x T1 *)
     {
       rewrite (IsEmpty_eq Hmt2o) in HxNot2.
       rewrite i_neg_empty in *.
-      destruct HxIn as [x HxIn | x HxIn].
-      {
-        assert False as impossible by (eapply no_empty_val; eauto).
-        contradiction.
-      }
+      destruct HxIn as [x HxIn | x HxIn];
+        try (solve[eapply no_empty_val; eauto]).
       {
         assert (~ IsA x T1) as HxNotT1.
         {
@@ -511,7 +508,34 @@ Proof with crush.
       }
     }
     {
-      (* BOOKMARK *)
+      destruct HxIn as [x HxIn | x HxIn].
+      (* IsA x T1 *)
+      {
+        destruct (exists_target_fn (ICons (Arrow T1 T2) i') outT)
+          as [f [Hfi Hmaps]].
+        assert (FnA f (Arrow T1 T2)) as Hfa by (eapply FnI_first; eauto).
+        unfold MapsToTarget in Hmaps.
+        assert (forall (T : Ty),
+                   i_result (ICons (Arrow T1 T2) i') x = Some T ->
+                   IsInhabited (tyAnd T outT) ->
+                   exists y : V, f x = Res y
+                                  /\ IsA y (tyAnd T outT))
+          as Hxmap by (eapply Hmaps; eauto). clear Hmaps.
+        simpl in *.
+        destruct (IsA_dec x T1); try solve[contradiction].
+        remember (i_result i' x) as Hres'.
+        (* BOOKMARK! *)
+        destruct (i_result i' x).
+        {
+        }
+        {
+          
+        }
+      }
+      (* IsA x (i_pos i' outT) *)
+      {
+
+      }
     }
       
 
