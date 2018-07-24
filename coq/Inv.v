@@ -32,14 +32,14 @@ Notation tyNot := (tyDiff anyTy).
 Notation IsEmpty t := (~ Inhabited V t).
 Notation IsInhabited t := (Inhabited V t).
 Axiom IsEmpty_dec : forall (t: Ty), {IsEmpty t} + {IsInhabited t}.
+Notation Subtype T1 T2 := (Included V T1 T2).
+Axiom Subtype_dec : forall T1 T2, {Subtype T1 T2} + {~ Subtype T1 T2}.
 Notation IsA v T := (In V T v).
 Axiom IsA_dec : forall (v:V) (t: Ty), {IsA v t} + {~ IsA v t}.
-Notation Subtype T1 T2 := (Included V T1 T2).
 
 Hint Unfold Included Setminus.
 Hint Constructors Union Intersection Inhabited.
-
-
+  
 Lemma IsEmpty_eq : forall t,
     IsEmpty t ->
     t = emptyTy.
@@ -154,37 +154,44 @@ Fixpoint i_dom (i : interface) : Ty :=
 Hint Unfold i_dom.
 
 
-Fixpoint a_result (a : arrow) (v : V) : option Ty :=
+Fixpoint a_apply (a : arrow) (argT : Ty) : option Ty :=
   match a with
-  | Arrow T1 T2 => if IsA_dec v T1
+  | Arrow T1 T2 => if IsEmpty_dec (tyDiff argT T1)
                    then Some T2
                    else None
   end.
-Hint Unfold a_result.
+Hint Unfold a_apply.
 
 Definition FnA (f : fn) (a : arrow) : Prop :=
-forall x T,
-  a_result a x = Some T ->
-  (f x = Bot \/ exists y, f x = Res y /\ IsA y T).
+  forall x T1 T2,
+    IsA x T1 ->
+    a_apply a T1 = Some T2 ->
+  (f x = Bot \/ exists y, f x = Res y /\ IsA y T2).
 Hint Unfold FnA.
 
-Fixpoint i_result (i : interface) (v : V) : option Ty :=
-  match i with
-  | IBase a => a_result a v
-  | ICons a i' => match a_result a v, i_result i' v with
-                  | None, None => None
-                  | Some T, None => Some T
-                  | None, Some T => Some T
-                  | Some T, Some T' => Some (tyAnd T T')
-                  end
+Definition mTyAnd (oT1 oT2 : option Ty) : option Ty :=
+  match oT1, oT2 with
+  | None, _ => oT2
+  | _, None => oT1
+  | Some T1, Some T2  => Some (tyAnd T1 T2)
   end.
-Hint Unfold i_result.
+
+Fixpoint i_apply (i : interface) (argT : Ty) : option Ty :=
+  match i with
+  | IBase a => a_apply a argT
+  | ICons (Arrow S1 S2) i' =>
+    let T1 := a_apply (Arrow S1 S2) argT in
+    let T2 := i_apply i' argT in
+    let T3 := mTyAnd (Some S2) (i_apply i' (tyDiff argT S1)) in
+    mTyAnd T1 (mTyAnd T2 T3)
+  end.  
 
 (* Function Interface *)
 Definition FnI (f : fn) (i : interface) : Prop :=
-  forall x T,
-    i_result i x = Some T ->
-    f x = Bot \/ (exists y, (f x = Res y /\ IsA y T)).
+  forall x T1 T2,
+    IsA x T1 ->
+    i_apply i T1 = Some T2 ->
+    (f x = Bot \/ exists y, f x = Res y /\ IsA y T2).
 Hint Unfold FnI.
 
 Lemma FnI_base : forall f a,
