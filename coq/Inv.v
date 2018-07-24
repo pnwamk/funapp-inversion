@@ -102,19 +102,30 @@ match goal with
   apply (no_empty_val_indirect x P H H')
 end.
 
-Hint Extern 1 (IsA _ _) =>
-match goal with
-| [H : IsA ?x (tyAnd ?T1 ?T2) |- IsA ?x ?T1]
-  => destruct H; assumption
-| [H : IsA ?x (tyAnd ?T1 ?T2) |- IsA ?x ?T2]
-  => destruct H; assumption
-| [H1 : IsA ?x ?T1, H2 : IsA ?x ?T2 |- IsA ?x (tyAnd ?T1 ?T2)]
-  => constructor; assumption
-| [H1 : IsA ?x ?T1 |- IsA ?x (tyOr ?T1 _)]
-  => left; exact H1
-| [H2 : IsA ?x ?T2 |- IsA ?x (tyOr _ ?T2)]
-  => left; exact H2
-end. 
+Ltac simpl_IsA :=
+  match goal with
+  | [H : IsA ?x (tyAnd ?T _) |- IsA ?x ?T]
+    => destruct H; assumption
+  | [H : IsA ?x (tyAnd _ ?T) |- IsA ?x ?T]
+    => destruct H; assumption
+  | [H : IsA ?x (tyAnd (tyAnd ?T _) _) |- IsA ?x ?T]
+    => destruct H; simpl_IsA
+  | [H : IsA ?x (tyAnd (tyAnd _ ?T) _) |- IsA ?x ?T]
+    => destruct H; simpl_IsA
+  | [H : IsA ?x (tyAnd _ (tyAnd ?T _)) |- IsA ?x ?T]
+    => destruct H; simpl_IsA
+  | [H : IsA ?x (tyAnd _ (tyAnd _ ?T)) |- IsA ?x ?T]
+    => destruct H; simpl_IsA
+  | [H1 : IsA ?x ?T1, H2 : IsA ?x ?T2 |- IsA ?x (tyAnd ?T1 ?T2)]
+    => constructor; assumption
+  | [H1 : IsA ?x ?T1 |- IsA ?x (tyOr ?T1 _)]
+    => left; exact H1
+  | [H2 : IsA ?x ?T2 |- IsA ?x (tyOr _ ?T2)]
+    => left; exact H2
+  end. 
+
+
+Hint Extern 1 (IsA _ _) => simpl_IsA.
 
 
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
@@ -244,54 +255,169 @@ Proof with auto.
   intros f [T1 T2] i H x T T' Hx Happ.
   specialize (H x T).
   unfold a_apply in *. simpl in *.
-  destruct (IsEmpty_dec (tyDiff T T1)) as [Hmt1 | Hnmt1]...
-  {
-    inversion Happ; subst. clear Happ.
-    edestruct (mTyAnd_l_exists T') as [S Heq].
-    rewrite Heq in *.
-    specialize (H S Hx eq_refl).
-    destruct H as [duh | [y [Hres Hy]]]...
-    right; exists y; split; eauto.
-  }
-  {
-    
-  }
+  destruct (IsEmpty_dec (tyDiff T T1)) as [Hmt1 | Hnmt1];
+    inversion Happ; subst; clear Happ...
+  edestruct (mTyAnd_l_exists T') as [S Heq].
+  rewrite Heq in *.
+  specialize (H S Hx eq_refl).
+  destruct H as [duh | [y [Hres Hy]]]...
+  right. exists y. split; auto.
+  matchcaseH... simpl in *.
+  matchcaseH... crush. crush.
   simpl in *.
-  inversion Happ; subst. clear Happ.
-  remember (i_apply i (tyDiff T T1)) as iapp.
-  destruct iapp as [T3 |].
-  simpl in *. symmetry in Heqiapp. subst.
-  specialize (H (mTyAnd (Some T') (mTyAnd (i_apply i T) (Some (tyAnd T' T3))))).
-  ifcaseH; matchcaseH; crush.
-  specialize (H (tyAnd T e)); crush.
-  inv_IsA_tyAnd; crush; eauto.
+  matchcaseH... crush. crush.
 Qed.
   
 Lemma FnI_rest : forall f a i,
     FnI f (ICons a i) ->
     FnI f i.
-Proof.
+Proof with auto.
   intros f [T1 T2] i Hfi.
   unfold FnI in *.
-  intros x T Hres.
-  specialize (Hfi x).
+  intros x T T' Hx Happ.
+  specialize (Hfi x T).
   simpl in *.
-  ifcaseH; matchcaseH; inversion Hres; subst; eauto.
-  specialize (Hfi (tyAnd T2 T));
-    intuition; crush; inv_IsA_tyAnd; eauto.
+  ifcaseH. simpl in *.
+  {
+    remember (i_apply i T) as Happ1.
+    remember (i_apply i (tyDiff T T1)) as Happ2.
+    destruct Happ1 as [S1 |].
+    destruct Happ2 as [S2 |].
+    simpl in *. inversion Happ; subst. clear Happ.
+    specialize (Hfi (tyAnd T2 (tyAnd T' (tyAnd T2 S2))) Hx eq_refl).
+    destruct Hfi as [Hbot | [y [Hyres Hy]]]...
+    right. exists y. split...
+    inversion Happ; subst.
+    simpl in *.
+    specialize (Hfi (tyAnd T2 (tyAnd T' T2)) Hx eq_refl).
+    destruct Hfi as [Hbot | [y [Hyres Hy]]]...
+    right. exists y. split...
+    inversion Happ.
+  }
+  {
+    simpl in *.
+    remember (i_apply i T) as Happ1.
+    remember (i_apply i (tyDiff T T1)) as Happ2.
+    destruct Happ1 as [S1 |].
+    destruct Happ2 as [S2 |].
+    simpl in *. inversion Happ; subst. clear Happ.
+    specialize (Hfi (tyAnd T' (tyAnd T2 S2)) Hx eq_refl).
+    destruct Hfi as [Hbot | [y [Hyres Hy]]]...
+    right. exists y. split...
+    inversion Happ; subst.
+    simpl in *.
+    specialize (Hfi (tyAnd T' T2) Hx eq_refl).
+    destruct Hfi as [Hbot | [y [Hyres Hy]]]...
+    right. exists y. split...
+    inversion Happ.
+  }
 Qed.
+
+Lemma i_apply_sub : forall i T1 T2 S1 S2,
+    i_apply i T1 = Some S1 ->
+    Subtype T2 T1 ->
+    i_apply i T2 = Some S2 /\ Subtype S2 S1.
+Proof. Admitted.
 
 Lemma FnI_cons : forall f a i,
     FnA f a ->
     FnI f i ->
     FnI f (ICons a i).
-Proof.
+Proof with auto.
   intros f [T1 T2] i Ha Hi.
   unfold FnI in *. unfold FnA in *.
-  intros x T Hres.
+  intros x T T' Hx Happ.
   specialize (Ha x). specialize (Hi x).
   simpl in *.
-  destruct (IsA_dec x T1) as [Hx1 | Hx1].
+  remember (i_apply i T) as Happ1.
+  remember (i_apply i (tyDiff T T1)) as Happ2.
+  specialize (Ha T). specialize (Hi T).
+  destruct (IsEmpty_dec (tyDiff T T1)) as [Hmt1 | Hnmt1].
+  {
+    simpl in *.
+    specialize (Ha T2 Hx eq_refl).
+    destruct Happ1 as [S1 |].
+    {
+      simpl in *.
+      destruct Happ2 as [S2 |].
+      {
+        simpl in *.
+        specialize (Hi S1 Hx (eq_sym HeqHapp1)).
+        destruct Ha as [Hbot | [y [Hyr Hy]]].
+        {
+          left...
+        }
+        {
+          destruct Hi as [Hbot | [y' [Hyr' Hy']]].
+          {
+            left...
+          }
+          {
+            same_Res. symmetry in Happ. inversion Happ; subst. clear Happ.
+            right. exists y'.  split... split... split... split...
+            eapply i_apply_sub; eauto.
+          }
+        }
+      }
+      {
+        specialize (Hi S1 Hx (eq_sym HeqHapp1)).
+        destruct Ha as [Hbot | [y [Hyr Hy]]].
+        {
+          left...
+        }
+        {
+          destruct Hi as [Hbot | [y' [Hyr' Hy']]].
+          {
+            left...
+          }
+          {
+            same_Res. symmetry in Happ. inversion Happ; subst. clear Happ.
+            right. exists y'.  split... 
+          }
+        }
+      }
+    }
+    {
+      clear Hi. clear HeqHapp1.
+      simpl in *.
+      destruct Happ2 as [S2 |].
+      {
+        destruct Ha as [Hbot | [y [Hyr Hy]]].
+        {
+          left...
+        }
+        {
+          (* BOOKMARK *)
+          right. exists y. split...
+          apply IsEmpty_eq in Hmt1. rewrite Hmt1 in HeqHapp2. 
+          inversion Happ; subst. split... split...
+          
+            eapply i_apply_sub; eauto.
+          }
+        }
+      }
+      {
+        specialize (Hi S1 Hx (eq_sym HeqHapp1)).
+        destruct Ha as [Hbot | [y [Hyr Hy]]].
+        {
+          left...
+        }
+        {
+          destruct Hi as [Hbot | [y' [Hyr' Hy']]].
+          {
+            left...
+          }
+          {
+            same_Res. symmetry in Happ. inversion Happ; subst. clear Happ.
+            right. exists y'.  split... 
+          }
+        }
+      }
+    }
+  }
+  {
+
+  }
   remember (i_result i x) as Hxr.
   destruct Hxr as [T'|]; inversion Hres; subst.
   destruct (Ha T2 eq_refl). left; assumption.
@@ -324,12 +450,13 @@ Definition a_neg (a : arrow) (outT : Ty) : Ty :=
 Fixpoint i_neg (i : interface) (outT : Ty) : Ty :=
   match i with
   | IBase a => a_neg a outT
-  | ICons a i' =>
-    let T1 := a_neg a outT in
+  | ICons (Arrow S1 S2) i' =>
+    let T1 := a_neg (Arrow S1 S2) outT in
     let T2 := i_neg i' outT in
-    let T3 := tyAnd T1 (i_neg i' (tyAnd T2 outT)) in
+    let T3 := tyAnd S1 (i_neg i' (tyAnd S2 outT)) in
     tyOr T1 (tyOr T2 T3)
   end.
+
 
 Fixpoint i_pos (i : interface) (outT : Ty) : Ty :=
   match i with
