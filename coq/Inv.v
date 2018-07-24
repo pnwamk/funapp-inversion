@@ -35,7 +35,7 @@ Notation IsInhabited t := (Inhabited V t).
 Axiom IsEmpty_dec : forall (t: Ty), {IsEmpty t} + {IsInhabited t}.
 Notation IsA v T := (In V T v).
 Axiom IsA_dec : forall (v:V) (t: Ty), {IsA v t} + {~ IsA v t}.
-Notation "T1 <: T2" := (Included V T1 T2) (at level 70).
+Notation Subtype T1 T2 := (Included V T1 T2).
 
 Hint Unfold Included Setminus.
 Hint Constructors Union Intersection Inhabited.
@@ -312,6 +312,76 @@ Ltac solve_IsA :=
 
 Hint Extern 1 (IsA _ _) => solve[solve_IsA].
 
+Lemma Subtype_trans : forall T1 T2 T3,
+    Subtype T1 T2 ->
+    Subtype T2 T3 ->
+    Subtype T1 T3.
+Proof.
+  crush.
+Qed.
+Lemma i_neg_sub : forall i T1 T2,
+    Subtype T2 T1 ->
+    Subtype (i_neg i T1) (i_neg i T2).
+Proof.
+  intros i. induction i as [[T1 T2] | [T1 T2] i' IH].
+  {
+    intros T T' Hsub x Hx. simpl in *.
+    destruct (IsEmpty_dec (tyAnd T2 T'))
+      as [Hmt' | Hnmt']; auto.
+    destruct (IsEmpty_dec (tyAnd T2 T))
+      as [Hmt | Hnmt]; auto.
+    eapply no_empty_val; eauto.
+    destruct (IsEmpty_dec (tyAnd T2 T))
+      as [Hmt | Hnmt]; auto.
+    assert False. apply Hmt.
+    destruct Hnmt' as [y Hy]. exists y; eauto.
+    contradiction.
+  }
+  {
+    intros T T' Hsub x Hx.
+    simpl in *.
+    destruct (IsEmpty_dec (tyAnd T2 T)) as [Hmt | Hnmt].
+    {
+      destruct (IsEmpty_dec (tyAnd T2 T')) as [Hmt' | Hnmt'].
+      {
+        destruct Hx as [x Hx | x Hx]; auto.
+        destruct Hx as [x Hx | x Hx]; auto.
+        right; left; eapply IH; eauto.
+      }
+      {
+        right.
+        assert False as impossible.
+        {
+          eapply Hmt.
+          destruct Hnmt' as [y Hy1 Hy2].
+          exists y. eauto.
+        }
+        contradiction.
+      }
+    }
+    destruct (IsEmpty_dec (tyAnd T2 T')) as [Hmt' | Hnmt'].
+    {
+      right.
+      destruct Hx as [x Hx | x Hx];
+        try solve[eapply no_empty_val; eauto].
+      destruct Hx as [x Hx | x Hx].
+      {
+        left; eapply IH; eauto.
+      }
+      {
+        destruct Hx; eapply no_empty_val; eauto.
+      }
+    }                  
+    {
+      destruct Hx as [x Hx | x Hx];
+        try solve[eapply no_empty_val; eauto].
+      destruct Hx as [x Hx | x Hx].
+      right. left. eapply IH; eauto.
+      destruct Hx; eapply no_empty_val; eauto.
+    }
+  }
+Qed.
+
 Ltac apply_fun :=
   match goal with
   | [H1 : IsA ?x ?T1,
@@ -510,67 +580,11 @@ Proof.
   contradiction. intros v Hv. inversion Hv.
 Qed.
 
-(* Lemma i_pos_result : forall i x T, *)
-(*     IsA x (i_pos i T) -> *)
-(*     exists T', i_result i x = Some T' *)
-(*                /\ (IsInhabited T' -> IsInhabited (tyAnd T' T)). *)
-(* Proof. *)
-(*   intros i. induction i as [[T1 T2] | [T1 T2] i' IH]. *)
-(*   { *)
-(*     intros x T HxIs. *)
-(*     simpl in *. *)
-(*     destruct (IsEmpty_dec (tyAnd T2 T)). *)
-(*     eapply no_empty_val; eauto. *)
-(*     destruct (IsA_dec x T1); try solve[contradiction]. *)
-(*     exists T2; crush. *)
-(*   } *)
-(*   { *)
-(*     intros x T HxIs. *)
-(*     unfold i_pos in HxIs. *)
-(*     destruct (IsEmpty_dec (tyAnd T2 T)). *)
-(*     { *)
-(*       fold i_pos in HxIs. *)
-(*       rewrite tyOr_empty_l in *. *)
-(*       simpl in *. *)
-(*       destruct (IsA_dec x T1) as [Hx1 | Hxn1]. *)
-(*       { *)
-(*         remember (i_result i' x) as res'. *)
-(*         destruct res' as [T' |]. *)
-(*         { *)
-(*           exists (tyAnd T2 T'); split; auto. *)
-(*           intros Hex. *)
-(*           Admitted *)
-(*         } *)
-(*         { *)
-          
-(*         } *)
-(*       } *)
-(*       { *)
-        
-(*       } *)
-(*     } *)
-(*     destruct HxIs as [x impossible | x HxIs]; *)
-(*       try solve[eapply no_empty_val; eauto]. *)
-(*     destruct (IH x T HxIs) as [T' [Hres Hinhab]]. *)
-(*     (* BOOKMARK -- I THINK THIS IS TOO STRONG *)
-(*        e.g. assume x ∈ T1 but x ∉ T4, T = (∪ T2 T5), *)
-(*         and *)
-(*         i = (∩ (→ T1 (∪ T2 T3))   *)
-(*                (→ T1 (∪ T5 T6))) *)
-      
-(*         then  IsA x (i_pos i T), *)
-(*               i_result i x = Some (∩ (∪ T2 T3) (∪ T5 T6)) = ∅  *)
-(*               /\ IsInhabited (tyAnd T' T) is FALSE!  *)
-             
-(*        FIX? Add precondition that (i_result i x) is not empty?*) *)
-(* Admitted. *)
-
-
 
 (* Interface Inversion Minimality
    i.e. the input type we predict is minimal *)
 Lemma i_pos_dom : forall i T,
-    (i_pos i T) <: (i_dom i).
+    Subtype (i_pos i T) (i_dom i).
 Proof.
   Admitted.
   
@@ -605,6 +619,7 @@ Proof with crush.
     destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt2o | Hnmt2o].
     (* IsEmpty (tyAnd T2 outT), ∴ ~ IsA x T1 *)
     {
+      clear HxNot3.
       rewrite tyOr_empty_l in *.
       destruct (IH outT x HxIn HxNot2) as [f [y [Hf [Hfx Hy]]]].
       remember (fun (v:V) =>
@@ -639,7 +654,61 @@ Proof with crush.
       assumption.
       assumption.
     }
-    admit. (* BOOKMARK / TODO!*)
+    {
+      clear HxNot1. clear HxNot3.
+      destruct (IsA_dec x T1) as [HxIn1 | HxNot1].
+      {
+        clear HxIn.
+        remember (i_result i' x) as optT'.        
+        destruct optT' as [T' |].
+        {
+          destruct (IsEmpty_dec (tyAnd (tyAnd T2 T') outT)) as [Hmt | Hnmt].
+          {
+            
+              }
+                  {
+                    
+                  }
+                }
+                {
+                }
+                
+                
+              }
+          }
+          {
+            
+          }
+          unfold FnI in Hf.
+        }
+        {
+          
+        }
+      }
+      {
+        
+      }
+
+        
+      destruct (IsA_dec x T1) as [HxIn1 | HxNot1].
+      {
+        clear HxIn.
+        clear HxIn1'.
+        
+        {
+          
+        }
+        {
+          
+        }
+        simpl in *.
+      }
+      {
+        
+      }
+      (* BOOKMARK *)
+    }
+
   }
 Qed.
       
