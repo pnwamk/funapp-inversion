@@ -626,6 +626,48 @@ Admitted.
       
 (*     } *)
 (*   } *)
+
+Lemma i_inv_i_result : forall i x outT,
+    IsA x (i_pos i outT) ->
+    ~ IsA x (i_neg i outT)->
+    exists T, i_result i x = Some T
+              /\ IsInhabited (tyAnd T outT).
+Proof with auto.
+  intros i. induction i as [[T1 T2] | [T1 T2] i' IH];
+    intros x outT HxIn HxNot.
+  {
+    simpl in *.
+    destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt]...
+    clear HxNot.
+    destruct (IsA_dec x T1) as [Hx | Hx]; crush.
+    exists T2...    
+  }
+  {
+    simpl in *.
+    apply not_IsA_tyOr in HxNot. destruct HxNot as [HxNot1 HxNot2].
+    apply not_IsA_tyOr in HxNot2. destruct HxNot2 as [HxNot2 HxNot3].
+    apply not_IsA_tyAnd in HxNot3.
+    destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt2 | Hnmt2].
+    {
+      destruct HxIn as [x HxIn | x HxIn]...
+      destruct (IsA_dec x T1) as [Hx1 | Hx1];
+        try solve[contradiction]. clear Hx1.
+      specialize (IH x outT HxIn HxNot2).
+      destruct IH as [T [Hres Hinhab]].
+      exists T; crush.
+    }
+    {
+      clear HxNot1. clear HxNot3.
+      destruct (IsA_dec x T1) as [Hx1 | Hx1].
+      {
+        destruct (IsA_dec x (i_pos i' outT)) as [Hx' | Hx'].
+        (* BOOKMARK *)
+      }
+      {
+      }
+
+    }
+  }
   
 (* Interface Inversion Minimality
    i.e. the input type we predict is minimal *)
@@ -654,7 +696,7 @@ Proof with auto.
       destruct (IsA_dec x (i_pos i' outT)) as [Hx11 | Hx12].
       (* IsA x (tyAnd T1 (i_pos i' outT)) *)
       {
-        
+
       }
       (* IsA x (tyAnd T1 (tyNot (i_pos i' outT))) *)
       {
