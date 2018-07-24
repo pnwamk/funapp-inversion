@@ -283,10 +283,10 @@ Definition a_neg (a : arrow) (outT : Ty) : Ty :=
 Fixpoint i_neg (i : interface) (outT : Ty) : Ty :=
   match i with
   | IBase a => a_neg a outT
-  | ICons a i' =>
-    let T1 := a_neg a outT in
+  | ICons (Arrow S1 S2) i' =>
+    let T1 := a_neg (Arrow S1 S2) outT in
     let T2 := i_neg i' outT in
-    let T3 := tyAnd T1 (i_neg i' (tyAnd T2 outT)) in
+    let T3 := tyAnd S1 (i_neg i' (tyAnd S2 outT)) in
     tyOr T1 (tyOr T2 T3)
   end.
 
@@ -396,12 +396,17 @@ Proof with auto.
       }
       {
         destruct Hx...
+        right; split...
+        apply (IH (tyAnd T2 T) (tyAnd T2 T'))...
       }
     }                  
     {
       destruct Hx as [x Hx | x Hx]...
       destruct Hx as [x Hx | x Hx]...
       right. left. eapply IH; eauto.
+      right. right; split...
+      destruct Hx as [x Hx' Hx'']...
+      apply (IH (tyAnd T2 T) (tyAnd T2 T'))...
     }
   }
 Qed.
@@ -470,9 +475,12 @@ Lemma in_i_neg : forall i v v' f T,
     f v = Res v' ->
     ~ IsA v' T.
 Proof with auto.
-  intros i. induction i as [[T1 T2] | [T1 T2] i' IH]; crush.
+  intros i.
+  induction i as [[T1 T2] | [T1 T2] i' IH];
+    intros v v' f T Hfi Hv Hfv Hcontra.
   (* IBase (Arrow T1 T2) *)
   {
+    simpl in *.
     ifcaseH; crush.
     applyH.
     match goal with
@@ -482,8 +490,9 @@ Proof with auto.
   }
   (* ICons (Arrow T1 T2) i' *)
   {
-    forwards: FnI_first; eauto.
-    forwards: FnI_rest; eauto.
+    simpl in *.
+    assert (FnA f (Arrow T1 T2)) as Hfa by (eapply FnI_first; eauto).
+    assert (FnI f i') as Hfi' by (eapply FnI_rest; eauto).
     destruct (IsEmpty_dec (tyAnd T2 T)) as [Hmt | Hnmt]...
     {
       inv_IsA_tyOr.
@@ -502,10 +511,15 @@ Proof with auto.
       }
     }
     {
-      rewrite tyAnd_empty_l in *.
       rewrite tyOr_empty_l in *.
-      rewrite tyOr_empty_r in *.
-      eapply IH; eauto.
+      destruct Hv as [v Hv | v Hv].
+      {
+        eapply IH; eauto.
+      }
+      {
+        destruct Hv as [v Hv1 Hv2].
+        eapply IH; eauto.
+      }
     }
   }
 Qed.
@@ -627,6 +641,144 @@ Admitted.
 (*     } *)
 (*   } *)
 
+
+Lemma i_result_None : forall i x outT,
+    IsA x (i_dom i) ->
+    i_result i x = None ->
+    IsA x (i_neg i outT).
+Proof with auto.
+  intros i; induction i as [[T1 T2] | [T1 T2] i' IH].
+  {
+    intros x outT Hdom Hires.
+    simpl in *.
+    destruct (IsA_dec x T1) as [Hx | Hx]; crush.
+  }
+  {
+    intros x outT Hx Hires.
+    simpl in *.
+    destruct (IsA_dec x T1) as [Hx1 | Hx1].
+    {
+      destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt].
+      {
+        left. assumption.
+      }
+      {
+        right.
+        remember (i_result i' x) as ires'.
+        destruct ires' as [T' |].
+        inversion Hires. inversion Hires.
+      }      
+    }
+    {
+      destruct Hx as [x Hx | x Hx]; try solve[contradiction].
+      right. left.
+      apply IH... matchcaseH; crush.
+    }
+  }
+Qed.
+
+Lemma i_result_dom : forall i x T,
+    i_result i x = Some T ->
+    IsA x (i_dom i).
+Proof. Admitted.
+  
+Lemma i_result_Some : forall i x T outT,
+    i_result i x = Some T ->
+    IsEmpty (tyAnd T outT) ->
+    IsA x (i_neg i outT).
+Proof with auto.
+  intros i; induction i as [[T1 T2] | [T1 T2] i' IH].
+  {
+    intros x T outT Hires Hmt.
+    simpl in *.
+    destruct (IsA_dec x T1) as [Hx1 | Hx1]; crush.
+    destruct (IsEmpty_dec (tyAnd T outT)) as [Hmt' | Hmt']...
+    assert False as contradiction. apply Hmt.
+    {
+      destruct Hmt' as [y Hy].
+      exists y...
+    }
+    contradiction.
+  }
+  {
+    intros x T outT Hires Hmt.
+    simpl.
+    remember (i_result i' x) as ires'.
+    destruct ires' as [T' |].
+    {
+      destruct (IsEmpty_dec (tyAnd T' outT)) as [Hmt' | Hnmt'].
+      {
+        assert (IsA x (i_neg i' outT)) as H'.
+        eapply IH. symmetry. eassumption. assumption.
+        right. left. assumption.
+      }
+      {
+        simpl in *.
+        destruct (IsA_dec x T1) as [Hx1 | Hx1].
+        {
+          destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt2 | Hnmt2].
+          {
+            left. assumption.
+          }
+          {
+            right. symmetry in Heqires'. rewrite Heqires' in *.
+            
+            
+          }
+        }
+
+    }
+    {
+      
+    }
+
+
+(*
+Lemma i_neg_sub : forall i T1 T2,
+    Subtype T2 T1 ->
+    Subtype (i_neg i T1) (i_neg i T2).
+*)
+    destruct (IsA_dec x T1) as [Hx1 | Hx1].
+    {
+      destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt2 | Hnmt2].
+      {
+        left. assumption.
+      }
+      {
+        right.
+        remember (i_result i' x) as ires'.
+        destruct ires' as [T' |].
+        symmetry in Hires.
+        inversion Hires. subst. clear Hires.
+        destruct (IsEmpty_dec (tyAnd T2 T')) as [Hmt' | Hnmt'].
+        {
+          left; eapply IH. symmetry; eassumption.
+          intros Hcontra. apply Hmt'.
+          destruct Hcontra as [y Hy]. exists y...
+        }
+        {
+          destruct (exists_fn (ICons (Arrow T1 T2) i'))
+            as [f [Hfi Hmaps]].
+          unfold MapsTo in Hmaps.
+          simpl in *.
+          specialize (Hmaps x).
+          destruct (IsA_dec x T1) as [Hx1' | Hx1']... clear Hx1'.
+          symmetry in Heqires'.
+          rewrite Heqires' in Hmaps.
+          specialize (Hmaps (tyAnd T2 T') eq_refl).
+          subst.
+        }
+        specialize (IH x T').
+        
+      }      
+    }
+    {
+      destruct Hx as [x Hx | x Hx]; try solve[contradiction].
+      right. left.
+      apply IH... matchcaseH; crush.
+    }
+  }
+  
 Lemma i_inv_i_result : forall i x outT,
     IsA x (i_pos i outT) ->
     ~ IsA x (i_neg i outT)->
