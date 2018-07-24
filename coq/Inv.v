@@ -594,38 +594,38 @@ Lemma i_pos_dom : forall i T,
 Proof.
 Admitted.
 
-Lemma must_be : forall i x T T',
-    i_result i x = Some T ->
-    IsInhabited T' ->
-    IsEmpty (tyAnd T T') ->
-    IsA x (i_neg i T').
-Proof with auto.
-  intros i; induction i as [[T1 T2] | [T1 T2] i' IH];
-    intros x T T' Hres Hnmt Hmt.
-  (* (IBase (Arrow T1 T2) *)
-  {
-    simpl in *.
-    destruct (IsA_dec x T1) as [HxIs | HxNot]; crush.
-    destruct (IsEmpty_dec (tyAnd T T')) as [Hmt' | Hnmt']...
-    contradiction.
-  }
-  (* (ICons (Arrow T1 T2) i') *)  
-  {
-    simpl in *.
-    destruct (IsA_dec x T1) as [HxIs | HxNot]...
-    destruct (IsEmpty_dec (tyAnd T2 T')) as [Hmt' | Hnmt']...
-    {
-      right.
-      remember (i_result i' x) as xres.
-      destruct xres as [Tx |]; inversion Hres; crush.
-      clear Hres.
-      eapply IH; eauto.
-      intro H'. apply Hmt.
-    }
-    {
+(* Lemma must_be : forall i x T T', *)
+(*     i_result i x = Some T -> *)
+(*     IsInhabited T' -> *)
+(*     IsEmpty (tyAnd T T') -> *)
+(*     IsA x (i_neg i T'). *)
+(* Proof with auto. *)
+(*   intros i; induction i as [[T1 T2] | [T1 T2] i' IH]; *)
+(*     intros x T T' Hres Hnmt Hmt. *)
+(*   (* (IBase (Arrow T1 T2) *) *)
+(*   { *)
+(*     simpl in *. *)
+(*     destruct (IsA_dec x T1) as [HxIs | HxNot]; crush. *)
+(*     destruct (IsEmpty_dec (tyAnd T T')) as [Hmt' | Hnmt']... *)
+(*     contradiction. *)
+(*   } *)
+(*   (* (ICons (Arrow T1 T2) i') *)   *)
+(*   { *)
+(*     simpl in *. *)
+(*     destruct (IsA_dec x T1) as [HxIs | HxNot]... *)
+(*     destruct (IsEmpty_dec (tyAnd T2 T')) as [Hmt' | Hnmt']... *)
+(*     { *)
+(*       right. *)
+(*       remember (i_result i' x) as xres. *)
+(*       destruct xres as [Tx |]; inversion Hres; crush. *)
+(*       clear Hres. *)
+(*       eapply IH; eauto. *)
+(*       intro H'. apply Hmt. *)
+(*     } *)
+(*     { *)
       
-    }
-  }
+(*     } *)
+(*   } *)
   
 (* Interface Inversion Minimality
    i.e. the input type we predict is minimal *)
@@ -649,6 +649,33 @@ Proof with auto.
   }
   (* (ICons (Arrow T1 T2) i') *)
   {
+    destruct (IsA_dec x T1) as [Hx1 | Hx2].
+    {
+      destruct (IsA_dec x (i_pos i' outT)) as [Hx11 | Hx12].
+      (* IsA x (tyAnd T1 (i_pos i' outT)) *)
+      {
+        
+      }
+      (* IsA x (tyAnd T1 (tyNot (i_pos i' outT))) *)
+      {
+        
+      }
+    }
+    {
+      destruct (IsA_dec x (i_pos i' outT)) as [Hx11 | Hx12].
+      (* IsA x (tyAnd (tyNot T1) (i_pos i' outT)) *)
+      {
+        
+      }
+      (* IsA x (tyAnd (tyNot T1) (tyNot (i_pos i' outT))) *)
+      {
+        
+      }
+      
+    }
+    
+
+    (* OLD *)
     simpl in *.
     apply not_IsA_tyOr in HxNot. destruct HxNot as [HxNot1 HxNot2].
     apply not_IsA_tyOr in HxNot2. destruct HxNot2 as [HxNot2 HxNot3].
@@ -667,9 +694,8 @@ Proof with auto.
       assert (FnA f' (Arrow T1 T2)) as Hfa.
       {
         unfold FnA.
-        intros v T Hares.
-        simpl in *.
-        subst.
+        intros v T Hares...
+        simpl in *. subst.
         destruct (IsA_dec v T1); inversion Hares; subst.
         left; reflexivity.
       }
@@ -680,8 +706,7 @@ Proof with auto.
         subst.
         destruct (IsA_dec v T1).
         left; reflexivity.
-        specialize (Hf v T Hres).
-        assumption.
+        specialize (Hf v T Hres). assumption.
       }
       assert (FnI f' (ICons (Arrow T1 T2) i')) as Hfai by
           (eapply FnI_cons; eauto).
@@ -690,7 +715,8 @@ Proof with auto.
     }
     {
       clear HxNot1. clear HxNot3.
-      assert (.
+      
+      destruct (IsA_dec 
       destruct HxIn as [x HxIn | x HxIn].
       {
         destruct Hnmt2o as [y Hy].
