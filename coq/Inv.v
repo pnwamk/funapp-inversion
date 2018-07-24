@@ -199,10 +199,10 @@ Lemma FnI_base : forall f a,
     FnA f a.
 Proof.
   unfold FnI. unfold FnA.
-  intros f [T1 T2] H x T Har.
+  intros f [T1 T2] H x T T' Hx Happ.
   simpl in *.
-  specialize H with x T2.
-  ifcaseH; inversion Har; subst; auto.
+  specialize (H x T).
+  ifcaseH; inversion Happ; subst; auto.
 Qed.
 
 Ltac inv_IsA_tyAnd :=
@@ -223,11 +223,18 @@ Ltac inv_exists :=
 Lemma FnI_first : forall f a i,
     FnI f (ICons a i) ->
     FnA f a.
-Proof.
+Proof with auto.
   unfold FnI. unfold FnA.
-  intros f [T1 T2] i H x T Har.
-  specialize (H x).
-  unfold a_result in *. simpl in *.
+  intros f [T1 T2] i H x T T' Hx Happ.
+  specialize (H x T).
+  unfold a_apply in *. simpl in *.
+  destruct (IsEmpty_dec (tyDiff T T1)) as [Hmt1 | Hnmt1]...
+  simpl in *.
+  inversion Happ; subst. clear Happ.
+  remember (i_apply i (tyDiff T T1)) as iapp.
+  destruct iapp as [T3 |].
+  simpl in *. symmetry in Heqiapp. subst.
+  specialize (H (mTyAnd (Some T') (mTyAnd (i_apply i T) (Some (tyAnd T' T3))))).
   ifcaseH; matchcaseH; crush.
   specialize (H (tyAnd T e)); crush.
   inv_IsA_tyAnd; crush; eauto.
@@ -618,7 +625,7 @@ Proof with auto.
   }
   (* (ICons (Arrow T1 T2) i') *)  
   {
-    simpl in *.
+    simpl uin *.
     destruct (IsA_dec x T1) as [HxIs | HxNot]...
     destruct (IsEmpty_dec (tyAnd T2 T')) as [Hmt' | Hnmt']...
     {
@@ -633,6 +640,12 @@ Proof with auto.
       
     }
   }
+
+  Lemma i_inv_i_result : forall i x outT T,
+      IsInhabited (i_inv i outT) ->
+      i_apply i (i_inv i outT) = Some T
+      /\ IsInhabited (tyAnd T outT).
+  Proof with auto.
   
 (* Interface Inversion Minimality
    i.e. the input type we predict is minimal *)
