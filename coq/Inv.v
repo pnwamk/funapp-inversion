@@ -13,10 +13,9 @@ Require Import Misc.
 
 Set Implicit Arguments.
 
-Open Scope list_scope.
 
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
-(*                 Definitions                   *)
+(*       Set/Type/Value Definitions              *)
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
 
 Axiom V : Type.
@@ -41,10 +40,28 @@ Hint Unfold Included Setminus.
 Hint Constructors Union Intersection Inhabited.
 
 
+Lemma IsEmpty_eq : forall t,
+    IsEmpty t ->
+    t = emptyTy.
+Proof.
+  intros t Hmt.
+  apply Extensionality_Ensembles. constructor.
+  intros v Hv. assert False. apply Hmt. exists v. auto.
+  contradiction. intros v Hv. inversion Hv.
+Qed.
+
+
 Lemma no_empty_val : forall v P,
     IsA v emptyTy -> P.
 Proof.
   intros v P Hmt. inversion Hmt.
+Qed.
+
+Lemma no_empty_val_indirect : forall v T P,
+    IsA v T -> IsEmpty T -> P.
+Proof.
+  intros v T P Hv Hmt. rewrite (IsEmpty_eq Hmt) in Hv.
+  eapply no_empty_val; eauto.
 Qed.
 
 Lemma tyOr_empty_l : forall t,
@@ -68,6 +85,34 @@ Proof.
   Admitted.
 
 Hint Rewrite tyOr_empty_l tyOr_empty_r tyAnd_empty_l tyAnd_empty_r.
+
+Hint Extern 1 =>
+match goal with
+| [H : IsA ?x emptyTy |- ?P] =>
+  apply (no_empty_val P H)
+| [H : IsA ?x ?T, H' : IsEmpty ?T |- ?P] =>
+  apply (no_empty_val_indirect x P H H')
+end.
+
+Hint Extern 1 (IsA _ _) =>
+match goal with
+| [H : IsA ?x (tyAnd ?T1 ?T2) |- IsA ?x ?T1]
+  => destruct H; assumption
+| [H : IsA ?x (tyAnd ?T1 ?T2) |- IsA ?x ?T2]
+  => destruct H; assumption
+| [H1 : IsA ?x ?T1, H2 : IsA ?x ?T2 |- IsA ?x (tyAnd ?T1 ?T2)]
+  => constructor; assumption
+| [H1 : IsA ?x ?T1 |- IsA ?x (tyOr ?T1 _)]
+  => left; exact H1
+| [H2 : IsA ?x ?T2 |- IsA ?x (tyOr _ ?T2)]
+  => left; exact H2
+end. 
+
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*           Function Definitions                *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+
 
 
 (* A single function arrow *)
@@ -174,14 +219,10 @@ Lemma FnI_first : forall f a i,
 Proof.
   unfold FnI. unfold FnA.
   intros f [T1 T2] i H x T Har.
-  assert (forall (T : Ty),
-             i_result (ICons (Arrow T1 T2) i) x = Some T ->
-             f x = Bot \/
-             (exists y : V, f x = Res y /\ IsA y T))
-    as H' by auto. clear H.
+  specialize (H x).
   unfold a_result in *. simpl in *.
   ifcaseH; matchcaseH; crush.
-  specialize H' with (tyAnd T e); crush.
+  specialize (H (tyAnd T e)); crush.
   inv_IsA_tyAnd; crush; eauto.
 Qed.
   
@@ -192,14 +233,10 @@ Proof.
   intros f [T1 T2] i Hfi.
   unfold FnI in *.
   intros x T Hres.
-  assert (forall (T : Ty),
-             i_result (ICons (Arrow T1 T2) i) x = Some T ->
-             f x = Bot \/
-             (exists y : V, f x = Res y /\ IsA y T))
-    as Hfi' by auto. clear Hfi.
+  specialize (Hfi x).
   simpl in *.
   ifcaseH; matchcaseH; inversion Hres; subst; eauto.
-  specialize Hfi' with (tyAnd T2 T);
+  specialize (Hfi (tyAnd T2 T));
     intuition; crush; inv_IsA_tyAnd; eauto.
 Qed.
 
@@ -220,7 +257,10 @@ Proof.
   destruct (Hi T' eq_refl). left; assumption.
   repeat inv_exists. crush.
   same_Res.
-  right. exists x0. split; auto.
+  right.
+  match goal with
+  | [H : f x = Res ?y |- _] => exists y
+  end; crush.
   destruct (Ha T eq_refl); crush; eauto.
   remember (i_result i x) as Hxr.
   destruct Hxr as [T'|]; inversion Hres; subst.
@@ -280,37 +320,24 @@ Proof.
   crush.
 Qed.
 
-
-Ltac solve_IsA :=
-  match goal with
-  | [Hx : IsA ?x ?T1,
-     Hfy : ?f ?x = Res ?y,
-     HFnA : FnA ?f (Arrow ?T1 ?T2)
-     |- IsA ?y ?T2]
-    => apply (FnA_res_ty x Hx Hfy HFnA)
-  | [Hx : IsA ?x ?T1,
-     Hfy : ?f ?x = Res ?y,
-     HFnA : FnI ?f (IBase (Arrow ?T1 ?T2))
-     |- IsA ?y ?T2]
-     => apply (FnA_res_ty x Hx Hfy (FnI_first HFnA))
-  | [Hx : IsA ?x ?T1,
-     Hfy : ?f ?x = Res ?y,
-     HFnA : FnI ?f (ICons (Arrow ?T1 ?T2) _)
-     |- IsA ?y ?T2]
-    => apply (FnA_res_ty x Hx Hfy (FnI_first HFnA))
-  | [H : IsA ?x (tyAnd ?T1 ?T2) |- IsA ?x ?T1]
-    => destruct H; assumption
-  | [H : IsA ?x (tyAnd ?T1 ?T2) |- IsA ?x ?T2]
-    => destruct H; assumption
-  | [H1 : IsA ?x ?T1, H2 : IsA ?x ?T2 |- IsA ?x (tyAnd ?T1 ?T2)]
-    => constructor; assumption
-  | [H1 : IsA ?x ?T1 |- IsA ?x (tyOr ?T1 _)]
-    => left; exact H1
-  | [H2 : IsA ?x ?T2 |- IsA ?x (tyOr _ ?T2)]
-    => left; exact H2
+Hint Extern 1 (IsA _ _) =>
+match goal with
+| [Hx : IsA ?x ?T1,
+        Hfy : ?f ?x = Res ?y,
+              HFnA : FnA ?f (Arrow ?T1 ?T2)
+   |- IsA ?y ?T2]
+  => apply (FnA_res_ty x Hx Hfy HFnA)
+| [Hx : IsA ?x ?T1,
+        Hfy : ?f ?x = Res ?y,
+              HFnA : FnI ?f (IBase (Arrow ?T1 ?T2))
+   |- IsA ?y ?T2]
+  => apply (FnA_res_ty x Hx Hfy (FnI_first HFnA))
+| [Hx : IsA ?x ?T1,
+        Hfy : ?f ?x = Res ?y,
+              HFnA : FnI ?f (ICons (Arrow ?T1 ?T2) _)
+   |- IsA ?y ?T2]
+  => apply (FnA_res_ty x Hx Hfy (FnI_first HFnA))
   end.
-
-Hint Extern 1 (IsA _ _) => solve[solve_IsA].
 
 Lemma Subtype_trans : forall T1 T2 T3,
     Subtype T1 T2 ->
@@ -319,20 +346,20 @@ Lemma Subtype_trans : forall T1 T2 T3,
 Proof.
   crush.
 Qed.
+
 Lemma i_neg_sub : forall i T1 T2,
     Subtype T2 T1 ->
     Subtype (i_neg i T1) (i_neg i T2).
-Proof.
+Proof with auto.
   intros i. induction i as [[T1 T2] | [T1 T2] i' IH].
   {
     intros T T' Hsub x Hx. simpl in *.
     destruct (IsEmpty_dec (tyAnd T2 T'))
-      as [Hmt' | Hnmt']; auto.
+      as [Hmt' | Hnmt']...
     destruct (IsEmpty_dec (tyAnd T2 T))
-      as [Hmt | Hnmt]; auto.
-    eapply no_empty_val; eauto.
+      as [Hmt | Hnmt]...
     destruct (IsEmpty_dec (tyAnd T2 T))
-      as [Hmt | Hnmt]; auto.
+      as [Hmt | Hnmt]...
     assert False. apply Hmt.
     destruct Hnmt' as [y Hy]. exists y; eauto.
     contradiction.
@@ -344,8 +371,8 @@ Proof.
     {
       destruct (IsEmpty_dec (tyAnd T2 T')) as [Hmt' | Hnmt'].
       {
-        destruct Hx as [x Hx | x Hx]; auto.
-        destruct Hx as [x Hx | x Hx]; auto.
+        destruct Hx as [x Hx | x Hx]...
+        destruct Hx as [x Hx | x Hx]...
         right; left; eapply IH; eauto.
       }
       {
@@ -362,22 +389,19 @@ Proof.
     destruct (IsEmpty_dec (tyAnd T2 T')) as [Hmt' | Hnmt'].
     {
       right.
-      destruct Hx as [x Hx | x Hx];
-        try solve[eapply no_empty_val; eauto].
-      destruct Hx as [x Hx | x Hx].
+      destruct Hx as [x Hx | x Hx]...
+      destruct Hx as [x Hx | x Hx]...
       {
         left; eapply IH; eauto.
       }
       {
-        destruct Hx; eapply no_empty_val; eauto.
+        destruct Hx...
       }
     }                  
     {
-      destruct Hx as [x Hx | x Hx];
-        try solve[eapply no_empty_val; eauto].
-      destruct Hx as [x Hx | x Hx].
+      destruct Hx as [x Hx | x Hx]...
+      destruct Hx as [x Hx | x Hx]...
       right. left. eapply IH; eauto.
-      destruct Hx; eapply no_empty_val; eauto.
     }
   }
 Qed.
@@ -404,7 +428,7 @@ Lemma in_i_pos : forall i v v' f T,
     f v = Res v' ->
     IsA v' T ->
     IsA v (i_pos i T).
-Proof.
+Proof with auto.
   intros i.
   induction i as [[T1 T2] | [T1 T2] i' IH];
     intros v v' f T Hfi Hv Hfv Hv'.
@@ -445,29 +469,22 @@ Lemma in_i_neg : forall i v v' f T,
     IsA v (i_neg i T) ->
     f v = Res v' ->
     ~ IsA v' T.
-Proof with crush.
+Proof with auto.
   intros i. induction i as [[T1 T2] | [T1 T2] i' IH]; crush.
   (* IBase (Arrow T1 T2) *)
   {
     ifcaseH; crush.
-    (* IsEmpty (tyAnd T2 T) *)
-    {
-      applyH.
-      match goal with
-      | [H : ?f ?v = Res ?v' |- _] => exists v'
-      end.
-      apply_fun...
-    }
-    (* IsInhabited (tyAnd T2 T) *)
-    {
-      eapply no_empty_val; eauto.
-    }
+    applyH.
+    match goal with
+    | [H : ?f ?v = Res ?v' |- _] => exists v'
+    end.
+    apply_fun...
   }
   (* ICons (Arrow T1 T2) i' *)
   {
     forwards: FnI_first; eauto.
     forwards: FnI_rest; eauto.
-    destruct (IsEmpty_dec (tyAnd T2 T)) as [Hmt | Hnmt].
+    destruct (IsEmpty_dec (tyAnd T2 T)) as [Hmt | Hnmt]...
     {
       inv_IsA_tyOr.
       {
@@ -570,23 +587,45 @@ Admitted.
 
 Hint Rewrite i_neg_empty i_pos_empty i_inv_empty.
 
-Lemma IsEmpty_eq : forall t,
-    IsEmpty t ->
-    t = emptyTy.
-Proof.
-  intros t Hmt.
-  apply Extensionality_Ensembles. constructor.
-  intros v Hv. assert False. apply Hmt. exists v. auto.
-  contradiction. intros v Hv. inversion Hv.
-Qed.
-
-
 (* Interface Inversion Minimality
    i.e. the input type we predict is minimal *)
 Lemma i_pos_dom : forall i T,
     Subtype (i_pos i T) (i_dom i).
 Proof.
-  Admitted.
+Admitted.
+
+Lemma must_be : forall i x T T',
+    i_result i x = Some T ->
+    IsInhabited T' ->
+    IsEmpty (tyAnd T T') ->
+    IsA x (i_neg i T').
+Proof with auto.
+  intros i; induction i as [[T1 T2] | [T1 T2] i' IH];
+    intros x T T' Hres Hnmt Hmt.
+  (* (IBase (Arrow T1 T2) *)
+  {
+    simpl in *.
+    destruct (IsA_dec x T1) as [HxIs | HxNot]; crush.
+    destruct (IsEmpty_dec (tyAnd T T')) as [Hmt' | Hnmt']...
+    contradiction.
+  }
+  (* (ICons (Arrow T1 T2) i') *)  
+  {
+    simpl in *.
+    destruct (IsA_dec x T1) as [HxIs | HxNot]...
+    destruct (IsEmpty_dec (tyAnd T2 T')) as [Hmt' | Hnmt']...
+    {
+      right.
+      remember (i_result i' x) as xres.
+      destruct xres as [Tx |]; inversion Hres; crush.
+      clear Hres.
+      eapply IH; eauto.
+      intro H'. apply Hmt.
+    }
+    {
+      
+    }
+  }
   
 (* Interface Inversion Minimality
    i.e. the input type we predict is minimal *)
@@ -594,7 +633,7 @@ Lemma i_inv_minimal : forall i outT x,
     IsA x (i_pos i outT) ->
     ~ IsA x (i_neg i outT) ->
     exists f y, FnI f i /\ f x = Res y /\ IsA y outT.
-Proof with crush.
+Proof with auto.
   intros i.
   induction i as [[T1 T2] | [T1 T2] i' IH];
     intros outT x HxIn HxNot.
@@ -602,8 +641,6 @@ Proof with crush.
   {    
     simpl in *.
     ifcaseH...
-    assert False as impossible by (eapply no_empty_val; eauto).
-    contradiction.
     destruct (exists_target_fn (IBase (Arrow T1 T2)) outT)
       as [f [Hfi Hmaps]].
     assert (exists y : V, f x = Res y /\ IsA y (tyAnd T2 outT))
@@ -648,14 +685,79 @@ Proof with crush.
       }
       assert (FnI f' (ICons (Arrow T1 T2) i')) as Hfai by
           (eapply FnI_cons; eauto).
-      exists f' y; split. assumption.
-      split. subst.
-      destruct (IsA_dec x T1); try solve[contradiction].
-      assumption.
-      assumption.
+      exists f' y; split... split...  subst.
+      destruct (IsA_dec x T1); try solve[contradiction]; auto.
     }
     {
       clear HxNot1. clear HxNot3.
+      assert (.
+      destruct HxIn as [x HxIn | x HxIn].
+      {
+        destruct Hnmt2o as [y Hy].
+        remember (fun (v:V) =>
+                    if (V_eq_dec v x)
+                    then Res y
+                    else Bot)
+          as f'.
+        exists f' y. split; try split.
+        unfold FnI.
+        intros v T Hres.
+        subst. simpl in *.
+        destruct (V_eq_dec v x) as [Heq | Hneq]. subst; simple.
+        destruct (IsA_dec x T1)...
+        remember (i_result i' x) as xres.
+        destruct xres. inversion Hres; subst.
+        right. exists y; split...
+        split; try solve[simpl crush | ifcase; crush]. split.
+
+      }
+      {
+        
+      }
+      destruct (IsA_dec x (i_pos i' outT)) as [HxIn' | HxNot'].
+      {
+        
+      }
+      {
+
+      }
+      unfold FnI. simpl in *.
+      destruct (IsA_dec x (i_pos i' (tyAnd T2 outT))) as [HxPos | HxPos].
+      {
+        destruct (IsA_dec x (i_neg i' (tyAnd T2 outT))) as [HxNeg | HxNeg].
+        {
+          
+
+          (*
+            Lemma i_neg_sub : forall i T1 T2,
+            Subtype T2 T1 ->
+            Subtype (i_neg i T1) (i_neg i T2).
+           *)
+          
+        }
+        {
+
+        }
+      }
+      {
+        
+      }
+       ~ IsA x (i_neg i' outT) ->
+      
+      destruct (IsA_dec x (i_pos i' outT)) as [HxIn' | HxNot'].
+      {
+        destruct (IH outT x HxIn' HxNot2) as [f [y [Hf [Hfx Hy]]]].
+        remember (fun (v:V) =>
+                    if (IsA_dec v T1)
+                    then Bot
+                    else (f v))
+          as f'.      
+      }
+      {
+        
+      }
+
+      
       destruct (IsA_dec x T1) as [HxIn1 | HxNot1].
       {
         clear HxIn.
@@ -714,595 +816,3 @@ Qed.
       
 
 
-(*****************************************************************)
-(*****************************************************************)
-(*****************************************************************)
-(**** Previous Approach Below ************************************)
-(*****************************************************************)
-(*****************************************************************)
-(*****************************************************************)
-
-(*
-Inductive FnArrow : fn -> arrow -> Prop :=
-| FnA : forall T1 T2 f,
-    (forall v,
-        IsA v T1 ->
-        (f v = Bot
-         \/ (exists v', IsA v' T2 /\ f v = Res v'))) ->
-    FnArrow f (Arrow T1 T2).
-Hint Constructors FnArrow.
-*)
-    
-Inductive FnInterface : fn -> interface -> Prop :=
-| FnIBase : forall f a,
-    FnArrow f a ->
-    FnInterface f (IBase a)
-| FnICons : forall f a i',
-    FnArrow f a ->
-    FnInterface f i' ->
-    FnInterface f (ICons a i').
-
-Hint Constructors FnInterface.
-
-Inductive InInterface : arrow -> interface -> Prop :=
-| InBase : forall a, InInterface a (IBase a)
-| InConsFirst : forall a i, InInterface a (ICons a i)
-| InConsRest : forall a i, InInterface a i ->
-                           InInterface a (ICons a i).
-Hint Constructors InInterface.
-
-Definition MapsTo (f : fn) (outT : Ty) : Prop :=
-  forall T1 T2,
-    FnArrow f (Arrow T1 T2) ->
-    (IsInhabited (tyAnd T2 outT) ->
-     forall v, IsA v T1 ->
-               exists v', IsA v' (tyAnd T2 outT) /\
-                          f v = Res v').
-
-(* We assume for any function specification, there exist
-   functions which always produce output in outT when given
-   input if the (tyAnd T2 outT) is inhabited. *)
-Axiom exists_FnInterface : forall i outT,
-    exists f, FnInterface f i /\ MapsTo f outT.
-        
-
-(* Append for interfaces *)
-Fixpoint i_app (i1 i2 : interface) : interface :=
-  match i1 with
-  | IBase a => ICons a i2
-  | ICons a i1' => ICons a (i_app i1' i2)
-  end.
-Hint Unfold i_app.
-
-(* Map for interfaces *)
-Fixpoint i_map (f : arrow -> arrow) (i : interface) : interface :=
-  match i with
-  | IBase a => IBase (f a)
-  | ICons a i' => ICons (f a) (i_map f i')
-  end.
-Hint Unfold i_map.
-
-(* non-empty subsets of an interface, as arrows with
-   pointwise intersected domain and codomains *)
-Fixpoint i_powerset (i : interface) : interface :=
-  match i with
-  | IBase a => IBase a
-  | ICons a i' => let p := i_powerset i' in
-                  (ICons a (i_app (i_map (a_meet a) p) p))
-  end.
-Hint Unfold i_powerset.
-
-Lemma i_app_valid_i : forall i i' f,
-    FnInterface f i ->
-    FnInterface f i' ->
-    FnInterface f (i_app i i').
-Proof.
-  intros i i' f Hi Hi'.
-  induction Hi; crush.
-Qed.
-
-Lemma a_meet_arrow_fn : forall a a' f,
-    FnArrow f a  ->
-    FnArrow f a' ->
-    FnArrow f (a_meet a a').
-Proof with crush.
-  intros a a' f Ha Ha'.
-  repeat (match goal with
-          | [H : FnArrow _ _ |- _] => destruct H
-          end).
-  constructor. intros.
-  destruct_IsA.
-  repeat applyHinH...
-  right.
-  match goal with
-  | [H : _ _ = Res ?v |- _] => exists v; rewrite H in *
-  end...
-Qed.
-Hint Resolve a_meet_arrow_fn.
-
-  
-Lemma a_meet_i : forall i f a,
-    FnInterface f i ->
-    FnArrow f a ->
-    FnInterface f (i_map (a_meet a) i).
-Proof with crush.
-  intros i f a Hfi Hfa.
-  induction Hfi...
-Qed.
-
-Lemma tyOr_assoc : forall T1 T2 T3,
-    tyOr T1 (tyOr T2 T3) = tyOr (tyOr T1 T2) T3.
-Proof.
-  intros T1 T2 T3.
-  apply Extensionality_Ensembles.
-  constructor.
-  {
-    intros x Hx.
-    destruct Hx as [x Hx | x Hx]; crush.
-    destruct Hx as [x Hx | x Hx]; crush.
-  }
-  {
-    intros x Hx.
-    destruct Hx as [x Hx | x Hx]; crush.
-    destruct Hx as [x Hx | x Hx]; crush.
-  }
-Qed.        
-
-
-Lemma i_app_dom : forall i i',
-    i_dom (i_app i i') = tyOr (i_dom i) (i_dom i').
-Proof.
-  intros i i'. induction i; crush.
-Qed.
-
-Lemma i_meet_dom : forall a i,
-    i_dom (i_map (a_meet a) i)
-    = tyAnd (a_dom a) (i_dom i).
-Proof.
-  intros [T1 T2] i.
-  induction i as [[T3 T4] | [T3 T4] i' IH]; crush.
-  apply Extensionality_Ensembles.
-  constructor.
-  {
-    intros x Hx.
-    destruct Hx as [x Hx | x Hx]; destruct Hx; crush.
-  }
-  {
-    intros x Hx.
-    destruct Hx as [x Hx1 Hx2].
-    destruct Hx2 as [x Hx2 | x Hx2]; crush.
-  }
-Qed.  
-  
-  
-Lemma i_powerset_dom : forall i,
-    i_dom i = i_dom (i_powerset i).
-Proof with crush.
-  intros i.
-  induction i...
-  rewrite <- IHi.
-  rewrite i_app_dom.
-  rewrite <- IHi.
-  apply Extensionality_Ensembles.
-  constructor.
-  (* _ <: _ direction *)
-  {
-    unfold Included.
-    intros x Hx.
-    inversion Hx; eauto.
-  }
-  (* _ :> _ direction *)
-  {
-    unfold Included.
-    intros x Hx.
-    destruct Hx as [x Hx | x Hx].
-    left; auto.
-    right.
-    destruct Hx as [x Hx | x Hx]; auto.
-    {
-      rewrite i_meet_dom in Hx.
-      inversion Hx; crush.
-    }
-  }
-Qed.
-
-Lemma i_powerset_interface : forall i i' f,
-    FnInterface f i ->
-    (i_powerset i) = i' -> 
-    FnInterface f i'.
-Proof with crush.
-  intros i i' f Hfi Heq. subst.
-  induction i... 
-  assert (FnInterface f (i_powerset i)) as Hp...
-  inversion Hfi; crush.
-  constructor.
-  inversion Hfi; auto.
-  apply i_app_valid_i...
-  apply a_meet_i...
-  inversion Hfi...
-Qed.
-
-Fixpoint i_neg_aux (p: interface) (outT : Ty) : Ty :=
-  match p with
-  | IBase a => (a_neg a outT)
-  | ICons a p' => tyOr (a_neg a outT) (i_neg_aux p' outT)
-  end.
-
-Definition i_neg (i : interface) (outT : Ty) : Ty :=
-  i_neg_aux (i_powerset i) outT.
-
-Hint Unfold i_neg i_neg_aux.
-
-
-Definition i_inv (i:interface) (out:Ty) : Ty :=
-  tyDiff (i_dom i) (i_neg i out).
-Hint Unfold i_inv.
-
-
-Definition InterfaceInv
-           (i:interface)
-           (outT inT : Ty) : Prop :=
-forall (f:fn),
-  FnInterface f i ->
-  forall (v v':V),
-    IsA v (i_dom i) ->
-    f v = Res v' ->
-    IsA v' outT ->
-    IsA v inT.
-
-Definition InterfaceInvNeg
-           (i:interface)
-           (outT notInT : Ty) : Prop :=
-forall (f:fn),
-  FnInterface f i ->
-  forall (v v':V),
-    IsA v (i_dom i) ->
-    f v = Res v' ->
-    IsA v' outT ->
-    ~ IsA v notInT.
-
-
-Ltac inv_FnInterface :=
-  match goal with
-  | [H : FnInterface _ _ |- _] => inversion H; subst
-  end.
-
-Lemma in_tyDiff : forall v T1 T2,
-    IsA v T1 ->
-    ~ IsA v T2 ->
-    IsA v (tyDiff T1 T2).
-Proof.
-  crush.
-Qed.
-
-Lemma empty_counterexample : forall v T,
-    IsA v T ->
-    ~ IsEmpty T.
-Proof.
-  eauto.
-Qed.
-
-
-Lemma i_neg_sound : forall i outT notInT,
-    i_neg i outT = notInT ->
-    InterfaceInvNeg i outT notInT.
-Proof with crush.
-  intros i; induction i as [[T1 T2] | [T1 T2] i IHi].
-  (* Case (IBase a) *)
-  {
-    unfold InterfaceInvNeg.
-    intros outT notInT Hinv f Hint v v' hf Hv' Hcontra.
-    subst. simpl in *.
-    inv_FnInterface.
-    eapply (a_neg_sound outT); eauto; crush.
-  }
-  (* Case (ICons a i) *)
-  {
-    unfold InterfaceInvNeg.
-    intros outT notInT Hinv f Hint v v' Hdom Hf Hv' Hcontra.
-    simpl in *. subst.
-    inv_FnInterface.
-    destruct Hcontra.
-    (* IsA v (a_neg (Arrow T1 T2) outT) *)
-    {
-      unfold a_neg in *. simpl in *.
-      destruct (IsEmpty_dec (tyAnd T2 outT))
-        as [Hmt | Hnmt].
-      (* IsEmpty (tyAnd (a_rng (Arrow T1 T2)) outT) *)
-      {
-        inv_FnArrow.
-        assert (IsA x T1) as HT1 by assumption.
-        applyHinH...
-        same_Res.
-        eauto.
-      }
-      (* IsInhabited (tyAnd (a_rng (Arrow T1 T2)) outT) *)
-      {
-        eapply no_empty_val; eassumption.
-      }
-    }
-    (* IsA v (i_inv_neg i outT)  *)
-    {
-      assert (InterfaceInvNeg i outT (i_neg i outT)) as Hi; auto.
-      destruct Hi with f x v'; crush.
-      shelve.
-      unfold i_neg.
-    }
-  }
-Qed.
-
-(* Interface Inversion Soundness *)
-Lemma i_inv_sound : forall i outT inT,
-    i_inv i outT = inT ->
-    InterfaceInv i outT inT.
-Proof with crush.
-  unfold InterfaceInv.
-  intros i outT inT Hinv f Hint v v' Hv Hf Hv'.
-  unfold i_inv in *.
-  remember (i_powerset i) as i'.
-  assert (FnInterface f i') as Hi' by (eapply i_powerset_interface; eauto).
-  clear Hint.
-  rewrite <- Hinv. constructor; auto.
-  (* Show: ~ IsA v (i_inv_neg i' outT) *)
-  intros Hcontra.
-  assert (InterfaceInvNeg i' outT (i_inv_neg i' outT)) as Hneg.
-  {
-    specialize i_inv_neg_sound with i' outT (i_inv_neg i' outT); eauto.
-  }
-  eapply Hneg; eauto.
-Qed.
-
-
-
-(*
-Definition ArrowInvNeg 
-           (a:arrow)
-           (outT notInT : Ty) : Prop :=
-forall (f:fn),
-  FnArrow f a ->
-  forall (v v':V),
-    f v = Res v' ->
-    IsA v' outT ->
-    ~ IsA v notInT.
-*)
-
-
-
-(*
-Definition InterfaceInvNeg
-           (i:interface)
-           (outT notInT : Ty) : Prop :=
-forall (f:fn),
-  FnInterface f i ->
-  forall (v v':V),
-    f v = Res v' ->
-    IsA v' outT ->
-    ~ IsA v notInT.
-*)
-
-
-(*  
-Theorem a_neg_complete : forall a outT notInT,
-    a_neg a outT = notInT ->
-    forall notInT',
-      ArrowInvNeg a outT notInT' ->
-      notInT' <: (a_dom a) ->
-      notInT' <: notInT.
-*)
-  
-  
-(* Interface Inversion Completeness *)
-Lemma i_inv_neg_complete : forall i outT notInT,
-      InterfaceInvNeg i outT notInT ->
-      (notInT <: (i_dom i)) ->
-      notInT <: i_inv_neg (i_powerset i) outT.
-Proof.
-  intros i. induction i as [[T1 T2] | [T1 T2] i' IH].
-    (* (IBase (Arrow T1 T2)) *)
-  {
-    intros outT notInT Hint Hdom x Hx.
-    eapply a_neg_complete; eauto; crush.
-  }
-    (* (ICons (Arrow T1 T2) i') *)
-  {
-    intros outT notInT Hint Hdom x Hx.
-    destruct (IsEmpty_dec (tyAnd notInT T1)) as [Hn1 | Hn1].
-    (* IsEmpty (tyAnd notInT T1) *)
-    {
-      assert (InterfaceInvNeg i' outT notInT) as IH'.
-      {
-        unfold InterfaceInvNeg in *.
-        intros f Hfi' v v' Hres Hv' Hcontra.
-        
-        
-      }
-    }
-    (* IsInhabited (tyAnd notInT T1) *)
-    {
-    }
-    simpl in *.
-    destruct (exists_FnInterface (ICons (Arrow T1 T2) i') outT)
-      as [f [Hfi Hmaps]].
-    unfold InterfaceInvNeg in *.
-    assert (forall v' : V, f x = Res v' -> IsA v' outT -> ~ IsA x notInT)
-      as Hfx. eauto.
-    unfold a_neg. simpl.
-    destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt].
-    (* IsA x (tyOr T1 (i_inv_neg i' outT)) *)
-    {
-      apply Hdom in Hx.
-      destruct Hx as [x Hx | x Hx].
-      left; auto.
-      
-    }
-    (* IsA x (tyOr emptyTy (i_inv_neg i' outT)) *)
-    {
-      unfold MapsTo in Hmaps.
-
-    }
-  }
-
-  
-(* Interface Inversion Completeness *)
-Lemma i_inv_complete : forall i outT inT,
-    i_inv i outT = inT ->
-    forall inT',
-      InterfaceInv i outT inT' ->
-      inT <: inT'.
-Proof.
-  intros i. induction i as [[T1 T2] | [T1 T2] i'].
-  (* (IBase (Arrow T1 T2)) *)
-  {
-    intros outT inT Hinv inT' Hint x Hx.
-    unfold InterfaceInv in *.
-    unfold i_inv in *.
-    rewrite <- Hinv in Hx.
-    clear Hinv.
-    destruct Hx as [HxIn HxNotIn].
-    simpl in *.
-    assert (forall inT',
-               ArrowInv (Arrow T1 T2) outT inT' ->
-               (a_pos (Arrow T1 T2) outT) <: inT')
-      as HPCom
-        by (eapply a_pos_complete; auto).
-    assert (forall notInT',
-               ArrowInvNeg (Arrow T1 T2) outT notInT' ->
-               (notInT' <: (a_dom (Arrow T1 T2)) ->
-                           notInT' <: (a_neg (Arrow T1 T2) outT)))
-      as HNCom
-        by (eapply a_neg_complete; auto).
-    unfold a_pos in *.
-    unfold a_neg in *.
-    destruct (IsEmpty_dec (tyAnd (a_rng (Arrow T1 T2)) outT))
-      as [Hmt | Hnmt].
-    {
-      assert False as impossible by (eapply no_empty_val; eauto).
-      contradiction.
-    }
-    {
-      simpl in *.
-      destruct (exists_FnArrow T1 Hnmt)
-        as [f [Hf Hex]].
-      specialize Hex with x.
-      destruct (Hex HxIn) as [v' [Hv' Hres]]. 
-      assert (FnInterface f (IBase (Arrow T1 T2))) as  Hf' by crush.
-      eapply Hint; eauto.
-      inversion Hv'; auto.
-    }
-  }
-  (* (ICons (Arrow T1 T2)) *)
-  {
-    unfold InterfaceInv.
-    intros outT intT Hinv inT' Hint x Hx.
-    unfold i_inv in *. simpl in *.
-    rewrite <- Hinv in Hx.
-    clear Hinv.
-    destruct Hx as [HxIn HxNotIn].
-    destruct HxIn as [x HxIn | x HxIn].
-    (* IsA x (a_pos (Arrow T1 T2) outT) *)
-    {
-      assert (forall inT',
-                 ArrowInv (Arrow T1 T2) outT inT' ->
-                 (a_pos (Arrow T1 T2) outT) <: inT')
-        as HPCom
-          by (eapply a_pos_complete; auto).
-      assert (forall notInT',
-                 ArrowInvNeg (Arrow T1 T2) outT notInT' ->
-                 (notInT' <: (a_dom (Arrow T1 T2)) ->
-                             notInT' <: (a_neg (Arrow T1 T2) outT)))
-        as HNCom
-          by (eapply a_neg_complete; auto).
-      unfold a_pos in *.
-      unfold a_neg in *.
-      simpl in *.
-      destruct (IsEmpty_dec (tyAnd T2 outT))
-        as [Hmt | Hnmt].
-      (* Hmt: IsEmpty  (* (tyAnd T2 outT) *) *)
-      {
-        assert False as impossible by (eapply no_empty_val; eauto).
-        contradiction.
-      }
-      (* Hnmt: IsInhabited  (* (tyAnd T2 outT) *) *)
-      {
-        rewrite tyOr_empty_l in HxNotIn.
-        destruct (exists_FnInterface (ICons (Arrow T1 T2) i') outT)
-          as [f [Hfi Hf]].
-        assert (exists v' : V, IsA v' (tyAnd T2 outT) /\ f x = Res v')
-          as Hex.
-        {
-          inversion Hfi; subst.
-          eapply Hf; eauto.
-        }
-        destruct Hex as [y [Hy Hres]].
-        eapply Hint; eauto.
-        destruct Hy; auto.
-      }
-    }
-    (* IsA x (i_inv_pos
-                 (i_app (i_map (a_meet (Arrow T1 T2)) (i_powerset i'))
-                    (i_powerset i')) outT) *)
-    {
-      (* BOOKMARK *)
-    }
-
-  
-Admitted.
-
-    
-(* A disjunction of interfaces *)
-Inductive dnf : Type :=
-| DBase : interface -> dnf
-| DCons : interface -> dnf -> dnf.
-
-Fixpoint d_dom (d : dnf) : Ty :=
-  match d with
-  | DBase i => i_dom i
-  | DCons i d' => tyAnd (i_dom i) (d_dom d')
-  end.
-
-Inductive FnDnf : fn -> dnf -> Prop :=
-| FnDBase : forall f i,
-    FnInterface f i ->
-    FnDnf f (DBase i)
-| FnDCons : forall f i d,
-    FnInterface f i -> 
-    FnDnf f (DCons i d)
-| FnDRest : forall f i d,
-    FnDnf f d -> 
-    FnDnf f (DCons i d).
-
-
-Fixpoint d_inv (d:dnf) (out:Ty) : Ty :=
-  match d with
-  | DBase i => i_inv i out
-  | DCons i d' => tyOr (i_inv i out) (d_inv d' out)
-  end. 
-
-Definition DnfInv
-           (d:dnf)
-           (outT inT : Ty) : Prop :=
-forall (f:fn),
-  FnDnf f d ->
-  forall (v v':V),
-    IsA v (d_dom d) ->
-    f v = Res v' ->
-    IsA v' outT ->
-    IsA v inT.
-
-
-(* Dnf Inversion Soundness *)
-Theorem d_inv_sound : forall d outT inT,
-      d_inv d outT = inT ->
-      DnfInv d outT inT.
-Proof.
-  Admitted.
-
-
-(* Dnf Inversion Completeness *)
-Theorem d_inv_complete : forall d outT inT,
-    d_inv d outT = inT ->
-    forall inT',
-      DnfInv d outT inT' ->
-      inT <: inT'.
-Proof.
-  Admitted.
