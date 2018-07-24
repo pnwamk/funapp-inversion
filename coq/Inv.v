@@ -37,6 +37,14 @@ Axiom Subtype_dec : forall T1 T2, {Subtype T1 T2} + {~ Subtype T1 T2}.
 Notation IsA v T := (In V T v).
 Axiom IsA_dec : forall (v:V) (t: Ty), {IsA v t} + {~ IsA v t}.
 
+Definition mTyAnd (oT1 oT2 : option Ty) : option Ty :=
+  match oT1, oT2 with
+  | None, _ => oT2
+  | _, None => oT1
+  | Some T1, Some T2  => Some (tyAnd T1 T2)
+  end.
+Hint Unfold mTyAnd.
+
 Hint Unfold Included Setminus.
 Hint Constructors Union Intersection Inhabited.
   
@@ -169,13 +177,6 @@ Definition FnA (f : fn) (a : arrow) : Prop :=
   (f x = Bot \/ exists y, f x = Res y /\ IsA y T2).
 Hint Unfold FnA.
 
-Definition mTyAnd (oT1 oT2 : option Ty) : option Ty :=
-  match oT1, oT2 with
-  | None, _ => oT2
-  | _, None => oT1
-  | Some T1, Some T2  => Some (tyAnd T1 T2)
-  end.
-
 Fixpoint i_apply (i : interface) (argT : Ty) : option Ty :=
   match i with
   | IBase a => a_apply a argT
@@ -220,6 +221,21 @@ Ltac inv_exists :=
   | [H : exists x, _ |- _] => destruct H
   end.
 
+Lemma mTyAnd_l_exists : forall T1 oT2,
+    exists T3, mTyAnd (Some T1) oT2 = Some T3.
+Proof.
+  intros.
+  destruct oT2; eexists; eauto; reflexivity.
+Qed.
+
+Lemma mTyAnd_r_exists : forall oT1 T2,
+    exists T3, mTyAnd oT1 (Some T2) = Some T3.
+Proof.
+  intros.
+  destruct oT1; eexists; eauto; reflexivity.
+Qed.
+
+  
 Lemma FnI_first : forall f a i,
     FnI f (ICons a i) ->
     FnA f a.
@@ -229,6 +245,17 @@ Proof with auto.
   specialize (H x T).
   unfold a_apply in *. simpl in *.
   destruct (IsEmpty_dec (tyDiff T T1)) as [Hmt1 | Hnmt1]...
+  {
+    inversion Happ; subst. clear Happ.
+    edestruct (mTyAnd_l_exists T') as [S Heq].
+    rewrite Heq in *.
+    specialize (H S Hx eq_refl).
+    destruct H as [duh | [y [Hres Hy]]]...
+    right; exists y; split; eauto.
+  }
+  {
+    
+  }
   simpl in *.
   inversion Happ; subst. clear Happ.
   remember (i_apply i (tyDiff T T1)) as iapp.
