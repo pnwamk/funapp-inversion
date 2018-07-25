@@ -111,13 +111,6 @@ end.
 (*           Function Definitions                *)
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
 
-
-
-(* A single function arrow *)
-Inductive arrow : Type :=
-| Arrow : Ty -> Ty -> arrow.
-Hint Constructors arrow.
-
 Inductive res : Type :=
 | Err : res (* invalid argument/type error *)
 | Bot : res (* non-termination *)
@@ -140,27 +133,25 @@ Ltac same_Res :=
 
 
 Inductive interface : Type :=
-| IBase: arrow -> interface
-| ICons : arrow -> interface -> interface.
+| IBase: (Ty * Ty) -> interface
+| ICons : (Ty * Ty) -> interface -> interface.
 Hint Constructors interface.
 
 Fixpoint i_dom (i : interface) : Ty :=
   match i with
-  | IBase (Arrow T1 _) => T1
-  | ICons (Arrow T1 _) i' => tyOr T1 (i_dom i')
+  | IBase (T1,_) => T1
+  | ICons (T1,_) i' => tyOr T1 (i_dom i')
   end.
 Hint Unfold i_dom.
 
 
-Fixpoint a_result (a : arrow) (v : V) : option Ty :=
-  match a with
-  | Arrow T1 T2 => if IsA_dec v T1
-                   then Some T2
-                   else None
-  end.
+Fixpoint a_result (a : (Ty * Ty)) (v : V) : option Ty :=
+  if IsA_dec v (fst a)
+  then Some (snd a)
+  else None.
 Hint Unfold a_result.
 
-Definition FnA (f : fn) (a : arrow) : Prop :=
+Definition FnA (f : fn) (a : (Ty * Ty)) : Prop :=
 forall x T,
   a_result a x = Some T ->
   (f x = Bot \/ exists y, f x = Res y /\ IsA y T).
@@ -271,18 +262,16 @@ Ltac inv_FnI :=
   | [H : FnI _ _ |- _] => inversion H; subst
   end.
 
-Definition a_neg (a : arrow) (outT : Ty) : Ty :=
-  match a with
-  | Arrow T1 T2 => if IsEmpty_dec (tyAnd T2 outT)
-                   then T1
-                   else emptyTy
-  end.
+Fixpoint a_neg (a : (Ty * Ty)) (outT : Ty) : Ty :=
+  if IsEmpty_dec (tyAnd (snd a) outT)
+  then (fst a)
+  else emptyTy.
 
 Fixpoint i_neg (i : interface) (outT : Ty) : Ty :=
   match i with
   | IBase a => a_neg a outT
-  | ICons (Arrow S1 S2) i' =>
-    let T1 := a_neg (Arrow S1 S2) outT in
+  | ICons (S1,S2) i' =>
+    let T1 := a_neg (S1,S2) outT in
     let T2 := i_neg i' outT in
     let T3 := tyAnd S1 (i_neg i' (tyAnd S2 outT)) in
     tyOr T1 (tyOr T2 T3)
@@ -294,7 +283,7 @@ Definition i_inv (i : interface) (outT : Ty) : Ty :=
 Lemma FnA_res_ty : forall T1 T2 f x y,
     IsA x T1 ->
     f x = Res y ->
-    FnA f (Arrow T1 T2) ->
+    FnA f (T1,T2) ->
     IsA y T2.
 Proof.
   intros T1 T2 f x y Hx Hfx Hfa.
@@ -309,17 +298,17 @@ Hint Extern 1 (IsA _ _) =>
 match goal with
 | [Hx : IsA ?x ?T1,
         Hfy : ?f ?x = Res ?y,
-              HFnA : FnA ?f (Arrow ?T1 ?T2)
+              HFnA : FnA ?f (?T1,?T2)
    |- IsA ?y ?T2]
   => apply (FnA_res_ty x Hx Hfy HFnA)
 | [Hx : IsA ?x ?T1,
         Hfy : ?f ?x = Res ?y,
-              HFnA : FnI ?f (IBase (Arrow ?T1 ?T2))
+              HFnA : FnI ?f (IBase (?T1,?T2))
    |- IsA ?y ?T2]
   => apply (FnA_res_ty x Hx Hfy (FnI_first HFnA))
 | [Hx : IsA ?x ?T1,
         Hfy : ?f ?x = Res ?y,
-              HFnA : FnI ?f (ICons (Arrow ?T1 ?T2) _)
+              HFnA : FnI ?f (ICons (?T1,?T2) _)
    |- IsA ?y ?T2]
   => apply (FnA_res_ty x Hx Hfy (FnI_first HFnA))
   end.
@@ -399,13 +388,13 @@ Qed.
 Ltac apply_fun :=
   match goal with
   | [H1 : IsA ?x ?T1,
-          Hf : FnI ?f (IBase (Arrow ?T1 ?T2)),
+          Hf : FnI ?f (IBase (?T1,?T2)),
                Hres : ?f ?x = Res ?y
      |- _] =>
     assert (IsA y T2)
       by (exact (FnA_res_ty x H1 Hres (FnI_base Hf)))
   | [H1 : IsA ?x ?T1,
-          Hf : FnA ?f (Arrow ?T1 ?T2),
+          Hf : FnA ?f (?T1,?T2),
                Hres : ?f ?x = Res ?y
      |- _] =>
     assert (IsA y T2)
@@ -434,7 +423,7 @@ Proof with auto.
   (* ICons (Arrow T1 T2) i' *)
   {
     simpl in *.
-    assert (FnA f (Arrow T1 T2)) as Hfa by (eapply FnI_first; eauto).
+    assert (FnA f (T1,T2)) as Hfa by (eapply FnI_first; eauto).
     assert (FnI f i') as Hfi' by (eapply FnI_rest; eauto).
     destruct (IsEmpty_dec (tyAnd T2 T)) as [Hmt | Hnmt]...
     {
