@@ -1,21 +1,52 @@
-Require Import Coq.ZArith.BinInt.
-Require Import List.
-Require Import Omega.
-Require Import Ensembles.
-Require Import Classical_sets.
-Require Import Coq.Logic.Classical_Prop.
-Require Import Powerset.
-Require Import Image.
-Require Import Relations.
+Require Import Coq.Sets.Ensembles.
+Require Import Coq.Sets.Classical_sets.
+Require Import Coq.Sets.Image.
 Require Import CpdtTactics.
-Require Import LibTactics.
-Require Import Misc.
 
 Set Implicit Arguments.
 
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*             A few useful tactics              *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+
+Ltac ifcase :=
+  match goal with
+  | [ |- context[if ?X then _ else _] ] => destruct X
+  end.
+
+Ltac ifcaseH :=
+  match goal with
+  | [ H : context[if ?X then _ else _] |- _ ] => destruct X
+  end.
+
+Ltac matchcase :=
+  match goal with
+  | [ |- context[match ?term with
+                 | _ => _
+                 end] ] => destruct term
+  end.
+
+Ltac matchcaseH :=
+  match goal with
+  | [ H: context[match ?term with
+                 | _ => _
+                 end] |- _ ] => destruct term
+  end.
+
+
+Ltac applyH :=
+  match goal with
+  | [H : _ -> _ |- _] => progress (apply H)
+  end.
+
+Ltac applyHinH :=
+  match goal with
+  | [H1 : _ -> _ , H2 : _ |- _] => apply H1 in H2
+  end.
+
 
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
-(*       Set/Type/Value Definitions              *)
+(*           Value/Type Definitions              *)
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
 
 Axiom V : Type.
@@ -37,6 +68,11 @@ Notation Subtype T1 T2 := (Included V T1 T2).
 
 Hint Unfold Included Setminus.
 Hint Constructors Union Intersection Inhabited.
+
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*         Basic Type Lemmas/Tactics             *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
 
 
 Lemma IsEmpty_eq : forall t,
@@ -82,6 +118,12 @@ Lemma tyAnd_empty_r : forall t,
     tyAnd t emptyTy = emptyTy.
 Proof. crush. Qed.
 
+Lemma not_IsA_tyOr : forall x T1 T2,
+    ~ IsA x (tyOr T1 T2) ->
+    ~ IsA x T1 /\ ~ IsA x T2.
+Proof. crush. Qed.
+
+
 Hint Rewrite tyOr_empty_l tyOr_empty_r tyAnd_empty_l tyAnd_empty_r.
 
 Hint Extern 1 =>
@@ -106,86 +148,10 @@ match goal with
   => left; exact H2
 end. 
 
-
-(* * * * * * * * * * * * * * * * * * * * * * * * *)
-(*           Function Definitions                *)
-(* * * * * * * * * * * * * * * * * * * * * * * * *)
-
-Inductive res : Type :=
-| Err : res (* invalid argument/type error *)
-| Bot : res (* non-termination *)
-| Res : V -> res. (* a value result *)
-Hint Constructors res.
-
-Definition fn := (V -> res).
-
-
 Ltac destruct_IsA :=
   match goal with
   | [H : IsA _ _ |- _] => destruct H
   end.
-
-Ltac same_Res :=
-  match goal with
-  | [H1 : ?f ?v = Res ?x , H2 : ?f ?v = Res ?y |- _] =>
-    rewrite H1 in H2; inversion H2; subst; clear H2
-  end.
-
-
-Inductive interface : Type :=
-| IBase: (Ty * Ty) -> interface
-| ICons : (Ty * Ty) -> interface -> interface.
-Hint Constructors interface.
-
-Fixpoint i_dom (i : interface) : Ty :=
-  match i with
-  | IBase (T1,_) => T1
-  | ICons (T1,_) i' => tyOr T1 (i_dom i')
-  end.
-Hint Unfold i_dom.
-
-
-Fixpoint a_result (a : (Ty * Ty)) (v : V) : option Ty :=
-  if IsA_dec v (fst a)
-  then Some (snd a)
-  else None.
-Hint Unfold a_result.
-
-Definition FnA (f : fn) (a : (Ty * Ty)) : Prop :=
-forall x T,
-  a_result a x = Some T ->
-  (f x = Bot \/ exists y, f x = Res y /\ IsA y T).
-Hint Unfold FnA.
-
-Fixpoint i_result (i : interface) (v : V) : option Ty :=
-  match i with
-  | IBase a => a_result a v
-  | ICons a i' => match a_result a v, i_result i' v with
-                  | None, None => None
-                  | Some T, None => Some T
-                  | None, Some T => Some T
-                  | Some T, Some T' => Some (tyAnd T T')
-                  end
-  end.
-Hint Unfold i_result.
-
-(* Function Interface *)
-Definition FnI (f : fn) (i : interface) : Prop :=
-  forall x T,
-    i_result i x = Some T ->
-    f x = Bot \/ (exists y, (f x = Res y /\ IsA y T)).
-Hint Unfold FnI.
-
-Lemma FnI_base : forall f a,
-    FnI f (IBase a) ->
-    FnA f a.
-Proof.
-  unfold FnI. unfold FnA.
-  intros f [T1 T2] H x T Har.
-  simpl in *.
-  specialize H with x T2.
-  ifcaseH; inversion Har; subst; auto.
-Qed.
 
 Ltac inv_IsA_tyAnd :=
   match goal with
@@ -201,6 +167,111 @@ Ltac inv_exists :=
   match goal with
   | [H : exists x, _ |- _] => destruct H
   end.
+
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*       Function Related Definitions            *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+
+(* the result of function application *)
+Inductive res : Type :=
+| Err : res (* invalid argument/type error *)
+| Bot : res (* non-termination *)
+| Res : V -> res. (* a value result *)
+Hint Constructors res.
+
+
+(* We use a shallow embedding in Gallina's functions
+   to model the target language functions. *)
+Definition fn := (V -> res).
+
+
+
+(* An `interface` is the set of arrows that describe a
+   function (i.e. an intersection of 1 or more arrows). We
+   use a pair for each arrow, where the fst is the domain
+   and the snd is the codomain. *)
+Inductive interface : Type :=
+| IBase: (Ty * Ty) -> interface
+| ICons : (Ty * Ty) -> interface -> interface.
+Hint Constructors interface.
+
+
+
+(* The domain for an interface is the union of each
+   individual arrow's domain. *)
+Fixpoint i_dom (i : interface) : Ty :=
+  match i with
+  | IBase (T1,_) => T1
+  | ICons (T1,_) i' => tyOr T1 (i_dom i')
+  end.
+Hint Unfold i_dom.
+
+
+(* Calculates the result type of calling a function which
+   has the arrow type `a` on value `v`. *)
+Fixpoint a_result (a : (Ty * Ty)) (v : V) : option Ty :=
+  if IsA_dec v (fst a)
+  then Some (snd a)
+  else None.
+Hint Unfold a_result.
+
+
+(* Function Arrow *)
+(* I.e., what it means for a function `f` to conform to the
+   description given by arrow `a`. *)
+Definition FnA (f : fn) (a : (Ty * Ty)) : Prop :=
+forall x T,
+  a_result a x = Some T ->
+  (f x = Bot \/ exists y, f x = Res y /\ IsA y T).
+Hint Unfold FnA.
+
+(* Calculates the result type of calling a function which
+   has the interface type `i` on value `v`. *)
+Fixpoint i_result (i : interface) (v : V) : option Ty :=
+  match i with
+  | IBase a => a_result a v
+  | ICons a i' => match a_result a v, i_result i' v with
+                  | None, None => None
+                  | Some T, None => Some T
+                  | None, Some T => Some T
+                  | Some T, Some T' => Some (tyAnd T T')
+                  end
+  end.
+Hint Unfold i_result.
+
+(* Function Interface *)
+(* I.e., what it means for a function `f` to conform to the
+   description given by interface `i`. *)
+Definition FnI (f : fn) (i : interface) : Prop :=
+  forall x T,
+    i_result i x = Some T ->
+    f x = Bot \/ (exists y, (f x = Res y /\ IsA y T)).
+Hint Unfold FnI.
+
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*       Function Related Lemmas/Tactics         *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+
+Lemma FnI_base : forall f a,
+    FnI f (IBase a) ->
+    FnA f a.
+Proof.
+  unfold FnI. unfold FnA.
+  intros f [T1 T2] H x T Har.
+  simpl in *.
+  specialize H with x T2.
+  ifcaseH; inversion Har; subst; auto.
+Qed.
+
+
+Ltac same_Res :=
+  match goal with
+  | [H1 : ?f ?v = Res ?x , H2 : ?f ?v = Res ?y |- _] =>
+    rewrite H1 in H2; inversion H2; subst; clear H2
+  end.
+
 
 Lemma FnI_first : forall f a i,
     FnI f (ICons a i) ->
@@ -262,11 +333,22 @@ Ltac inv_FnI :=
   | [H : FnI _ _ |- _] => inversion H; subst
   end.
 
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*        Function Inversion Definitions         *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+
+(* Consider function `f` of type `a`. This function
+   calculates what type an argument `x` must _not_
+   have had  if `(f x) ↝ v` and `v ∈ outT` *)
 Fixpoint a_neg (a : (Ty * Ty)) (outT : Ty) : Ty :=
   if IsEmpty_dec (tyAnd (snd a) outT)
   then (fst a)
   else emptyTy.
 
+(* Consider function `f` of type `i`. This function
+   calculates what type an argument `x` must _not_ 
+   have had if `(f x) ↝ v` and `v ∈ outT` *)
 Fixpoint i_neg (i : interface) (outT : Ty) : Ty :=
   match i with
   | IBase a => a_neg a outT
@@ -277,8 +359,16 @@ Fixpoint i_neg (i : interface) (outT : Ty) : Ty :=
     tyOr T1 (tyOr T2 T3)
   end.
 
+(* Consider function `f` of type `i`. This function
+   calculates what type an argument `x` must _have_
+   had if `(f x) ↝ v` and `v ∈ outT` *)
 Definition i_inv (i : interface) (outT : Ty) : Ty :=
   tyDiff (i_dom i) (i_neg i outT).
+
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*      Function Inversion Lemmas/Tactics        *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
 
 Lemma FnA_res_ty : forall T1 T2 f x y,
     IsA x T1 ->
@@ -313,13 +403,6 @@ match goal with
   => apply (FnA_res_ty x Hx Hfy (FnI_first HFnA))
   end.
 
-Lemma Subtype_trans : forall T1 T2 T3,
-    Subtype T1 T2 ->
-    Subtype T2 T3 ->
-    Subtype T1 T3.
-Proof.
-  crush.
-Qed.
 
 Lemma i_neg_sub : forall i T1 T2,
     Subtype T2 T1 ->
@@ -466,16 +549,30 @@ Proof.
   eapply in_i_neg; eauto.
 Qed.
 
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*           Inversion Definition                *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+
+
+Definition Inv (i : interface) (outT inT: Ty) : Prop :=
+  forall (f:fn),
+    FnI f i ->
+    forall (v v':V),
+      IsA v (i_dom i) ->
+      f v = Res v' ->
+      IsA v' outT ->
+      IsA v inT.
+
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*                 Soundness                     *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+
 (* Interface Inversion Soundness 
    i.e. the input type we predict is correct *)
-Lemma i_inv_sound : forall i outT,
-    forall (f:fn),
-      FnI f i ->
-      forall (v v':V),
-        IsA v (i_dom i) ->
-        f v = Res v' ->
-        IsA v' outT ->
-        IsA v (i_inv i outT).
+Theorem i_inv_sound : forall i outT,
+    Inv i outT (i_inv i outT).
 Proof with crush.
   intros i outT f Hint v v' Hv Hf Hv'.
   unfold i_inv in *.
@@ -483,6 +580,15 @@ Proof with crush.
   intros Hcontra.
   eapply in_i_neg; eauto.
 Qed.
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*         Axioms for proving minimality         *)
+(*                                               *)
+(* i.e. basically we assume if a codomain is     *)
+(* inhabited, then there exists a function which *)
+(* will map inputs to those codomain values.     *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+
 
 Definition MapsTo (f : fn) (i : interface) : Prop :=
   forall v T,
@@ -505,12 +611,11 @@ Axiom exists_target_fn : forall i outT,
     exists f, FnI f i /\ MapsToTarget f i outT.
 
 
-Lemma not_IsA_tyOr : forall x T1 T2,
-    ~ IsA x (tyOr T1 T2) ->
-    ~ IsA x T1 /\ ~ IsA x T2.
-Proof. crush. Qed.
 
-
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*         Lemmas related to i_result            *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+  
 Lemma i_result_None : forall i x outT,
     IsA x (i_dom i) ->
     i_result i x = None ->
@@ -597,10 +702,9 @@ Proof with auto.
 Qed.    
 
   
-  
 (* Interface Inversion Minimality
    i.e. the input type we predict is minimal *)
-Lemma i_inv_minimal : forall i outT x,
+Lemma i_inv_exists_fn : forall i outT x,
     IsA x (i_inv i outT) ->
     exists f y, FnI f i /\ f x = Res y /\ IsA y outT.
 Proof with auto.
@@ -624,7 +728,7 @@ Proof with auto.
         as [f [Hfi Hmaps]].
       unfold MapsToTarget in Hmaps.
       destruct (Hmaps x S Heqxres Hnmt) as [y [Hfx Hy]].
-      exists f y...
+      exists f. exists y...
     }
   }
   {
@@ -636,6 +740,20 @@ Proof with auto.
   }
 Qed.
 
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*                   Minimality                  *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
 
+
+Theorem i_inv_minimal : forall i outT inT,
+    Inv i outT inT ->
+    Subtype (i_inv i outT) inT.
+Proof with auto.
+  intros i outT inT Hinv x Hx.
+  unfold Inv in Hinv.
+  destruct (i_inv_exists_fn Hx) as [f [y [Hf [Hres Hy]]]].
+  specialize (Hinv f Hf x y). eapply Hinv; eauto.
+  destruct Hx...
+Qed.
 
 
