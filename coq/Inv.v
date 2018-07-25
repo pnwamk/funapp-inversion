@@ -288,21 +288,8 @@ Fixpoint i_neg (i : interface) (outT : Ty) : Ty :=
     tyOr T1 (tyOr T2 T3)
   end.
 
-Fixpoint i_pos (i : interface) (outT : Ty) : Ty :=
-  match i with
-  | IBase (Arrow T1 T2) =>
-    if IsEmpty_dec (tyAnd T2 outT)
-    then emptyTy
-    else T1
-  | ICons (Arrow T1 T2) i' =>
-    let T := if IsEmpty_dec (tyAnd T2 outT)
-             then emptyTy
-             else T1
-    in tyOr T (i_pos i' outT)
-  end.
-
 Definition i_inv (i : interface) (outT : Ty) : Ty :=
-  tyDiff (i_pos i outT) (i_neg i outT).
+  tyDiff (i_dom i) (i_neg i outT).
 
 Lemma FnA_res_ty : forall T1 T2 f x y,
     IsA x T1 ->
@@ -425,48 +412,6 @@ Ltac apply_fun :=
       by (exact (FnA_res_ty x H1 Hres (FnI_base Hf)))
   end.
 
-Lemma in_i_pos : forall i v v' f T,
-    FnI f i ->
-    IsA v (i_dom i) ->
-    f v = Res v' ->
-    IsA v' T ->
-    IsA v (i_pos i T).
-Proof with auto.
-  intros i.
-  induction i as [[T1 T2] | [T1 T2] i' IH];
-    intros v v' f T Hfi Hv Hfv Hv'.
-  {
-    apply_fun.
-    simpl in *.
-    destruct (IsEmpty_dec (tyAnd T2 T)) as [Hmt2 | Hnmt2]; crush.
-    {
-      assert False as impossible. applyH. exists v'; auto.
-      contradiction.
-    }
-  }
-  {
-    assert (FnA f (Arrow T1 T2)) as Hfa by (eapply FnI_first; eauto).
-    simpl in *.
-    destruct Hv as [v Hv | v Hv].
-    {
-      destruct (IsEmpty_dec (tyAnd T2 T)) as [Hmt2 | Hnmt2].
-      {
-        assert False as impossible.
-        apply_fun. apply Hmt2. exists v'; eauto.
-        contradiction.        
-      }
-      {
-        left; auto.
-      }
-    }
-    {
-      assert (FnI f i') as Hfi' by (eapply FnI_rest; eauto).
-      right.
-      eapply IH; eauto.
-    }
-  }
-Qed.  
-
 Lemma in_i_neg : forall i v v' f T,
     FnI f i ->
     IsA v (i_neg i T) ->
@@ -546,7 +491,6 @@ Proof with crush.
   intros i outT f Hint v v' Hv Hf Hv'.
   unfold i_inv in *.
   constructor; auto.
-  eapply in_i_pos; eauto.
   intros Hcontra.
   eapply in_i_neg; eauto.
 Qed.
@@ -576,20 +520,6 @@ Lemma not_IsA_tyOr : forall x T1 T2,
     ~ IsA x (tyOr T1 T2) ->
     ~ IsA x T1 /\ ~ IsA x T2.
 Proof. crush. Qed.
-
-(* Interface Inversion Minimality
-   i.e. the input type we predict is minimal *)
-Lemma i_pos_dom : forall i T,
-    Subtype (i_pos i T) (i_dom i).
-Proof.
-  intros i; induction i as [[T1 T2] | [T1 T2] i' IH];
-    intros T x Hx.
-  simpl in *. ifcaseH; crush.
-  simpl in *.
-  ifcaseH.
-  right. inversion Hx; subst; eauto. eapply IH; eauto.
-  inversion Hx; subst; eauto. right; eapply IH; eauto.
-Qed.
 
 
 Lemma i_result_None : forall i x outT,
@@ -712,11 +642,11 @@ Proof with auto.
     assert (IsA x (i_neg i outT)) as impossible.
     {
       eapply i_result_None; eauto.
-      eapply i_pos_dom; eauto.
     }
     contradiction.
   }
 Qed.
+
 
 
 
