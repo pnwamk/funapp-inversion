@@ -66,23 +66,22 @@ Qed.
 
 Lemma tyOr_empty_l : forall t,
     tyOr emptyTy t = t.
-Proof.
-  Admitted.
+Proof. crush. Qed.
 
 Lemma tyOr_empty_r : forall t,
     tyOr t emptyTy = t.
 Proof.
-  Admitted.
+  intros. rewrite Union_commutative.
+  crush.
+Qed.
 
 Lemma tyAnd_empty_l : forall t,
     tyAnd emptyTy t = emptyTy.
-Proof.
-  Admitted.
+Proof. crush. Qed.
 
 Lemma tyAnd_empty_r : forall t,
     tyAnd t emptyTy = emptyTy.
-Proof.
-  Admitted.
+Proof. crush. Qed.
 
 Hint Rewrite tyOr_empty_l tyOr_empty_r tyAnd_empty_l tyAnd_empty_r.
 
@@ -380,7 +379,7 @@ Proof with auto.
         assert False as impossible.
         {
           eapply Hmt.
-          destruct Hnmt' as [y Hy1 Hy2].
+          destruct Hnmt' as [y Hy1].
           exists y. eauto.
         }
         contradiction.
@@ -577,69 +576,21 @@ Axiom exists_target_fn : forall i outT,
 Lemma not_IsA_tyOr : forall x T1 T2,
     ~ IsA x (tyOr T1 T2) ->
     ~ IsA x T1 /\ ~ IsA x T2.
-Proof. Admitted.
-Lemma not_IsA_tyAnd : forall x T1 T2,
-    ~ IsA x (tyAnd T1 T2) ->
-    ~ IsA x T1 \/ ~ IsA x T2.
-Proof. Admitted.
-
-Lemma i_neg_empty : forall i,
-    i_neg i emptyTy = i_dom i.
-Proof.
-Admitted.
-
-Lemma i_pos_empty : forall i,
-    i_pos i emptyTy = emptyTy.
-Proof.
-Admitted.
-
-
-Lemma i_inv_empty : forall i,
-    i_inv i emptyTy = emptyTy.
-Proof.
-Admitted.
-
-Hint Rewrite i_neg_empty i_pos_empty i_inv_empty.
+Proof. crush. Qed.
 
 (* Interface Inversion Minimality
    i.e. the input type we predict is minimal *)
 Lemma i_pos_dom : forall i T,
     Subtype (i_pos i T) (i_dom i).
 Proof.
-Admitted.
-
-(* Lemma must_be : forall i x T T', *)
-(*     i_result i x = Some T -> *)
-(*     IsInhabited T' -> *)
-(*     IsEmpty (tyAnd T T') -> *)
-(*     IsA x (i_neg i T'). *)
-(* Proof with auto. *)
-(*   intros i; induction i as [[T1 T2] | [T1 T2] i' IH]; *)
-(*     intros x T T' Hres Hnmt Hmt. *)
-(*   (* (IBase (Arrow T1 T2) *) *)
-(*   { *)
-(*     simpl in *. *)
-(*     destruct (IsA_dec x T1) as [HxIs | HxNot]; crush. *)
-(*     destruct (IsEmpty_dec (tyAnd T T')) as [Hmt' | Hnmt']... *)
-(*     contradiction. *)
-(*   } *)
-(*   (* (ICons (Arrow T1 T2) i') *)   *)
-(*   { *)
-(*     simpl in *. *)
-(*     destruct (IsA_dec x T1) as [HxIs | HxNot]... *)
-(*     destruct (IsEmpty_dec (tyAnd T2 T')) as [Hmt' | Hnmt']... *)
-(*     { *)
-(*       right. *)
-(*       remember (i_result i' x) as xres. *)
-(*       destruct xres as [Tx |]; inversion Hres; crush. *)
-(*       clear Hres. *)
-(*       eapply IH; eauto. *)
-(*       intro H'. apply Hmt. *)
-(*     } *)
-(*     { *)
-      
-(*     } *)
-(*   } *)
+  intros i; induction i as [[T1 T2] | [T1 T2] i' IH];
+    intros T x Hx.
+  simpl in *. ifcaseH; crush.
+  simpl in *.
+  ifcaseH.
+  right. inversion Hx; subst; eauto. eapply IH; eauto.
+  inversion Hx; subst; eauto. right; eapply IH; eauto.
+Qed.
 
 
 Lemma i_result_None : forall i x outT,
@@ -677,19 +628,15 @@ Proof with auto.
   }
 Qed.
 
-Lemma i_result_dom : forall i x T,
-    i_result i x = Some T ->
-    IsA x (i_dom i).
-Proof. Admitted.
   
 Lemma i_result_Some : forall i x T outT,
     i_result i x = Some T ->
     IsEmpty (tyAnd T outT) ->
     IsA x (i_neg i outT).
 Proof with auto.
-  intros i; induction i as [[T1 T2] | [T1 T2] i' IH].
+  intros i x; induction i as [[T1 T2] | [T1 T2] i' IH].
   {
-    intros x T outT Hires Hmt.
+    intros T outT Hires Hmt.
     simpl in *.
     destruct (IsA_dec x T1) as [Hx1 | Hx1]; crush.
     destruct (IsEmpty_dec (tyAnd T outT)) as [Hmt' | Hmt']...
@@ -701,338 +648,76 @@ Proof with auto.
     contradiction.
   }
   {
-    intros x T outT Hires Hmt.
-    simpl.
-    remember (i_result i' x) as ires'.
-    destruct ires' as [T' |].
-    {
-      destruct (IsEmpty_dec (tyAnd T' outT)) as [Hmt' | Hnmt'].
-      {
-        assert (IsA x (i_neg i' outT)) as H'.
-        eapply IH. symmetry. eassumption. assumption.
-        right. left. assumption.
-      }
-      {
-        simpl in *.
-        destruct (IsA_dec x T1) as [Hx1 | Hx1].
-        {
-          destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt2 | Hnmt2].
-          {
-            left. assumption.
-          }
-          {
-            right. symmetry in Heqires'. rewrite Heqires' in *.
-            
-            
-          }
-        }
-
-    }
-    {
-      
-    }
-
-
-(*
-Lemma i_neg_sub : forall i T1 T2,
-    Subtype T2 T1 ->
-    Subtype (i_neg i T1) (i_neg i T2).
-*)
+    intros T outT Hires Hmt.
+    simpl in *.
     destruct (IsA_dec x T1) as [Hx1 | Hx1].
     {
       destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt2 | Hnmt2].
       {
-        left. assumption.
+        left...
       }
       {
         right.
-        remember (i_result i' x) as ires'.
-        destruct ires' as [T' |].
-        symmetry in Hires.
-        inversion Hires. subst. clear Hires.
-        destruct (IsEmpty_dec (tyAnd T2 T')) as [Hmt' | Hnmt'].
+        destruct (i_result i' x) as [S |]; try solve[crush].
+        specialize (IH S).
+        inversion Hires; subst. clear Hires.
+        assert (IsEmpty (tyAnd S (tyAnd T2 outT))) as Hmt3.
         {
-          left; eapply IH. symmetry; eassumption.
-          intros Hcontra. apply Hmt'.
-          destruct Hcontra as [y Hy]. exists y...
+          intros Hcontra. apply Hmt. inversion Hcontra as [y Hy].
+          exists y. repeat inv_IsA_tyAnd. split...
         }
-        {
-          destruct (exists_fn (ICons (Arrow T1 T2) i'))
-            as [f [Hfi Hmaps]].
-          unfold MapsTo in Hmaps.
-          simpl in *.
-          specialize (Hmaps x).
-          destruct (IsA_dec x T1) as [Hx1' | Hx1']... clear Hx1'.
-          symmetry in Heqires'.
-          rewrite Heqires' in Hmaps.
-          specialize (Hmaps (tyAnd T2 T') eq_refl).
-          subst.
-        }
-        specialize (IH x T').
-        
-      }      
+        right. split...
+      }
     }
     {
-      destruct Hx as [x Hx | x Hx]; try solve[contradiction].
-      right. left.
-      apply IH... matchcaseH; crush.
+      destruct (i_result i' x) as [S |]; try solve[crush].
+      inversion Hires; subst.
+      specialize (IH T outT eq_refl Hmt).
+      auto.
     }
   }
-  
-Lemma i_inv_i_result : forall i x outT,
-    IsA x (i_pos i outT) ->
-    ~ IsA x (i_neg i outT)->
-    exists T, i_result i x = Some T
-              /\ IsInhabited (tyAnd T outT).
-Proof with auto.
-  intros i. induction i as [[T1 T2] | [T1 T2] i' IH];
-    intros x outT HxIn HxNot.
-  {
-    simpl in *.
-    destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt]...
-    clear HxNot.
-    destruct (IsA_dec x T1) as [Hx | Hx]; crush.
-    exists T2...    
-  }
-  {
-    simpl in *.
-    apply not_IsA_tyOr in HxNot. destruct HxNot as [HxNot1 HxNot2].
-    apply not_IsA_tyOr in HxNot2. destruct HxNot2 as [HxNot2 HxNot3].
-    apply not_IsA_tyAnd in HxNot3.
-    destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt2 | Hnmt2].
-    {
-      destruct HxIn as [x HxIn | x HxIn]...
-      destruct (IsA_dec x T1) as [Hx1 | Hx1];
-        try solve[contradiction]. clear Hx1.
-      specialize (IH x outT HxIn HxNot2).
-      destruct IH as [T [Hres Hinhab]].
-      exists T; crush.
-    }
-    {
-      clear HxNot1. clear HxNot3.
-      destruct (IsA_dec x T1) as [Hx1 | Hx1].
-      {
-        destruct (IsA_dec x (i_pos i' outT)) as [Hx' | Hx'].
-        (* BOOKMARK *)
-      }
-      {
-      }
+Qed.    
 
-    }
-  }
+  
   
 (* Interface Inversion Minimality
    i.e. the input type we predict is minimal *)
 Lemma i_inv_minimal : forall i outT x,
-    IsA x (i_pos i outT) ->
-    ~ IsA x (i_neg i outT) ->
+    IsA x (i_inv i outT) ->
     exists f y, FnI f i /\ f x = Res y /\ IsA y outT.
 Proof with auto.
-  intros i.
-  induction i as [[T1 T2] | [T1 T2] i' IH];
-    intros outT x HxIn HxNot.
-  (* (IBase (Arrow T1 T2)) *)
-  {    
-    simpl in *.
-    ifcaseH...
-    destruct (exists_target_fn (IBase (Arrow T1 T2)) outT)
-      as [f [Hfi Hmaps]].
-    assert (exists y : V, f x = Res y /\ IsA y (tyAnd T2 outT))
-      as [y [Hy1 Hy2]] by (apply Hmaps; crush; ifcase; crush).
-    eauto.
-  }
-  (* (ICons (Arrow T1 T2) i') *)
+  intros i outT x Hx.
+  unfold i_inv in Hx.
+  destruct Hx as [HxIs HxNot].
+  remember (i_result i x) as xres.
+  destruct xres as [S |].
   {
-    destruct (IsA_dec x T1) as [Hx1 | Hx2].
+    symmetry in Heqxres.
+    destruct (IsEmpty_dec (tyAnd S outT)) as [Hmt | Hnmt].
     {
-      destruct (IsA_dec x (i_pos i' outT)) as [Hx11 | Hx12].
-      (* IsA x (tyAnd T1 (i_pos i' outT)) *)
+      assert (IsA x (i_neg i outT)) as impossible.
       {
-
+        eapply i_result_Some; eauto.
       }
-      (* IsA x (tyAnd T1 (tyNot (i_pos i' outT))) *)
-      {
-        
-      }
+      contradiction.
     }
     {
-      destruct (IsA_dec x (i_pos i' outT)) as [Hx11 | Hx12].
-      (* IsA x (tyAnd (tyNot T1) (i_pos i' outT)) *)
-      {
-        
-      }
-      (* IsA x (tyAnd (tyNot T1) (tyNot (i_pos i' outT))) *)
-      {
-        
-      }
-      
+      destruct (exists_target_fn i outT)
+        as [f [Hfi Hmaps]].
+      unfold MapsToTarget in Hmaps.
+      destruct (Hmaps x S Heqxres Hnmt) as [y [Hfx Hy]].
+      exists f y...
     }
-    
-
-    (* OLD *)
-    simpl in *.
-    apply not_IsA_tyOr in HxNot. destruct HxNot as [HxNot1 HxNot2].
-    apply not_IsA_tyOr in HxNot2. destruct HxNot2 as [HxNot2 HxNot3].
-    apply not_IsA_tyAnd in HxNot3.
-    destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt2o | Hnmt2o].
-    (* IsEmpty (tyAnd T2 outT), ∴ ~ IsA x T1 *)
+  }
+  {
+    assert (IsA x (i_neg i outT)) as impossible.
     {
-      clear HxNot3.
-      rewrite tyOr_empty_l in *.
-      destruct (IH outT x HxIn HxNot2) as [f [y [Hf [Hfx Hy]]]].
-      remember (fun (v:V) =>
-                  if (IsA_dec v T1)
-                  then Bot
-                  else (f v))
-        as f'.      
-      assert (FnA f' (Arrow T1 T2)) as Hfa.
-      {
-        unfold FnA.
-        intros v T Hares...
-        simpl in *. subst.
-        destruct (IsA_dec v T1); inversion Hares; subst.
-        left; reflexivity.
-      }
-      assert (FnI f' i') as Hfi'.
-      {
-        unfold FnI.
-        intros v T Hres.
-        subst.
-        destruct (IsA_dec v T1).
-        left; reflexivity.
-        specialize (Hf v T Hres). assumption.
-      }
-      assert (FnI f' (ICons (Arrow T1 T2) i')) as Hfai by
-          (eapply FnI_cons; eauto).
-      exists f' y; split... split...  subst.
-      destruct (IsA_dec x T1); try solve[contradiction]; auto.
+      eapply i_result_None; eauto.
+      eapply i_pos_dom; eauto.
     }
-    {
-      clear HxNot1. clear HxNot3.
-      
-      destruct (IsA_dec 
-      destruct HxIn as [x HxIn | x HxIn].
-      {
-        destruct Hnmt2o as [y Hy].
-        remember (fun (v:V) =>
-                    if (V_eq_dec v x)
-                    then Res y
-                    else Bot)
-          as f'.
-        exists f' y. split; try split.
-        unfold FnI.
-        intros v T Hres.
-        subst. simpl in *.
-        destruct (V_eq_dec v x) as [Heq | Hneq]. subst; simple.
-        destruct (IsA_dec x T1)...
-        remember (i_result i' x) as xres.
-        destruct xres. inversion Hres; subst.
-        right. exists y; split...
-        split; try solve[simpl crush | ifcase; crush]. split.
-
-      }
-      {
-        
-      }
-      destruct (IsA_dec x (i_pos i' outT)) as [HxIn' | HxNot'].
-      {
-        
-      }
-      {
-
-      }
-      unfold FnI. simpl in *.
-      destruct (IsA_dec x (i_pos i' (tyAnd T2 outT))) as [HxPos | HxPos].
-      {
-        destruct (IsA_dec x (i_neg i' (tyAnd T2 outT))) as [HxNeg | HxNeg].
-        {
-          
-
-          (*
-            Lemma i_neg_sub : forall i T1 T2,
-            Subtype T2 T1 ->
-            Subtype (i_neg i T1) (i_neg i T2).
-           *)
-          
-        }
-        {
-
-        }
-      }
-      {
-        
-      }
-       ~ IsA x (i_neg i' outT) ->
-      
-      destruct (IsA_dec x (i_pos i' outT)) as [HxIn' | HxNot'].
-      {
-        destruct (IH outT x HxIn' HxNot2) as [f [y [Hf [Hfx Hy]]]].
-        remember (fun (v:V) =>
-                    if (IsA_dec v T1)
-                    then Bot
-                    else (f v))
-          as f'.      
-      }
-      {
-        
-      }
-
-      
-      destruct (IsA_dec x T1) as [HxIn1 | HxNot1].
-      {
-        clear HxIn.
-        remember (i_result i' x) as optT'.        
-        destruct optT' as [T' |].
-        {
-          destruct (IsEmpty_dec (tyAnd (tyAnd T2 T') outT)) as [Hmt | Hnmt].
-          {
-            
-              }
-                  {
-                    
-                  }
-                }
-                {
-                }
-                
-                
-              }
-          }
-          {
-            
-          }
-          unfold FnI in Hf.
-        }
-        {
-          
-        }
-      }
-      {
-        
-      }
-
-        
-      destruct (IsA_dec x T1) as [HxIn1 | HxNot1].
-      {
-        clear HxIn.
-        clear HxIn1'.
-        
-        {
-          
-        }
-        {
-          
-        }
-        simpl in *.
-      }
-      {
-        
-      }
-      (* BOOKMARK *)
-    }
-
+    contradiction.
   }
 Qed.
-      
+
 
 
