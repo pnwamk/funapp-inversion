@@ -19,7 +19,6 @@ Set Implicit Arguments.
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
 
 Axiom V : Type.
-Axiom V_eq_dec : forall (v1 v2: V), {v1 = v2} + {v1 <> v2}.
 Notation Ty := (Ensemble V).
 
 Notation emptyTy := (Empty_set V).
