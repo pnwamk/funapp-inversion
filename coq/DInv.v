@@ -136,12 +136,20 @@ Qed.
 Lemma InvD_implies_InvI : forall i d outT inT,
     InvD (DCons i d) outT inT ->
     Inv i outT inT.
-Proof. Admitted.
-
+Proof.
+(* BOOKMARK
+   This is not true, since InvD is reasoning about a
+   potentially smaller set of inputs as Inv =\ Not
+   sure how to fix at the moment. *)
+Admitted.  
+  
 Lemma InvD_implies_InvD : forall i d outT inT,
     InvD (DCons i d) outT inT ->
     InvD d outT inT.
-Proof. Admitted.
+Proof.
+(* BOOKMARK
+   Also not true for basically the same reason =\ *)
+Admitted.
 
 Theorem d_inv_minimal : forall d outT inT,
     InvD d outT inT ->
