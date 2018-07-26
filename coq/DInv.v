@@ -28,22 +28,6 @@ Fixpoint d_dom (d : dnf) : Ty :=
   end.
 Hint Unfold d_dom.
 
-
-(* Calculates the result type of calling a function which
-   has the interface type `i` on value `v`. *)
-Fixpoint d_result (i : dnf) (v : V) : option Ty :=
-  match i with
-  | DBase i => i_result i v
-  | DCons i d' => match i_result i v, d_result d' v with
-                  | None, None => None
-                  | Some T, None => Some T
-                  | None, Some T => Some T
-                  | Some T, Some T' => Some (tyOr T T')
-                  end
-  end.
-Hint Unfold d_result.
-
-
 (* Disjunction of Function Arrows *)
 (* I.e., what it means for a function `f` to conform to the
    description given by arrow `a`. *)
@@ -67,18 +51,33 @@ Proof.
   crush.
 Qed.
 
+Lemma FnD_Cons_i : forall i d f,
+    FnI f i ->
+    FnD f (DCons i d).
+Proof. crush. Qed.
+
+Lemma FnD_Cons_d : forall i d f,
+    FnD f d ->
+    FnD f (DCons i d).
+Proof. crush. Qed.
+
+
+
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
 (*           DNF Inversion Definitions           *)
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
 
+Fixpoint d_inv_aux (d : dnf) (outT : Ty) : Ty :=
+  match d with
+  | DBase i => i_inv i outT
+  | DCons i d' => tyOr (i_inv i outT) (d_inv_aux d' outT)
+  end.
+
 (* Calculates the result type of calling a function which
    has the interface type `i` on value `v`. *)
-Fixpoint d_inv (i : dnf) (outT : Ty) : Ty :=
-  match i with
-  | DBase i => i_inv i outT
-  | DCons i d' => tyOr (i_inv i outT) (d_inv d' outT)
-  end.
-Hint Unfold d_inv.
+Definition d_inv (d : dnf) (outT : Ty) : Ty :=
+ tyAnd (d_dom d) (d_inv_aux d outT).
+Hint Unfold d_inv d_inv_aux.
 
 
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
@@ -94,7 +93,7 @@ Definition InvD (d : dnf) (outT inT: Ty) : Prop :=
       f v = Res v' ->
       IsA v' outT ->
       IsA v inT.
-
+Hint Unfold InvD.
 
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
 (*                 Soundness                     *)
@@ -108,6 +107,9 @@ Proof with auto.
   intros d.
   induction d as [i | i d' IH].
   {
+    unfold InvD.
+    intros outT f Hfd v v' Hv Hf Hv'. simpl in *.
+    split...
     eapply i_inv_sound; eauto.
   }
   {
@@ -116,10 +118,13 @@ Proof with auto.
     simpl in *.
     destruct Hfd as [Hfi | Hfd].
     {
+      split...
       left; eapply i_inv_sound; eauto.
     }
     {
-      right; eapply IH; eauto.
+      split...
+      assert (IsA v (d_inv d' outT)) by (eapply IH; eauto).      
+      right... unfold d_inv in *...
     }      
   }
 Qed.
@@ -128,33 +133,40 @@ Qed.
 (*                   Minimality                  *)
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
 
+Lemma InvD_implies_InvI : forall i d outT inT,
+    InvD (DCons i d) outT inT ->
+    Inv i outT inT.
+Proof. Admitted.
 
-(* BOOKMARK *)
+Lemma InvD_implies_InvD : forall i d outT inT,
+    InvD (DCons i d) outT inT ->
+    InvD d outT inT.
+Proof. Admitted.
+
 Theorem d_inv_minimal : forall d outT inT,
     InvD d outT inT ->
     Subtype (d_inv d outT) inT.
 Proof with auto.
   intros d. induction d as [i | i d' IH].
   {
-    intros outT inT Hinv x Hx. simpl in *.
-    unfold InvD in Hinv.
+    intros outT inT Hinv x Hx.
+    unfold InvD in Hinv. unfold d_inv in Hx.
+    simpl in *.
     assert (Inv i outT inT) as Hinv' by eauto.
     eapply i_inv_minimal; eauto.
   }
   {
-    intros outT inT Hinv x Hx.  simpl in *.
-    destruct Hx as [x Hx | x Hx].
+    intros outT inT Hinv x Hx. unfold d_inv in *.  simpl in *.
+    destruct Hx as [x Hx1 Hx3].
+    destruct Hx1 as [x Hx1 Hx2].
+    destruct Hx3 as [x Hx3 | x Hx3].
     {
-      destruct (i_inv_exists_fn Hx) as [f [y [Hfi [Hyres Hy]]]].
-      assert (FnD f (DCons i d')) as Hfd by eauto.
-      unfold InvD in Hinv.
       eapply i_inv_minimal; eauto.
-      unfold Inv.
-      intros f' Hf' v v' Hv Hres' Hv'.
-      eapply Hinv. simpl. left; eassumption. simpl.
+      eapply InvD_implies_InvI; eauto.      
     }
     {
-      
+      eapply IH; eauto.
+      eapply InvD_implies_InvD; eauto.
     }
   }
-  
+Qed.  
