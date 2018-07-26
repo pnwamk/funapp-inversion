@@ -52,19 +52,27 @@ Ltac applyHinH :=
 Axiom V : Type.
 Notation Ty := (Ensemble V).
 
-Notation emptyTy := (Empty_set V).
-Notation anyTy := (Full_set V).
-Notation tyOr := (Union V).
-Notation tyAnd := (Intersection V).
-Notation tyDiff := (Setminus V).
-Notation tyNot := (tyDiff anyTy).
+Notation "'0'" := (Empty_set V).
+Notation "'1'" := (Full_set V).
+Notation "T1 '∩' T2" :=
+  (Intersection V T1 T2) (at level 52, right associativity).
+Notation "T1 '∪' T2" :=
+    (Union V T1 T2) (at level 53, right associativity).
+Notation "T1 '∖' T2" :=
+  (Setminus V T1 T2) (at level 54, right associativity).
+Notation "'¬' T" :=
+  (1 ∖ T) (at level 51, right associativity).
 
 Notation IsEmpty t := (~ Inhabited V t).
 Notation IsInhabited t := (Inhabited V t).
 Axiom IsEmpty_dec : forall (t: Ty), {IsEmpty t} + {IsInhabited t}.
-Notation IsA v T := (In V T v).
-Axiom IsA_dec : forall (v:V) (t: Ty), {IsA v t} + {~ IsA v t}.
-Notation Subtype T1 T2 := (Included V T1 T2).
+Notation "x '∈' T" :=
+  (In V T x) (at level 55, right associativity).
+Notation "x '∉' T" :=
+  (~ In V T x) (at level 55, right associativity).
+Axiom in_dec : forall (v:V) (t: Ty), {v ∈ t} + {v ∉ t}.
+Notation "T1 '<:' T2" :=
+  (Included V T1 T2) (at level 55, right associativity).
 
 Hint Unfold Included Setminus.
 Hint Constructors Union Intersection Inhabited.
@@ -76,8 +84,7 @@ Hint Constructors Union Intersection Inhabited.
 
 
 Lemma IsEmpty_eq : forall t,
-    IsEmpty t ->
-    t = emptyTy.
+    IsEmpty t -> t = 0.
 Proof.
   intros t Hmt.
   apply Extensionality_Ensembles. constructor.
@@ -87,80 +94,79 @@ Qed.
 
 
 Lemma no_empty_val : forall v P,
-    IsA v emptyTy -> P.
+    v ∈ 0 -> P.
 Proof.
   intros v P Hmt. inversion Hmt.
 Qed.
 
 Lemma no_empty_val_indirect : forall v T P,
-    IsA v T -> IsEmpty T -> P.
+    v ∈ T -> IsEmpty T -> P.
 Proof.
   intros v T P Hv Hmt. rewrite (IsEmpty_eq Hmt) in Hv.
   eapply no_empty_val; eauto.
 Qed.
 
-Lemma tyOr_empty_l : forall t,
-    tyOr emptyTy t = t.
+Lemma union_empty_l : forall t,
+    0 ∪ t = t.
 Proof. crush. Qed.
 
-Lemma tyOr_empty_r : forall t,
-    tyOr t emptyTy = t.
+Lemma union_empty_r : forall t,
+    t ∪ 0 = t.
 Proof.
   intros. rewrite Union_commutative.
   crush.
 Qed.
 
-Lemma tyAnd_empty_l : forall t,
-    tyAnd emptyTy t = emptyTy.
+Lemma intersection_empty_l : forall t,
+    0 ∩ t = 0.
 Proof. crush. Qed.
 
-Lemma tyAnd_empty_r : forall t,
-    tyAnd t emptyTy = emptyTy.
+Lemma intersection_empty_r : forall t,
+    t ∩ 0 = 0.
 Proof. crush. Qed.
 
-Lemma not_IsA_tyOr : forall x T1 T2,
-    ~ IsA x (tyOr T1 T2) ->
-    ~ IsA x T1 /\ ~ IsA x T2.
+Lemma demorgan : forall x T1 T2,
+    x ∉ (T1 ∪ T2) ->
+    x ∉ T1 /\ x ∉ T2.
 Proof. crush. Qed.
 
 
-Hint Rewrite tyOr_empty_l tyOr_empty_r tyAnd_empty_l tyAnd_empty_r.
+Hint Rewrite
+     union_empty_l
+     union_empty_r
+     intersection_empty_l
+     intersection_empty_r.
 
 Hint Extern 1 =>
 match goal with
-| [H : IsA ?x emptyTy |- ?P] =>
+| [H : ?x ∈ 0 |- ?P] =>
   apply (no_empty_val P H)
-| [H : IsA ?x ?T, H' : IsEmpty ?T |- ?P] =>
+| [H : ?x ∈ ?T, H' : IsEmpty ?T |- ?P] =>
   apply (no_empty_val_indirect x P H H')
 end.
 
-Hint Extern 1 (IsA _ _) =>
+Hint Extern 1 (_ ∈ _) =>
 match goal with
-| [H : IsA ?x (tyAnd ?T1 ?T2) |- IsA ?x ?T1]
+| [H : ?x ∈ (?T1 ∩ ?T2) |- ?x ∈ ?T1]
   => destruct H; assumption
-| [H : IsA ?x (tyAnd ?T1 ?T2) |- IsA ?x ?T2]
+| [H : ?x ∈ (?T1 ∩ ?T2) |- ?x ∈ ?T2]
   => destruct H; assumption
-| [H1 : IsA ?x ?T1, H2 : IsA ?x ?T2 |- IsA ?x (tyAnd ?T1 ?T2)]
+| [H1 : ?x ∈ ?T1, H2 : ?x ∈ ?T2 |- ?x ∈ (?T1 ∩ ?T2)]
   => constructor; assumption
-| [H1 : IsA ?x ?T1 |- IsA ?x (tyOr ?T1 _)]
+| [H1 : ?x ∈ ?T1 |- ?x ∈ (?T1 ∪ _)]
   => left; exact H1
-| [H2 : IsA ?x ?T2 |- IsA ?x (tyOr _ ?T2)]
+| [H2 : ?x ∈ ?T2 |- ?x ∈ (_ ∪ ?T2)]
   => left; exact H2
 end. 
 
-Ltac destruct_IsA :=
+Ltac inv_in_intersection :=
   match goal with
-  | [H : IsA _ _ |- _] => destruct H
+  | [H : _ ∈ (_ ∩ _) |- _] => destruct H
   end.
 
-Ltac inv_IsA_tyAnd :=
+Ltac inv_in_union :=
   match goal with
-  | [H : IsA _ (tyAnd _ _) |- _] => destruct H
-  end.
-
-Ltac inv_IsA_tyOr :=
-  match goal with
-  | [H : IsA _ (tyOr _ _) |- _] => destruct H
+  | [H : _ ∈ (_ ∪ _) |- _] => destruct H
   end.
 
 Ltac inv_exists :=
@@ -203,7 +209,7 @@ Hint Constructors interface.
 Fixpoint i_dom (i : interface) : Ty :=
   match i with
   | IBase (T1,_) => T1
-  | ICons (T1,_) i' => tyOr T1 (i_dom i')
+  | ICons (T1,_) i' => T1 ∪ (i_dom i')
   end.
 Hint Unfold i_dom.
 
@@ -211,7 +217,7 @@ Hint Unfold i_dom.
 (* Calculates the result type of calling a function which
    has the arrow type `a` on value `v`. *)
 Fixpoint a_result (a : (Ty * Ty)) (v : V) : option Ty :=
-  if IsA_dec v (fst a)
+  if in_dec v (fst a)
   then Some (snd a)
   else None.
 Hint Unfold a_result.
@@ -223,7 +229,7 @@ Hint Unfold a_result.
 Definition FnA (f : fn) (a : (Ty * Ty)) : Prop :=
 forall x T,
   a_result a x = Some T ->
-  (f x = Bot \/ exists y, f x = Res y /\ IsA y T).
+  (f x = Bot \/ exists y, f x = Res y /\ y ∈ T).
 Hint Unfold FnA.
 
 (* Calculates the result type of calling a function which
@@ -235,7 +241,7 @@ Fixpoint i_result (i : interface) (v : V) : option Ty :=
                   | None, None => None
                   | Some T, None => Some T
                   | None, Some T => Some T
-                  | Some T, Some T' => Some (tyAnd T T')
+                  | Some T, Some T' => Some (T ∩ T')
                   end
   end.
 Hint Unfold i_result.
@@ -246,7 +252,7 @@ Hint Unfold i_result.
 Definition FnI (f : fn) (i : interface) : Prop :=
   forall x T,
     i_result i x = Some T ->
-    f x = Bot \/ (exists y, (f x = Res y /\ IsA y T)).
+    f x = Bot \/ (exists y, (f x = Res y /\ y ∈ T)).
 Hint Unfold FnI.
 
 
@@ -282,8 +288,8 @@ Proof.
   specialize (H x).
   unfold a_result in *. simpl in *.
   ifcaseH; matchcaseH; crush.
-  specialize (H (tyAnd T e)); crush.
-  inv_IsA_tyAnd; crush; eauto.
+  specialize (H (T ∩ e)); crush.
+  inv_in_intersection; crush; eauto.
 Qed.
   
 Lemma FnI_rest : forall f a i,
@@ -296,8 +302,8 @@ Proof.
   specialize (Hfi x).
   simpl in *.
   ifcaseH; matchcaseH; inversion Hres; subst; eauto.
-  specialize (Hfi (tyAnd T2 T));
-    intuition; crush; inv_IsA_tyAnd; eauto.
+  specialize (Hfi (T2 ∩ T));
+    intuition; crush; inv_in_intersection; eauto.
 Qed.
 
 Lemma FnI_cons : forall f a i,
@@ -310,7 +316,7 @@ Proof.
   intros x T Hres.
   specialize (Ha x). specialize (Hi x).
   simpl in *.
-  destruct (IsA_dec x T1) as [Hx1 | Hx1].
+  destruct (in_dec x T1) as [Hx1 | Hx1].
   remember (i_result i x) as Hxr.
   destruct Hxr as [T'|]; inversion Hres; subst.
   destruct (Ha T2 eq_refl). left; assumption.
@@ -342,9 +348,9 @@ Ltac inv_FnI :=
    calculates what type an argument `x` must _not_
    have had  if `(f x) ↝ v` and `v ∈ outT` *)
 Fixpoint a_neg (a : (Ty * Ty)) (outT : Ty) : Ty :=
-  if IsEmpty_dec (tyAnd (snd a) outT)
+  if IsEmpty_dec ((snd a) ∩ outT)
   then (fst a)
-  else emptyTy.
+  else 0.
 
 (* Consider function `f` of type `i`. This function
    calculates what type an argument `x` must _not_ 
@@ -355,15 +361,15 @@ Fixpoint i_neg (i : interface) (outT : Ty) : Ty :=
   | ICons (S1,S2) i' =>
     let T1 := a_neg (S1,S2) outT in
     let T2 := i_neg i' outT in
-    let T3 := tyAnd S1 (i_neg i' (tyAnd S2 outT)) in
-    tyOr T1 (tyOr T2 T3)
+    let T3 := S1 ∩ (i_neg i' (S2 ∩ outT)) in
+    T1 ∪ T2 ∪ T3
   end.
 
 (* Consider function `f` of type `i`. This function
    calculates what type an argument `x` must _have_
    had if `(f x) ↝ v` and `v ∈ outT` *)
 Definition i_inv (i : interface) (outT : Ty) : Ty :=
-  tyDiff (i_dom i) (i_neg i outT).
+  (i_dom i) ∖ (i_neg i outT).
 
 
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
@@ -371,51 +377,51 @@ Definition i_inv (i : interface) (outT : Ty) : Ty :=
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
 
 Lemma FnA_res_ty : forall T1 T2 f x y,
-    IsA x T1 ->
+    x ∈ T1 ->
     f x = Res y ->
     FnA f (T1,T2) ->
-    IsA y T2.
+    y ∈ T2.
 Proof.
   intros T1 T2 f x y Hx Hfx Hfa.
-  assert (f x = Bot \/ (exists y, (f x = Res y /\ IsA y T2)))
+  assert (f x = Bot \/ (exists y, (f x = Res y /\ y ∈ T2)))
     as Hex.
   eapply Hfa; crush.
   ifcase; crush.
   crush.
 Qed.
 
-Hint Extern 1 (IsA _ _) =>
+Hint Extern 1 (_ ∈ _) =>
 match goal with
-| [Hx : IsA ?x ?T1,
+| [Hx : ?x ∈ ?T1,
         Hfy : ?f ?x = Res ?y,
               HFnA : FnA ?f (?T1,?T2)
-   |- IsA ?y ?T2]
+   |- ?y ∈ ?T2]
   => apply (FnA_res_ty x Hx Hfy HFnA)
-| [Hx : IsA ?x ?T1,
+| [Hx : ?x ∈ ?T1,
         Hfy : ?f ?x = Res ?y,
               HFnA : FnI ?f (IBase (?T1,?T2))
-   |- IsA ?y ?T2]
+   |- ?y ∈ ?T2]
   => apply (FnA_res_ty x Hx Hfy (FnI_first HFnA))
-| [Hx : IsA ?x ?T1,
+| [Hx : ?x ∈ ?T1,
         Hfy : ?f ?x = Res ?y,
               HFnA : FnI ?f (ICons (?T1,?T2) _)
-   |- IsA ?y ?T2]
+   |- ?y ∈ ?T2]
   => apply (FnA_res_ty x Hx Hfy (FnI_first HFnA))
   end.
 
 
 Lemma i_neg_sub : forall i T1 T2,
-    Subtype T2 T1 ->
-    Subtype (i_neg i T1) (i_neg i T2).
+    T2 <: T1 ->
+    (i_neg i T1) <: (i_neg i T2).
 Proof with auto.
   intros i. induction i as [[T1 T2] | [T1 T2] i' IH].
   {
     intros T T' Hsub x Hx. simpl in *.
-    destruct (IsEmpty_dec (tyAnd T2 T'))
+    destruct (IsEmpty_dec (T2 ∩ T'))
       as [Hmt' | Hnmt']...
-    destruct (IsEmpty_dec (tyAnd T2 T))
+    destruct (IsEmpty_dec (T2 ∩ T))
       as [Hmt | Hnmt]...
-    destruct (IsEmpty_dec (tyAnd T2 T))
+    destruct (IsEmpty_dec (T2 ∩ T))
       as [Hmt | Hnmt]...
     assert False. apply Hmt.
     destruct Hnmt' as [y Hy]. exists y; eauto.
@@ -424,9 +430,9 @@ Proof with auto.
   {
     intros T T' Hsub x Hx.
     simpl in *.
-    destruct (IsEmpty_dec (tyAnd T2 T)) as [Hmt | Hnmt].
+    destruct (IsEmpty_dec (T2 ∩ T)) as [Hmt | Hnmt].
     {
-      destruct (IsEmpty_dec (tyAnd T2 T')) as [Hmt' | Hnmt'].
+      destruct (IsEmpty_dec (T2 ∩ T')) as [Hmt' | Hnmt'].
       {
         destruct Hx as [x Hx | x Hx]...
         destruct Hx as [x Hx | x Hx]...
@@ -443,7 +449,7 @@ Proof with auto.
         contradiction.
       }
     }
-    destruct (IsEmpty_dec (tyAnd T2 T')) as [Hmt' | Hnmt'].
+    destruct (IsEmpty_dec (T2 ∩ T')) as [Hmt' | Hnmt'].
     {
       right.
       destruct Hx as [x Hx | x Hx]...
@@ -454,7 +460,7 @@ Proof with auto.
       {
         destruct Hx...
         right; split...
-        apply (IH (tyAnd T2 T) (tyAnd T2 T'))...
+        apply (IH (T2 ∩ T) (T2 ∩ T'))...
       }
     }                  
     {
@@ -463,32 +469,32 @@ Proof with auto.
       right. left. eapply IH; eauto.
       right. right; split...
       destruct Hx as [x Hx' Hx'']...
-      apply (IH (tyAnd T2 T) (tyAnd T2 T'))...
+      apply (IH (T2 ∩ T) (T2 ∩ T'))...
     }
   }
 Qed.
 
 Ltac apply_fun :=
   match goal with
-  | [H1 : IsA ?x ?T1,
+  | [H1 : ?x ∈ ?T1,
           Hf : FnI ?f (IBase (?T1,?T2)),
                Hres : ?f ?x = Res ?y
      |- _] =>
-    assert (IsA y T2)
+    assert (y ∈ T2)
       by (exact (FnA_res_ty x H1 Hres (FnI_base Hf)))
-  | [H1 : IsA ?x ?T1,
+  | [H1 : ?x ∈ ?T1,
           Hf : FnA ?f (?T1,?T2),
                Hres : ?f ?x = Res ?y
      |- _] =>
-    assert (IsA y T2)
+    assert (y ∈ T2)
       by (exact (FnA_res_ty x H1 Hres (FnI_base Hf)))
   end.
 
 Lemma in_i_neg : forall i v v' f T,
     FnI f i ->
-    IsA v (i_neg i T) ->
+    v ∈ (i_neg i T) ->
     f v = Res v' ->
-    ~ IsA v' T.
+    v' ∉ T.
 Proof with auto.
   intros i.
   induction i as [[T1 T2] | [T1 T2] i' IH];
@@ -508,25 +514,25 @@ Proof with auto.
     simpl in *.
     assert (FnA f (T1,T2)) as Hfa by (eapply FnI_first; eauto).
     assert (FnI f i') as Hfi' by (eapply FnI_rest; eauto).
-    destruct (IsEmpty_dec (tyAnd T2 T)) as [Hmt | Hnmt]...
+    destruct (IsEmpty_dec (T2 ∩ T)) as [Hmt | Hnmt]...
     {
-      inv_IsA_tyOr.
+      inv_in_union.
       {
         apply_fun. apply Hmt; eauto.
       }
       {
-        inv_IsA_tyOr.
+        inv_in_union.
         {
           eapply IH; eauto. 
         }
         {
-          inv_IsA_tyAnd.
+          inv_in_intersection.
           apply_fun. apply Hmt; eauto.
         }
       }
     }
     {
-      rewrite tyOr_empty_l in *.
+      rewrite union_empty_l in *.
       destruct Hv as [v Hv | v Hv].
       {
         eapply IH; eauto.
@@ -542,8 +548,8 @@ Qed.
 Lemma not_in_i_neg : forall i v v' f T,
     FnI f i ->
     f v = Res v' ->
-    IsA v' T ->
-    ~ IsA v (i_neg i T).
+    v' ∈ T ->
+    v ∉ (i_neg i T).
 Proof.
   intros i v v' f T Hfi Hfv Hv' Hcontra.
   eapply in_i_neg; eauto.
@@ -559,10 +565,10 @@ Definition Inv (i : interface) (outT inT: Ty) : Prop :=
   forall (f:fn),
     FnI f i ->
     forall (v v':V),
-      IsA v (i_dom i) ->
+      v ∈ (i_dom i) ->
       f v = Res v' ->
-      IsA v' outT ->
-      IsA v inT.
+      v' ∈ outT ->
+      v ∈ inT.
 
 
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
@@ -594,15 +600,15 @@ Definition MapsTo (f : fn) (i : interface) : Prop :=
   forall v T,
     i_result i v = Some T ->
     IsInhabited T ->
-    exists v', f v = Res v' /\ IsA v' T.
+    exists v', f v = Res v' /\ v' ∈ T.
 
 
 Definition MapsToTarget (f : fn) (i : interface) (tgt : Ty) : Prop :=
   forall v T,
     i_result i v = Some T ->
-    IsInhabited (tyAnd T tgt) ->
+    IsInhabited (T ∩ tgt) ->
     exists v', f v = Res v'
-               /\ IsA v' (tyAnd T tgt).
+               /\ v' ∈ (T ∩ tgt).
 
 Axiom exists_fn : forall i,
     exists f, FnI f i /\ MapsTo f i.
@@ -617,22 +623,22 @@ Axiom exists_target_fn : forall i outT,
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
   
 Lemma i_result_None : forall i x outT,
-    IsA x (i_dom i) ->
+    x ∈ (i_dom i) ->
     i_result i x = None ->
-    IsA x (i_neg i outT).
+    x ∈ (i_neg i outT).
 Proof with auto.
   intros i; induction i as [[T1 T2] | [T1 T2] i' IH].
   {
     intros x outT Hdom Hires.
     simpl in *.
-    destruct (IsA_dec x T1) as [Hx | Hx]; crush.
+    destruct (in_dec x T1) as [Hx | Hx]; crush.
   }
   {
     intros x outT Hx Hires.
     simpl in *.
-    destruct (IsA_dec x T1) as [Hx1 | Hx1].
+    destruct (in_dec x T1) as [Hx1 | Hx1].
     {
-      destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt | Hnmt].
+      destruct (IsEmpty_dec (T2 ∩ outT)) as [Hmt | Hnmt].
       {
         left. assumption.
       }
@@ -654,15 +660,15 @@ Qed.
   
 Lemma i_result_Some : forall i x T outT,
     i_result i x = Some T ->
-    IsEmpty (tyAnd T outT) ->
-    IsA x (i_neg i outT).
+    IsEmpty (T ∩ outT) ->
+    x ∈ (i_neg i outT).
 Proof with auto.
   intros i x; induction i as [[T1 T2] | [T1 T2] i' IH].
   {
     intros T outT Hires Hmt.
     simpl in *.
-    destruct (IsA_dec x T1) as [Hx1 | Hx1]; crush.
-    destruct (IsEmpty_dec (tyAnd T outT)) as [Hmt' | Hmt']...
+    destruct (in_dec x T1) as [Hx1 | Hx1]; crush.
+    destruct (IsEmpty_dec (T ∩ outT)) as [Hmt' | Hmt']...
     assert False as contradiction. apply Hmt.
     {
       destruct Hmt' as [y Hy].
@@ -673,9 +679,9 @@ Proof with auto.
   {
     intros T outT Hires Hmt.
     simpl in *.
-    destruct (IsA_dec x T1) as [Hx1 | Hx1].
+    destruct (in_dec x T1) as [Hx1 | Hx1].
     {
-      destruct (IsEmpty_dec (tyAnd T2 outT)) as [Hmt2 | Hnmt2].
+      destruct (IsEmpty_dec (T2 ∩ outT)) as [Hmt2 | Hnmt2].
       {
         left...
       }
@@ -684,10 +690,10 @@ Proof with auto.
         destruct (i_result i' x) as [S |]; try solve[crush].
         specialize (IH S).
         inversion Hires; subst. clear Hires.
-        assert (IsEmpty (tyAnd S (tyAnd T2 outT))) as Hmt3.
+        assert (IsEmpty (S ∩ T2 ∩ outT)) as Hmt3.
         {
           intros Hcontra. apply Hmt. inversion Hcontra as [y Hy].
-          exists y. repeat inv_IsA_tyAnd. split...
+          exists y. repeat inv_in_intersection. split...
         }
         right. split...
       }
@@ -705,8 +711,8 @@ Qed.
 (* Interface Inversion Minimality
    i.e. the input type we predict is minimal *)
 Lemma i_inv_exists_fn : forall i outT x,
-    IsA x (i_inv i outT) ->
-    exists f y, FnI f i /\ f x = Res y /\ IsA y outT.
+    x ∈ (i_inv i outT) ->
+    exists f y, FnI f i /\ f x = Res y /\ y ∈ outT.
 Proof with auto.
   intros i outT x Hx.
   unfold i_inv in Hx.
@@ -715,9 +721,9 @@ Proof with auto.
   destruct xres as [S |].
   {
     symmetry in Heqxres.
-    destruct (IsEmpty_dec (tyAnd S outT)) as [Hmt | Hnmt].
+    destruct (IsEmpty_dec (S ∩ outT)) as [Hmt | Hnmt].
     {
-      assert (IsA x (i_neg i outT)) as impossible.
+      assert (x ∈ (i_neg i outT)) as impossible.
       {
         eapply i_result_Some; eauto.
       }
@@ -732,7 +738,7 @@ Proof with auto.
     }
   }
   {
-    assert (IsA x (i_neg i outT)) as impossible.
+    assert (x ∈ (i_neg i outT)) as impossible.
     {
       eapply i_result_None; eauto.
     }
@@ -747,7 +753,7 @@ Qed.
 
 Theorem i_inv_minimal : forall i outT inT,
     Inv i outT inT ->
-    Subtype (i_inv i outT) inT.
+    (i_inv i outT) <: inT.
 Proof with auto.
   intros i outT inT Hinv x Hx.
   unfold Inv in Hinv.
@@ -777,7 +783,7 @@ Hint Constructors dnf.
 Fixpoint d_dom (d : dnf) : Ty :=
   match d with
   | DBase i => (i_dom i)
-  | DCons i d' => tyAnd (i_dom i) (d_dom d')
+  | DCons i d' => (i_dom i) ∩ (d_dom d')
   end.
 Hint Unfold d_dom.
 
@@ -823,13 +829,13 @@ Proof. crush. Qed.
 Fixpoint d_inv_aux (d : dnf) (outT : Ty) : Ty :=
   match d with
   | DBase i => i_inv i outT
-  | DCons i d' => tyOr (i_inv i outT) (d_inv_aux d' outT)
+  | DCons i d' => (i_inv i outT) ∪ (d_inv_aux d' outT)
   end.
 
 (* Calculates the result type of calling a function which
    has the interface type `i` on value `v`. *)
 Definition d_inv (d : dnf) (outT : Ty) : Ty :=
- tyAnd (d_dom d) (d_inv_aux d outT).
+ (d_dom d) ∩ (d_inv_aux d outT).
 Hint Unfold d_inv d_inv_aux.
 
 
@@ -842,10 +848,10 @@ Definition InvD (d : dnf) (outT inT: Ty) : Prop :=
   forall (f:fn),
     FnD f d ->
     forall (v v':V),
-      IsA v (d_dom d) ->
+      v ∈ (d_dom d) ->
       f v = Res v' ->
-      IsA v' outT ->
-      IsA v inT.
+      v' ∈ outT ->
+      v ∈ inT.
 Hint Unfold InvD.
 
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
@@ -876,7 +882,7 @@ Proof with auto.
     }
     {
       split...
-      assert (IsA v (d_inv d' outT)) by (eapply IH; eauto).      
+      assert (v ∈ (d_inv d' outT)) by (eapply IH; eauto).      
       right... unfold d_inv in *...
     }      
   }
@@ -887,8 +893,8 @@ Qed.
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
 
 Lemma d_inv_exists_fn : forall d outT x,
-    IsA x (d_inv d outT) ->
-    exists f y, FnD f d /\ f x = Res y /\ IsA y outT.
+    x ∈ (d_inv d outT) ->
+    exists f y, FnD f d /\ f x = Res y /\ y ∈ outT.
 Proof with auto.
   intros d.
   induction d as [i | i d' IH];
@@ -903,13 +909,13 @@ Proof with auto.
     destruct Hx as [x Hx1 Hx2].
     destruct Hx2 as [x Hx2 | x Hx2].
     {
-      assert (IsA x (i_inv i outT)) as Hx by auto.
+      assert (x ∈ (i_inv i outT)) as Hx by auto.
       destruct (i_inv_exists_fn Hx) as [f [y [H]]].
       exists f. exists y...
     }
     {
       unfold d_inv in Hx1.
-      assert (IsA x (d_inv d' outT)) as Hx.
+      assert (x ∈ (d_inv d' outT)) as Hx.
       unfold d_inv...
       destruct (IH outT x Hx) as [f [y [H1 [H2 H3]]]].
       exists f. exists y...
@@ -925,7 +931,7 @@ Qed.
   
 Theorem d_inv_minimal : forall d outT inT,
     InvD d outT inT ->
-    Subtype (d_inv d outT) inT.
+    (d_inv d outT) <: inT.
 Proof with auto.
   intros d outT inT Hinv x Hx.
   destruct (d_inv_exists_fn Hx) as [f [y [H1 [H2 H3]]]].
