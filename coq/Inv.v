@@ -335,7 +335,7 @@ Ltac inv_FnI :=
 
 
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
-(*        Function Inversion Definitions         *)
+(*         Function Inversion Algorithm          *)
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
 
 (* Consider function `f` of type `a`. This function
@@ -566,7 +566,7 @@ Definition Inv (i : interface) (outT inT: Ty) : Prop :=
 
 
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
-(*                 Soundness                     *)
+(*               i_inv soundness                 *)
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
 
 (* Interface Inversion Soundness 
@@ -741,7 +741,7 @@ Proof with auto.
 Qed.
 
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
-(*                   Minimality                  *)
+(*             i_inv minimality                  *)
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
 
 
@@ -757,3 +757,179 @@ Proof with auto.
 Qed.
 
 
+
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*           DNF Function Definitions            *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+
+
+(* A `dnf` is a union of interfaces, at least one of which
+  describes a function (i.e. an DNF with 1 or more
+  clauses). *)
+Inductive dnf : Type :=
+| DBase : interface -> dnf
+| DCons : interface -> dnf -> dnf.
+Hint Constructors dnf.
+
+(* The domain for a dnf is the intersection of each
+   individual interface's domain. *)
+Fixpoint d_dom (d : dnf) : Ty :=
+  match d with
+  | DBase i => (i_dom i)
+  | DCons i d' => tyAnd (i_dom i) (d_dom d')
+  end.
+Hint Unfold d_dom.
+
+(* Disjunction of Function Arrows *)
+(* I.e., what it means for a function `f` to conform to the
+   description given by arrow `a`. *)
+Fixpoint FnD (f : fn) (d : dnf) : Prop :=
+  match d with
+  | DBase i => FnI f i
+  | DCons i d' => FnI f i \/ FnD f d'
+  end.
+Hint Unfold FnD.
+
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*                  DNF Lemmas                   *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+
+Lemma FnD_base : forall f i,
+    FnD f (DBase i) ->
+    FnI f i.
+Proof.
+  intros f i H.
+  crush.
+Qed.
+
+Lemma FnD_Cons_i : forall i d f,
+    FnI f i ->
+    FnD f (DCons i d).
+Proof. crush. Qed.
+
+Lemma FnD_Cons_d : forall i d f,
+    FnD f d ->
+    FnD f (DCons i d).
+Proof. crush. Qed.
+
+
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*      DNF Function Inversion Algorithm         *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+
+Fixpoint d_inv_aux (d : dnf) (outT : Ty) : Ty :=
+  match d with
+  | DBase i => i_inv i outT
+  | DCons i d' => tyOr (i_inv i outT) (d_inv_aux d' outT)
+  end.
+
+(* Calculates the result type of calling a function which
+   has the interface type `i` on value `v`. *)
+Definition d_inv (d : dnf) (outT : Ty) : Ty :=
+ tyAnd (d_dom d) (d_inv_aux d outT).
+Hint Unfold d_inv d_inv_aux.
+
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*          DNF Inversion Definition             *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+
+
+Definition InvD (d : dnf) (outT inT: Ty) : Prop :=
+  forall (f:fn),
+    FnD f d ->
+    forall (v v':V),
+      IsA v (d_dom d) ->
+      f v = Res v' ->
+      IsA v' outT ->
+      IsA v inT.
+Hint Unfold InvD.
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*                 Soundness                     *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+
+(* Interface Inversion Soundness 
+   i.e. the input type we predict is correct *)
+Theorem d_inv_sound : forall d outT,
+    InvD d outT (d_inv d outT).
+Proof with auto.
+  intros d.
+  induction d as [i | i d' IH].
+  {
+    unfold InvD.
+    intros outT f Hfd v v' Hv Hf Hv'. simpl in *.
+    split...
+    eapply i_inv_sound; eauto.
+  }
+  {
+    unfold InvD.
+    intros outT f Hfd v v' Hv Hfv Hv'.
+    simpl in *.
+    destruct Hfd as [Hfi | Hfd].
+    {
+      split...
+      left; eapply i_inv_sound; eauto.
+    }
+    {
+      split...
+      assert (IsA v (d_inv d' outT)) by (eapply IH; eauto).      
+      right... unfold d_inv in *...
+    }      
+  }
+Qed.
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*            Lemma for Minimality               *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+
+Lemma d_inv_exists_fn : forall d outT x,
+    IsA x (d_inv d outT) ->
+    exists f y, FnD f d /\ f x = Res y /\ IsA y outT.
+Proof with auto.
+  intros d.
+  induction d as [i | i d' IH];
+    intros outT x Hx.
+  {
+    unfold d_inv in Hx.
+    simpl in *. eapply i_inv_exists_fn...
+  }
+  {
+    unfold d_inv in Hx.
+    simpl in *.
+    destruct Hx as [x Hx1 Hx2].
+    destruct Hx2 as [x Hx2 | x Hx2].
+    {
+      assert (IsA x (i_inv i outT)) as Hx by auto.
+      destruct (i_inv_exists_fn Hx) as [f [y [H]]].
+      exists f. exists y...
+    }
+    {
+      unfold d_inv in Hx1.
+      assert (IsA x (d_inv d' outT)) as Hx.
+      unfold d_inv...
+      destruct (IH outT x Hx) as [f [y [H1 [H2 H3]]]].
+      exists f. exists y...
+    }    
+  }
+Qed.
+
+
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+(*                   Minimality                  *)
+(* * * * * * * * * * * * * * * * * * * * * * * * *)
+
+  
+Theorem d_inv_minimal : forall d outT inT,
+    InvD d outT inT ->
+    Subtype (d_inv d outT) inT.
+Proof with auto.
+  intros d outT inT Hinv x Hx.
+  destruct (d_inv_exists_fn Hx) as [f [y [H1 [H2 H3]]]].
+  unfold d_inv in *. destruct Hx as [x Hx1 Hx2].
+  unfold InvD in Hinv. 
+  specialize (Hinv f H1 x y Hx1 H2 H3)...
+Qed.  
