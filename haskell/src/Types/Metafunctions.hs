@@ -156,45 +156,44 @@ inTy fty@(Ty _ _ arrows) arg out =
     _ -> Nothing
   where input :: (BDD Arrow) -> [Arrow] -> Ty
         input Bot p = emptyTy
-        input Top p = tyDiff pos neg
-          where (pos,neg) = aux arg out p
-        input (Node a@(Arrow s1 _) l m r) p = tyOr lRes $ tyOr mRes rRes
-          where lRes = input l $ a:p
-                mRes = input m p
-                rRes = input r p
-        aux :: Ty -> Ty -> [Arrow] -> (Ty , Ty)
+        input Top p = tyDiff arg (aux arg out p)
+        input (Node a l m r) p = tyOr lty $ tyOr mty rty
+          where lty = input l $ a:p
+                mty = input m p
+                rty = input r p
+        aux :: Ty -> Ty -> [Arrow] -> Ty
         aux dom rng []
-          | (isEmpty rng) = (emptyTy , dom)
-          | otherwise     = (dom , emptyTy)
-        aux dom rng ((Arrow t1 t2):p) = (tyOr pos1 pos2 , tyOr neg1 neg2)
+          | (isEmpty rng) = dom
+          | otherwise     = emptyTy
+        aux dom rng ((Arrow t1 t2):p) = tyOr neg1 neg2
           where dom' = (tyAnd t1 dom)
                 rng' = (tyAnd t2 rng)
-                (pos1,neg1) = if isEmpty dom'
-                              then (emptyTy, emptyTy)
-                              else if isEmpty rng'
-                                   then (emptyTy,dom')
-                                   else aux dom' rng' p
-                (pos2,neg2) = aux dom rng p
+                neg1 = if isEmpty dom'
+                       then emptyTy
+                       else if isEmpty rng'
+                            then dom'
+                            else aux dom' rng' p
+                neg2 = aux dom rng p
 
                   
 -- conservative version, linear instead of exponential search
 cInTy :: Ty -> Ty -> Ty -> Maybe Ty
 cInTy fty@(Ty _ _ arrows) arg out =
   case (domTy fty) of
-    (Just dom) | (subtype arg dom) -> Just $ input arrows emptyTy emptyTy
+    (Just dom) | (subtype arg dom) -> Just $ tyDiff arg (input arrows [])
     _ -> Nothing
-  where
-    input :: (BDD Arrow) -> Ty -> Ty -> Ty
-    input Bot pos neg = emptyTy
-    input Top pos neg = tyDiff pos neg
-    input (Node a@(Arrow s1 s2) l m r) pos neg
-      | isEmpty pos = emptyTy
-      | otherwise = tyOr lRes $ tyOr mRes rRes
-      where dom = tyAnd s1 arg
-            (pos', neg') = if ((not (isEmpty dom)) && (overlap out s2))
-                           then (tyOr pos dom, neg)
-                           else (pos, tyOr neg dom)
-            lRes = input l pos' neg'
-            mRes = input m pos neg
-            rRes = input r pos neg
+  where input :: (BDD Arrow) -> [Arrow] -> Ty
+        input Bot p = emptyTy
+        input Top p = aux p
+        input (Node a l m r) p = tyOr lty $ tyOr mty rty
+          where lty = input l $ a:p
+                mty = input m p
+                rty = input r p
+        aux :: [Arrow] -> Ty
+        aux [] = emptyTy
+        aux ((Arrow s1 s2):p) = tyOr neg1 neg2
+          where neg1 = if (overlap s2 out)
+                       then emptyTy
+                       else s1
+                neg2 = aux p
 
