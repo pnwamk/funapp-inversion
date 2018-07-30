@@ -255,7 +255,7 @@ numericTypes =
   , ("nonnegativeFixnum", nonnegativeFixnum)
   , ("nonpositiveFixnum", nonpositiveFixnum)
   , ("fixnum", fixnum)
-  , ("positiveinteger", positiveInteger)
+  , ("positiveInteger", positiveInteger)
   , ("nonnegativeInteger", nonnegativeInteger)
   , ("negativeInteger", negativeInteger)
   , ("nonpositiveInteger", nonpositiveInteger)
