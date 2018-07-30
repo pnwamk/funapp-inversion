@@ -63,9 +63,9 @@ Notation "T1 '∖' T2" :=
 Notation "'¬' T" :=
   (1 ∖ T) (at level 51, right associativity).
 
-Notation IsEmpty t := (~ Inhabited V t).
-Notation IsInhabited t := (Inhabited V t).
-Axiom IsEmpty_dec : forall (t: Ty), {IsEmpty t} + {IsInhabited t}.
+Notation "T1 '≠' T2" :=
+  (T1 = T2 -> False) (at level 55, right associativity).
+Axiom empty_dec : forall (t: Ty), {t = 0} + {t ≠ 0}.
 Notation "x '∈' T" :=
   (In V T x) (at level 55, right associativity).
 Notation "x '∉' T" :=
@@ -83,13 +83,20 @@ Hint Constructors Union Intersection Inhabited.
 (* * * * * * * * * * * * * * * * * * * * * * * * *)
 
 
-Lemma IsEmpty_eq : forall t,
-    IsEmpty t -> t = 0.
+Lemma nonempty_inhab : forall t,
+    t ≠ 0 -> exists x, x ∈ t.
 Proof.
-  intros t Hmt.
-  apply Extensionality_Ensembles. constructor.
-  intros v Hv. assert False. apply Hmt. exists v. auto.
-  contradiction. intros v Hv. inversion Hv.
+  intros t Hneq.
+  apply not_empty_Inhabited in Hneq.
+  destruct Hneq as [x H].
+  exists x; auto.
+Qed.
+
+Lemma empty_uninhab : forall t,
+    t = 0 -> forall x, x ∉ t.
+Proof.
+  intros t Hneq x Hnot.
+  rewrite Hneq in Hnot. inversion Hnot.
 Qed.
 
 
@@ -97,13 +104,6 @@ Lemma no_empty_val : forall v P,
     v ∈ 0 -> P.
 Proof.
   intros v P Hmt. inversion Hmt.
-Qed.
-
-Lemma no_empty_val_indirect : forall v T P,
-    v ∈ T -> IsEmpty T -> P.
-Proof.
-  intros v T P Hv Hmt. rewrite (IsEmpty_eq Hmt) in Hv.
-  eapply no_empty_val; eauto.
 Qed.
 
 Lemma union_empty_l : forall t,
@@ -125,6 +125,25 @@ Lemma intersection_empty_r : forall t,
     t ∩ 0 = 0.
 Proof. crush. Qed.
 
+Lemma intersection_assoc : forall T1 T2 T3,
+    T1 ∩ (T2 ∩ T3) = (T1 ∩ T2) ∩ T3.
+Proof.
+  intros.
+  apply Extensionality_Ensembles; constructor; intros x Hx.
+  destruct Hx as [x Hx1 Hx2]. destruct Hx2 as [x Hx2 Hx3].
+  crush.
+  destruct Hx as [x Hx1 Hx2]. destruct Hx1 as [x Hx1 Hx3].
+  crush. 
+Qed.
+
+Lemma intersection_comm : forall T1 T2,
+    T1 ∩ T2 = T2 ∩ T1.
+Proof.
+  intros T1 T2.
+  apply Extensionality_Ensembles; constructor; intros x Hx;
+    inversion Hx; crush.
+Qed.  
+  
 Lemma demorgan : forall x T1 T2,
     x ∉ (T1 ∪ T2) ->
     x ∉ T1 /\ x ∉ T2.
@@ -141,8 +160,10 @@ Hint Extern 1 =>
 match goal with
 | [H : ?x ∈ 0 |- ?P] =>
   apply (no_empty_val P H)
-| [H : ?x ∈ ?T, H' : IsEmpty ?T |- ?P] =>
-  apply (no_empty_val_indirect x P H H')
+| [H : ?x ∈ ?T, H' : ?T = 0 |- ?P] =>
+  rewrite H' in H; apply (no_empty_val P H)
+| [H : ?x ∈ ?T, H' : ?T = 0 |- ?P] =>
+  symmetry in H'; rewrite H' in H; apply (no_empty_val P H)
 end.
 
 Hint Extern 1 (_ ∈ _) =>
@@ -348,7 +369,7 @@ Ltac inv_FnI :=
    calculates what type an argument `x` must _not_
    have had  if `(f x) ↝ v` and `v ∈ outT` *)
 Fixpoint a_neg (a : (Ty * Ty)) (outT : Ty) : Ty :=
-  if IsEmpty_dec ((snd a) ∩ outT)
+  if empty_dec ((snd a) ∩ outT)
   then (fst a)
   else 0.
 
@@ -417,59 +438,56 @@ Proof with auto.
   intros i. induction i as [[T1 T2] | [T1 T2] i' IH].
   {
     intros T T' Hsub x Hx. simpl in *.
-    destruct (IsEmpty_dec (T2 ∩ T'))
+    destruct (empty_dec (T2 ∩ T'))
       as [Hmt' | Hnmt']...
-    destruct (IsEmpty_dec (T2 ∩ T))
+    destruct (empty_dec (T2 ∩ T))
       as [Hmt | Hnmt]...
-    destruct (IsEmpty_dec (T2 ∩ T))
+    destruct (empty_dec (T2 ∩ T))
       as [Hmt | Hnmt]...
-    assert False. apply Hmt.
-    destruct Hnmt' as [y Hy]. exists y; eauto.
-    contradiction.
+    apply nonempty_inhab in Hnmt'.
+    destruct Hnmt' as [v Hv].
+    assert (v ∈ T2 ∩ T)... 
   }
   {
     intros T T' Hsub x Hx.
     simpl in *.
-    destruct (IsEmpty_dec (T2 ∩ T)) as [Hmt | Hnmt].
+    destruct (empty_dec (T2 ∩ T)) as [Hmt | Hnmt].
     {
-      destruct (IsEmpty_dec (T2 ∩ T')) as [Hmt' | Hnmt'].
+      destruct (empty_dec (T2 ∩ T')) as [Hmt' | Hnmt'].
       {
         destruct Hx as [x Hx | x Hx]...
         destruct Hx as [x Hx | x Hx]...
         right; left; eapply IH; eauto.
       }
       {
-        right.
-        assert False as impossible.
-        {
-          eapply Hmt.
-          destruct Hnmt' as [y Hy1].
-          exists y. eauto.
-        }
-        contradiction.
+        apply nonempty_inhab in Hnmt'.
+        destruct Hnmt' as [v Hv].
+        assert (v ∈ T2 ∩ T)...        
       }
     }
-    destruct (IsEmpty_dec (T2 ∩ T')) as [Hmt' | Hnmt'].
     {
-      right.
-      destruct Hx as [x Hx | x Hx]...
-      destruct Hx as [x Hx | x Hx]...
+      destruct (empty_dec (T2 ∩ T')) as [Hmt' | Hnmt'].
       {
-        left; eapply IH; eauto.
-      }
+        right.
+        destruct Hx as [x Hx | x Hx]...
+        destruct Hx as [x Hx | x Hx]...
+        {
+          left; eapply IH; eauto.
+        }
+        {
+          destruct Hx...
+          right; split...
+          apply (IH (T2 ∩ T) (T2 ∩ T'))...
+        }
+      }                  
       {
-        destruct Hx...
-        right; split...
+        destruct Hx as [x Hx | x Hx]...
+        destruct Hx as [x Hx | x Hx]...
+        right. left. eapply IH; eauto.
+        right. right; split...
+        destruct Hx as [x Hx' Hx'']...
         apply (IH (T2 ∩ T) (T2 ∩ T'))...
       }
-    }                  
-    {
-      destruct Hx as [x Hx | x Hx]...
-      destruct Hx as [x Hx | x Hx]...
-      right. left. eapply IH; eauto.
-      right. right; split...
-      destruct Hx as [x Hx' Hx'']...
-      apply (IH (T2 ∩ T) (T2 ∩ T'))...
     }
   }
 Qed.
@@ -503,22 +521,20 @@ Proof with auto.
   {
     simpl in *.
     ifcaseH; crush.
-    applyH.
-    match goal with
-    | [H : ?f ?v = Res ?v' |- _] => exists v'
-    end.
     apply_fun...
+    assert (v' ∈ (T2 ∩ T)) as impossible...
   }
   (* ICons (Arrow T1 T2) i' *)
   {
     simpl in *.
     assert (FnA f (T1,T2)) as Hfa by (eapply FnI_first; eauto).
     assert (FnI f i') as Hfi' by (eapply FnI_rest; eauto).
-    destruct (IsEmpty_dec (T2 ∩ T)) as [Hmt | Hnmt]...
+    destruct (empty_dec (T2 ∩ T)) as [Hmt | Hnmt]...
     {
       inv_in_union.
       {
-        apply_fun. apply Hmt; eauto.
+        apply_fun...
+        assert (v' ∈ (T2 ∩ T)) as impossible...        
       }
       {
         inv_in_union.
@@ -527,7 +543,8 @@ Proof with auto.
         }
         {
           inv_in_intersection.
-          apply_fun. apply Hmt; eauto.
+          apply_fun...
+          assert (v' ∈ (T2 ∩ T)) as impossible...        
         }
       }
     }
@@ -599,14 +616,14 @@ Qed.
 Definition MapsTo (f : fn) (i : interface) : Prop :=
   forall v T,
     i_result i v = Some T ->
-    IsInhabited T ->
+    T ≠ 0 ->
     exists v', f v = Res v' /\ v' ∈ T.
 
 
 Definition MapsToTarget (f : fn) (i : interface) (tgt : Ty) : Prop :=
   forall v T,
     i_result i v = Some T ->
-    IsInhabited (T ∩ tgt) ->
+    (T ∩ tgt) ≠ 0 ->
     exists v', f v = Res v'
                /\ v' ∈ (T ∩ tgt).
 
@@ -638,7 +655,7 @@ Proof with auto.
     simpl in *.
     destruct (in_dec x T1) as [Hx1 | Hx1].
     {
-      destruct (IsEmpty_dec (T2 ∩ outT)) as [Hmt | Hnmt].
+      destruct (empty_dec (T2 ∩ outT)) as [Hmt | Hnmt].
       {
         left. assumption.
       }
@@ -660,7 +677,7 @@ Qed.
   
 Lemma i_result_Some : forall i x T outT,
     i_result i x = Some T ->
-    IsEmpty (T ∩ outT) ->
+    (T ∩ outT) = 0 ->
     x ∈ (i_neg i outT).
 Proof with auto.
   intros i x; induction i as [[T1 T2] | [T1 T2] i' IH].
@@ -668,20 +685,15 @@ Proof with auto.
     intros T outT Hires Hmt.
     simpl in *.
     destruct (in_dec x T1) as [Hx1 | Hx1]; crush.
-    destruct (IsEmpty_dec (T ∩ outT)) as [Hmt' | Hmt']...
-    assert False as contradiction. apply Hmt.
-    {
-      destruct Hmt' as [y Hy].
-      exists y...
-    }
-    contradiction.
+    destruct (empty_dec (T ∩ outT)) as [Hmt' | Hmt']...
+    ifcase... contradiction. contradiction.
   }
   {
     intros T outT Hires Hmt.
     simpl in *.
     destruct (in_dec x T1) as [Hx1 | Hx1].
     {
-      destruct (IsEmpty_dec (T2 ∩ outT)) as [Hmt2 | Hnmt2].
+      destruct (empty_dec (T2 ∩ outT)) as [Hmt2 | Hnmt2].
       {
         left...
       }
@@ -690,19 +702,16 @@ Proof with auto.
         destruct (i_result i' x) as [S |]; try solve[crush].
         specialize (IH S).
         inversion Hires; subst. clear Hires.
-        assert (IsEmpty (S ∩ T2 ∩ outT)) as Hmt3.
-        {
-          intros Hcontra. apply Hmt. inversion Hcontra as [y Hy].
-          exists y. repeat inv_in_intersection. split...
-        }
         right. split...
+        eapply IH...
+        rewrite intersection_assoc.
+        rewrite (intersection_comm S T2)...
       }
     }
     {
       destruct (i_result i' x) as [S |]; try solve[crush].
       inversion Hires; subst.
-      specialize (IH T outT eq_refl Hmt).
-      auto.
+      specialize (IH T outT eq_refl Hmt)...
     }
   }
 Qed.    
@@ -721,7 +730,7 @@ Proof with auto.
   destruct xres as [S |].
   {
     symmetry in Heqxres.
-    destruct (IsEmpty_dec (S ∩ outT)) as [Hmt | Hnmt].
+    destruct (empty_dec (S ∩ outT)) as [Hmt | Hnmt].
     {
       assert (x ∈ (i_neg i outT)) as impossible.
       {
