@@ -149,6 +149,7 @@ rngTy fty@(Ty _ _ arrows) argty =
                        then emptyTy
                        else aux p arg' res
 
+
 inTy :: Ty -> Ty -> Ty -> Maybe Ty
 inTy fty@(Ty _ _ arrows) arg out =
   case (domTy fty) of

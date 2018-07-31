@@ -1,52 +1,37 @@
-module Types.SyntacticOpTypes where
+module Types.SyntacticOpTypesPlus where
 
 import Types.Syntax
-
 
 opTypes :: [(String, OpSpec)]
 opTypes =
   [ ("add1", (UnOp
               [ (zero, one)
-              , (one, positiveByte)
-              , (byte, positiveIndex)
-              , (index, positiveFixnum)
-              , (negativeFixnum, nonpositiveFixnum)
-              , (nonpositiveFixnum, fixnum)
-              , (nonnegativeInteger, positiveInteger)
-              , (negativeInteger, nonpositiveInteger)
+              , (one, byte)
+              , (byte, index)
+              , (index, fixnum)
               , (integer, integer)
-              , (nonnegativeRational, positiveRational)
               , (rational, rational)
-              , (nonnegativeFloat, positiveFloat)
               , (float, float)
-              , (nonnegativeSingleFloat, positiveSingleFloat)
               , (singleFloat, singleFloat)
-              , (nonnegativeInexactReal, positiveInexactReal)
-              , (inexactReal, inexactReal)
-              , (nonnegativeReal, positiveReal)
-              , (real, real)
               , (floatComplex, floatComplex)
               , (singleFloatComplex, singleFloatComplex)
+              , (nonpositiveFixnum, fixnum)
+              , (negativeInteger, nonpositiveInteger)
+              , (nonnegativeReal, positiveReal)
+              , (real, real)
+              , (inexactReal, inexactReal)
               , (inexactComplex, inexactComplex)
               , (number, number)]))
-    
   , ("sub1", (UnOp
               [ (one, zero)
               , (positiveByte, byte)
               , (positiveIndex, index)
-              , (index, fixnum)
-              , (positiveFixnum, nonnegativeFixnum)
               , (nonnegativeFixnum, fixnum)
               , (positiveInteger, nonnegativeInteger)
-              , (nonpositiveInteger, negativeInteger)
               , (integer, integer)
-              , (nonpositiveRational, negativeRational)
               , (rational, rational)
-              , (nonpositiveFloat, negativeFloat)
               , (float, float)
-              , (nonpositiveSingleFloat, negativeSingleFloat)
               , (singleFloat, singleFloat)
-              , (nonpositiveInexactReal, negativeInexactReal)
               , (inexactReal, inexactReal)
               , (nonpositiveReal, negativeReal)
               , (real, real)
@@ -54,94 +39,28 @@ opTypes =
               , (singleFloatComplex, singleFloatComplex)
               , (inexactComplex, inexactComplex)
               , (number, number)]))
-    
-    --abs is not the identity on negative zeros.
   , ("abs", (UnOp
-             [ (zero, zero)
-             , (positiveReal, positiveReal)
-             , (floatZero, floatZero) -- we know we at least get *some* zero, and that it preserves exactness
-             , (singleFloatZero, singleFloatZero)
-             , (realZero, realZero)
-             , ((Or [positiveInteger, negativeInteger]), positiveInteger) -- abs not be closed on fixnums
+             [ (realZero, realZero)
              , (integer, nonnegativeInteger)
-             , ((Or [positiveRational, negativeRational]), positiveRational)
              , (rational, nonnegativeRational)
-             , ((Or [positiveFloat, negativeFloat]), positiveFloat)
              , (float, nonnegativeFloat)
-             , ((Or [positiveSingleFloat, negativeSingleFloat]), positiveSingleFloat)
              , (singleFloat, nonnegativeSingleFloat)
-             , ((Or [positiveInexactReal, negativeInexactReal]), positiveInexactReal)
              , (inexactReal, nonnegativeInexactReal)
              , ((Or [positiveReal, negativeReal]), positiveReal)
              , (real, nonnegativeReal)]))
-
+    
   , ("+", (BinOp
-            [ (positiveByte, positiveByte, positiveIndex)
-            , (byte, byte, index)
-            , (positiveByte, positiveByte, positiveIndex)
-            , (positiveIndex, index, positiveFixnum)
-            , (index, positiveIndex, positiveFixnum)
+            [ (byte, byte, index)
             , (index, index, nonnegativeFixnum)
             , (negativeFixnum, one, nonpositiveFixnum)
             , (one, negativeFixnum, nonpositiveFixnum)
             , (nonpositiveFixnum, nonnegativeFixnum, fixnum)
             , (nonnegativeFixnum, nonpositiveFixnum, fixnum)
-            , (positiveInteger, nonnegativeInteger, positiveInteger)
-            , (nonnegativeInteger, positiveInteger, positiveInteger)
-            , (negativeInteger, nonpositiveInteger, negativeInteger)
-            , (nonpositiveInteger, negativeInteger, negativeInteger)
-            , (nonnegativeInteger, nonnegativeInteger, nonnegativeInteger)
-            , (nonpositiveInteger, nonpositiveInteger, nonpositiveInteger)
             , (integer, integer, integer)
-            , (positiveRational, nonnegativeRational, positiveRational)
-            , (nonnegativeRational, positiveRational, positiveRational)
-            , (negativeRational, nonpositiveRational, negativeRational)
-            , (nonpositiveRational, negativeRational, negativeRational)
-            , (nonnegativeRational, nonnegativeRational, nonnegativeRational)
-            , (nonpositiveRational, nonpositiveRational, nonpositiveRational)
-            , (rational, rational, rational)
-            , (positiveFloat, nonnegativeReal, positiveFloat)
-            , (nonnegativeReal, positiveFloat, positiveFloat)
-            , (positiveReal, nonnegativeFloat, positiveFloat)
-            , (nonnegativeFloat, positiveReal, positiveFloat)
-            , (negativeFloat, nonpositiveReal, negativeFloat)
-            , (nonpositiveReal, negativeFloat, negativeFloat)
-            , (negativeReal, nonpositiveFloat, negativeFloat)
-            , (nonpositiveFloat, negativeReal, negativeFloat)
-            , (nonnegativeFloat, nonnegativeReal, nonnegativeFloat)
-            , (nonnegativeReal, nonnegativeFloat, nonnegativeFloat)
-            , (nonpositiveFloat, nonpositiveReal, nonpositiveFloat)
-            , (nonpositiveReal, nonpositiveFloat, nonpositiveFloat)
             , (float, real, float)
             , (real, float, float)
-            , (float, float, float)
-            , (positiveSingleFloat, (Or [nonnegativeRational, nonnegativeSingleFloat]), positiveSingleFloat)
-            , ((Or [nonnegativeRational, nonnegativeSingleFloat]), positiveSingleFloat, positiveSingleFloat)
-            , ((Or [positiveRational, positiveSingleFloat]), nonnegativeSingleFloat, positiveSingleFloat)
-            , (nonnegativeSingleFloat, (Or [positiveRational, positiveSingleFloat]), positiveSingleFloat)
-            , (negativeSingleFloat, (Or [nonpositiveRational, nonpositiveSingleFloat]), negativeSingleFloat)
-            , ((Or [nonpositiveRational, nonpositiveSingleFloat]), negativeSingleFloat, negativeSingleFloat)
-            , ((Or [negativeRational, negativeSingleFloat]), nonpositiveSingleFloat, negativeSingleFloat)
-            , (nonpositiveSingleFloat, (Or [negativeRational, negativeSingleFloat]), negativeSingleFloat)
-            , (nonnegativeSingleFloat, (Or [nonnegativeRational, nonnegativeSingleFloat]), nonnegativeSingleFloat)
-            , ((Or [nonnegativeRational, nonnegativeSingleFloat]), nonnegativeSingleFloat, nonnegativeSingleFloat)
-            , (nonpositiveSingleFloat, (Or [nonpositiveRational, nonpositiveSingleFloat]), nonpositiveSingleFloat)
-            , ((Or [nonpositiveRational, nonpositiveSingleFloat]), nonpositiveSingleFloat, nonpositiveSingleFloat)
             , (singleFloat, (Or [rational, singleFloat]), singleFloat)
             , ((Or [rational, singleFloat]), singleFloat, singleFloat)
-            , (singleFloat, singleFloat, singleFloat)
-            , (positiveInexactReal, nonnegativeReal, positiveInexactReal)
-            , (nonnegativeReal, positiveInexactReal, positiveInexactReal)
-            , (positiveReal, nonnegativeInexactReal, positiveInexactReal)
-            , (nonnegativeInexactReal, positiveReal, positiveInexactReal)
-            , (negativeInexactReal, nonpositiveReal, negativeInexactReal)
-            , (nonpositiveReal, negativeInexactReal, negativeInexactReal)
-            , (negativeReal, nonpositiveInexactReal, negativeInexactReal)
-            , (nonpositiveInexactReal, negativeReal, negativeInexactReal)
-            , (nonnegativeInexactReal, nonnegativeReal, nonnegativeInexactReal)
-            , (nonnegativeReal, nonnegativeInexactReal, nonnegativeInexactReal)
-            , (nonpositiveInexactReal, nonpositiveReal, nonpositiveInexactReal)
-            , (nonpositiveReal, nonpositiveInexactReal, nonpositiveInexactReal)
             , (inexactReal, real, inexactReal)
             , (real, inexactReal, inexactReal)
             , (positiveReal, nonnegativeReal, positiveReal)
@@ -160,71 +79,36 @@ opTypes =
             , ((Or [rational, singleFloat, singleFloatComplex]), singleFloatComplex, singleFloatComplex)
             , (inexactComplex, (Or [rational, inexactReal, inexactComplex]), inexactComplex)
             , ((Or [rational, inexactReal, inexactComplex]), inexactComplex, inexactComplex)
-            , (number, number, number)]))
-
+            , (number, number, number)])) 
+    
   , ("-", (BinOp
-            [ (zero, zero, zero)
-            , (zero, positiveFixnum, negativeFixnum) -- half negation pattern
-            , (zero, nonnegativeFixnum, nonpositiveFixnum) -- half negation pattern
-            , (zero, positiveInteger, negativeInteger) -- negation pattern
-            , (zero, nonnegativeInteger, nonpositiveInteger) -- negation pattern
-            , (zero, negativeInteger, positiveInteger) -- negation pattern
-            , (zero, nonpositiveInteger, nonnegativeInteger) -- negation pattern
-            , (zero, positiveRational, negativeRational) -- negation pattern
-            , (zero, nonnegativeRational, nonpositiveRational) -- negation pattern
-            , (zero, negativeRational, positiveRational) -- negation pattern
-            , (zero, nonpositiveRational, nonnegativeRational) -- negation pattern
-            , (zero, positiveFloat, negativeFloat) -- negation pattern
-            , (zero, nonnegativeFloat, nonpositiveFloat) -- negation pattern
-            , (zero, negativeFloat, positiveFloat) -- negation pattern
-            , (zero, nonpositiveFloat, nonnegativeFloat) -- negation pattern
-            , (zero, positiveSingleFloat, negativeSingleFloat) -- negation pattern
-            , (zero, nonnegativeSingleFloat, nonpositiveSingleFloat) -- negation pattern
-            , (zero, negativeSingleFloat, positiveSingleFloat) -- negation pattern
-            , (zero, nonpositiveSingleFloat, nonnegativeSingleFloat) -- negation pattern
-            , (zero, positiveInexactReal, negativeInexactReal) -- negation pattern
-            , (zero, nonnegativeInexactReal, nonpositiveInexactReal) -- negation pattern
-            , (zero, negativeInexactReal, positiveInexactReal) -- negation pattern
-            , (zero, nonpositiveInexactReal, nonnegativeInexactReal) -- negation pattern
-            , (zero, positiveReal, negativeReal) -- negation pattern
+            [ (zero, positiveReal, negativeReal) -- negation pattern
             , (zero, nonnegativeReal, nonpositiveReal) -- negation pattern
             , (zero, negativeReal, positiveReal) -- negation pattern
             , (zero, nonpositiveReal, nonnegativeReal) -- negation pattern
             , (one, one, zero)
             , (positiveByte, one, byte)
             , (positiveIndex, one, index)
-            , (positiveFixnum, one, nonnegativeFixnum)
             , (positiveInteger, one, nonnegativeInteger)
             , (nonnegativeFixnum, nonnegativeFixnum, fixnum)
             , (negativeFixnum, nonpositiveFixnum, fixnum)
-            , (positiveInteger, nonpositiveInteger, positiveInteger)
-            , (nonnegativeInteger, nonpositiveInteger, nonnegativeInteger)
-            , (negativeInteger, nonnegativeInteger, negativeInteger)
-            , (nonpositiveInteger, nonnegativeInteger, nonpositiveInteger)
             , (integer, integer, integer)
             , (positiveRational, nonpositiveRational, positiveRational)
             , (nonnegativeRational, nonpositiveRational, nonnegativeRational)
             , (negativeRational, nonnegativeRational, negativeRational)
             , (nonpositiveRational, nonnegativeRational, nonpositiveRational)
-            , (rational, rational, rational)
-            , (float, float, float)
             , (float, real, float)
             , (real, float, float)
-            , (singleFloat, singleFloat, singleFloat)
             , (singleFloat, (Or [singleFloat, rational]), singleFloat)
             , ((Or [singleFloat, rational]), singleFloat, singleFloat)
-            , (inexactReal, inexactReal, inexactReal)
             , (inexactReal, (Or [inexactReal, rational]), inexactReal)
             , ((Or [inexactReal, rational]), inexactReal, inexactReal)
             , (real, real, real)
             , (exactNumber, exactNumber, exactNumber)
-            , (floatComplex, floatComplex, floatComplex)
             , (floatComplex, number, floatComplex)
             , (number, floatComplex, floatComplex)
-            , (singleFloatComplex, singleFloatComplex, singleFloatComplex)
             , (singleFloatComplex, (Or [singleFloatComplex, exactNumber]), singleFloatComplex)
             , ((Or [singleFloatComplex, exactNumber]), singleFloatComplex, singleFloatComplex)
-            , (inexactComplex, inexactComplex, inexactComplex)
             , (inexactComplex, (Or [inexactComplex, exactNumber]), inexactComplex)
             , ((Or [inexactComplex, exactNumber]), inexactComplex, inexactComplex)
             , (number, number, number)]))
@@ -511,185 +395,35 @@ opTypes =
               , (nonpositiveReal, nonpositiveReal, nonpositiveReal)
               , (real, real, real)]))
 
-  , ("<", (CompOp
-           [ (integer, one, (IsA ArgZero nonpositiveInteger), (IsA ArgZero positiveInteger))
-           , (real, zero, (IsA ArgZero negativeReal), (IsA ArgZero nonnegativeReal))
-           , (zero, real, (IsA ArgOne positiveReal), (IsA ArgOne nonpositiveReal))
-           , (real, realZero, (IsA ArgZero negativeReal), TT) -- False says nothing because of NaN
-           , (realZero, real, (IsA ArgOne positiveReal), TT) -- False says nothing because of NaN
-           , (byte, positiveByte, TT, (IsA ArgZero positiveByte))
-           , (byte, byte, (IsA ArgOne positiveByte), TT)
-           , (positiveInteger, byte, (Conj (IsA ArgZero positiveByte) (IsA ArgOne positiveByte)), TT)
-           , (positiveReal, byte, (IsA ArgOne positiveByte), TT) -- positiveReal is ok here, no prop for #f
-           , (byte, positiveInteger, TT, (Conj (IsA ArgZero positiveByte) (IsA ArgOne positiveByte)))
-           , (byte, positiveRational, TT, (IsA ArgZero positiveByte)) -- can't be positiveReal, which includes NaN
-           , (nonnegativeInteger, byte, (Conj (IsA ArgZero byte) (IsA ArgOne positiveByte)), TT)
-           , (nonnegativeReal, byte, (IsA ArgOne positiveByte), TT)
-           , (byte, nonnegativeInteger, TT, (IsA ArgOne byte))
-           , (index, positiveIndex, TT, (IsA ArgZero positiveIndex))
-           , (index, index, (IsA ArgOne positiveIndex), TT)
-           , (positiveInteger, index, (Conj (IsA ArgZero positiveIndex) (IsA ArgOne positiveIndex)), TT)
-           , (positiveReal, index, (IsA ArgOne positiveIndex), TT)
-           , (index, positiveInteger, TT, (Conj (IsA ArgZero positiveIndex) (IsA ArgOne positiveIndex)))
-           , (index, positiveRational, TT, (IsA ArgZero positiveIndex)) -- can't be positiveReal, which includes NaN
-           , (nonnegativeInteger, index, (Conj (IsA ArgZero index) (IsA ArgOne positiveIndex)), TT)
-           , (nonnegativeReal, index, (IsA ArgOne positiveIndex), TT)
-           , (index, nonnegativeInteger, TT, (IsA ArgOne index))
-           , (fixnum, positiveInteger, TT, (Conj (IsA ArgZero positiveFixnum) (IsA ArgOne positiveFixnum)))
-           , (fixnum, positiveRational, TT, (IsA ArgZero positiveFixnum))
-           , (fixnum, nonnegativeInteger, TT, (Conj (IsA ArgZero nonnegativeFixnum) (IsA ArgOne nonnegativeFixnum)))
-           , (fixnum, nonnegativeRational, TT, (IsA ArgZero nonnegativeFixnum))
-           , (nonnegativeInteger, fixnum, (Conj (IsA ArgZero nonnegativeFixnum) (IsA ArgOne positiveFixnum)), TT)
-           , (nonnegativeReal, fixnum, (IsA ArgOne positiveFixnum), TT)
-           , (fixnum, nonpositiveInteger, (Conj (IsA ArgZero negativeFixnum) (IsA ArgOne nonpositiveFixnum)), TT)
-           , (fixnum, nonpositiveReal, (IsA ArgZero negativeFixnum), TT)
-           , (negativeInteger, fixnum, TT, (Conj (IsA ArgZero negativeFixnum) (IsA ArgOne negativeFixnum)))
-           , (negativeRational, fixnum, TT, (IsA ArgOne negativeFixnum))
-           , (nonpositiveInteger, fixnum, TT, (Conj (IsA ArgZero nonpositiveFixnum) (IsA ArgOne nonpositiveFixnum)))
-           , (nonpositiveRational, fixnum, TT, (IsA ArgOne nonpositiveFixnum))
-           , (real, positiveInfinity, (IsA ArgZero (Not (Or [inexactRealNaN, positiveInfinity]))), (IsA ArgZero (Or [inexactRealNaN, positiveInfinity])))
-           , (negativeInfinity, real, (IsA ArgOne (Not (Or [inexactRealNaN, negativeInfinity]))), (IsA ArgOne (Or [inexactRealNaN, negativeInfinity])))
-           , (positiveInfinity, real, FF, TT)
-           , (real, negativeInfinity, FF, TT)
-           , (integer, zero, (IsA ArgZero negativeInteger), (IsA ArgZero nonnegativeInteger)) -- <-type-pattern integer
-           , (zero, integer, (IsA ArgOne positiveInteger), (IsA ArgOne nonpositiveInteger))
-           , (integer, positiveRealNoNaN, TT, (IsA ArgZero positiveInteger)) -- AMK added NoNaN
-           , (integer, nonnegativeRealNoNaN, TT, (IsA ArgZero nonnegativeInteger)) -- AMK added NoNaN
-           , (nonnegativeReal, integer, (IsA ArgOne positiveInteger), TT)
-           , (integer, nonpositiveReal, (IsA ArgZero negativeInteger), TT)
-           , (negativeRealNoNaN, integer, TT, (IsA ArgOne negativeInteger)) -- AMK added NoNaN
-           , (nonpositiveRealNoNaN, integer, TT, (IsA ArgOne nonpositiveInteger)) -- AMK added NoNaN
-           , (rational, zero, (IsA ArgZero negativeRational), (IsA ArgZero nonnegativeRational)) -- <-type-pattern rational
-           , (zero, rational, (IsA ArgOne positiveRational), (IsA ArgOne nonpositiveRational))
-           , (rational, positiveRealNoNaN, TT, (IsA ArgZero positiveRational)) -- AMK added NoNaN
-           , (rational, nonnegativeRealNoNaN, TT, (IsA ArgZero nonnegativeRational)) -- AMK added NoNaN
-           , (nonnegativeReal, rational, (IsA ArgOne positiveRational), TT)
-           , (rational, nonpositiveReal, (IsA ArgZero negativeRational), TT)
-           , (negativeRealNoNaN, rational, TT, (IsA ArgOne negativeRational)) -- AMK added NoNaN
-           , (nonpositiveRealNoNaN, rational, TT, (IsA ArgOne nonpositiveRational)) -- AMK added NoNaN
-           , (float, realZero, (IsA ArgZero negativeFloat), TT) -- <-type-pattern float
-           , (realZero, float, (IsA ArgOne positiveFloat), TT)
-           , (float, positiveReal, TT, TT)
-           , (float, nonnegativeReal, TT, TT)
-           , (nonnegativeReal, float, (IsA ArgOne positiveFloat), TT)
-           , (float, nonpositiveReal, (IsA ArgZero negativeFloat), TT)
-           , (negativeReal, float, TT, TT)
-           , (nonpositiveReal, float, TT, TT)
-           , (singleFloat, realZero, (IsA ArgZero negativeSingleFloat), TT) -- <-type-pattern single-Float
-           , (realZero, singleFloat, (IsA ArgOne positiveSingleFloat), TT)
-           , (singleFloat, positiveReal, TT, TT)
-           , (singleFloat, nonnegativeReal, TT, TT)
-           , (nonnegativeReal, singleFloat, (IsA ArgOne positiveSingleFloat), TT)
-           , (singleFloat, nonpositiveReal, (IsA ArgZero negativeSingleFloat), TT)
-           , (negativeReal, singleFloat, TT, TT)
-           , (nonpositiveReal, singleFloat, TT, TT)
-           , (inexactReal, realZero, (IsA ArgZero negativeInexactReal), TT) -- <-type-pattern inexactreal
-           , (realZero, inexactReal, (IsA ArgOne positiveInexactReal), TT)
-           , (inexactReal, positiveReal, TT, TT)
-           , (inexactReal, nonnegativeReal, TT, TT)
-           , (nonnegativeReal, inexactReal, (IsA ArgOne positiveInexactReal), TT)
-           , (inexactReal, nonpositiveReal, (IsA ArgZero negativeInexactReal), TT)
-           , (negativeReal, inexactReal, TT, TT)
-           , (nonpositiveReal, inexactReal, TT, TT)
-           , (real, realZero, (IsA ArgZero negativeReal), TT) -- <-type-pattern real
-           , (realZero, real, (IsA ArgOne positiveReal), TT)
-           , (real, positiveReal, TT, TT)
-           , (real, nonnegativeReal, TT, TT)
-           , (nonnegativeReal, real, (IsA ArgOne positiveReal), TT)
-           , (real, nonpositiveReal, (IsA ArgZero negativeReal), TT)
-           , (negativeReal, real, TT, TT)
-           , (nonpositiveReal, real, TT, TT) -- end of <-type-pattern
-           , (real, real, TT, TT)]))
     
-  , ("<=", (CompOp
-             [ (integer, one, (IsA ArgZero (Or [nonpositiveInteger, one])), (IsA ArgZero positiveInteger))
-             , (one, integer, (IsA ArgOne positiveInteger), (IsA ArgOne nonpositiveInteger))
-             , (real, zero, (IsA ArgZero nonpositiveReal), (IsA ArgZero positiveReal))
-             , (zero, real, (IsA ArgOne nonnegativeReal), (IsA ArgOne negativeReal))
-             , (real, realZero, (IsA ArgZero nonpositiveReal), TT) -- False says nothing because of NaN
-             , (realZero, real, (IsA ArgZero nonnegativeReal), TT) -- False says nothing because of NaN
-             , (positiveByte, byte, (IsA ArgOne positiveByte), TT)
-             , (byte, byte, TT, (IsA ArgZero positiveByte))
-             , (positiveInteger, byte, (Conj (IsA ArgZero positiveByte) (IsA ArgOne positiveByte)), TT)
-             , (positiveReal, byte, (IsA ArgOne positiveByte), TT)
-             , (byte, positiveInteger, TT, (Conj (IsA ArgZero positiveByte) (IsA ArgOne positiveByte)))
-             , (byte, positiveRational, TT, (IsA ArgZero positiveByte))
-             , (nonnegativeInteger, byte, (IsA ArgZero byte), TT)
-             , (byte, nonnegativeInteger, TT, (Conj (IsA ArgZero positiveByte) (IsA ArgOne byte)))
-             , (byte, nonnegativeRational, TT, (IsA ArgZero positiveByte))
-             , (positiveIndex, index, (IsA ArgOne positiveIndex), TT)
-             , (index, index, TT, (IsA ArgZero positiveIndex))
-             , (positiveInteger, index, (Conj (IsA ArgZero positiveIndex) (IsA ArgOne positiveIndex)), TT)
-             , (positiveReal, index, (IsA ArgOne positiveIndex), TT)
-             , (index, positiveInteger, TT, (Conj (IsA ArgZero positiveIndex) (IsA ArgOne positiveIndex)))
-             , (index, positiveRational, TT, (IsA ArgZero positiveIndex))
-             , (nonnegativeInteger, index, (IsA ArgZero index), TT)
-             , (index, nonnegativeInteger, TT, (Conj (IsA ArgZero positiveIndex) (IsA ArgOne index)))
-             , (index, nonnegativeRational, TT, (IsA ArgZero positiveIndex))
-             , (positiveInteger, fixnum, (Conj (IsA ArgZero positiveFixnum) (IsA ArgOne positiveFixnum)), TT)
-             , (positiveReal, fixnum, (IsA ArgOne positiveFixnum), TT)
-             , (nonnegativeInteger, fixnum, (Conj (IsA ArgZero nonnegativeFixnum) (IsA ArgOne nonnegativeFixnum)), TT)
-             , (nonnegativeReal, fixnum, (IsA ArgOne nonnegativeFixnum), TT)
-             , (fixnum, nonnegativeInteger, TT, (Conj (IsA ArgZero positiveFixnum) (IsA ArgOne nonnegativeFixnum)))
-             , (fixnum, nonnegativeRational, TT, (IsA ArgZero positiveFixnum))
-             , (nonpositiveInteger, fixnum, TT, (Conj (IsA ArgZero nonpositiveFixnum) (IsA ArgOne negativeFixnum)))
-             , (nonpositiveRational, fixnum, TT, (IsA ArgOne negativeFixnum))
-             , (fixnum, negativeInteger, (Conj (IsA ArgZero negativeFixnum) (IsA ArgOne negativeFixnum)), TT)
-             , (fixnum, negativeReal, (IsA ArgZero negativeFixnum), TT)
-             , (fixnum, nonpositiveInteger, (Conj (IsA ArgZero nonpositiveFixnum) (IsA ArgOne nonpositiveFixnum)), TT)
-             , (fixnum, nonpositiveReal, (IsA ArgZero nonpositiveFixnum), TT)
-             , (real, positiveInfinity, (IsA ArgZero (Not inexactRealNaN)), (IsA ArgZero inexactRealNaN))
-             , (negativeInfinity, real, (IsA ArgOne (Not inexactRealNaN)), (IsA ArgOne inexactRealNaN))
-             , (positiveInfinity, real, (IsA ArgOne positiveInfinity), (IsA ArgOne (Not positiveInfinity)))
-             , (real, negativeInfinity, (IsA ArgZero negativeInfinity), (IsA ArgZero (Not negativeInfinity)))
-             , (integer, zero, (IsA ArgZero nonpositiveInteger), (IsA ArgZero positiveInteger)) -- <=-pat integer
-             , (zero, integer, (IsA ArgOne nonnegativeInteger), (IsA ArgOne negativeInteger)) -- <=-pat integer
-             , (integer, nonnegativeRealNoNaN, TT, (IsA ArgZero positiveInteger)) -- <=-pat integer
-             , (positiveReal, integer, (IsA ArgOne positiveInteger), TT) -- <=-pat integer
-             , (nonnegativeReal, integer, (IsA ArgOne nonnegativeInteger), TT) -- <=-pat integer
-             , (nonpositiveRealNoNaN, integer, TT, (IsA ArgOne negativeInteger)) -- <=-pat integer
-             , (integer, negativeReal, (IsA ArgZero negativeInteger), TT) -- <=-pat integer
-             , (integer, nonpositiveReal, (IsA ArgZero nonpositiveInteger), TT) -- <=-pat integer
-             , (rational, zero, (IsA ArgZero nonpositiveRational), (IsA ArgZero positiveRational)) -- <=-pat rational
-             , (zero, rational, (IsA ArgOne nonnegativeRational), (IsA ArgOne negativeRational)) -- <=-pat rational
-             , (rational, nonnegativeRealNoNaN, TT, (IsA ArgZero positiveRational)) -- <=-pat rational
-             , (positiveReal, rational, (IsA ArgOne positiveRational), TT) -- <=-pat rational
-             , (nonnegativeReal, rational, (IsA ArgOne nonnegativeRational), TT) -- <=-pat rational
-             , (nonpositiveRealNoNaN, rational, TT, (IsA ArgOne negativeRational)) -- <=-pat rational
-             , (rational, negativeReal, (IsA ArgZero negativeRational), TT) -- <=-pat rational
-             , (rational, nonpositiveReal, (IsA ArgZero nonpositiveRational), TT) -- <=-pat rational
-             , (float, realZeroNoNaN, (IsA ArgZero nonpositiveFloat), TT) -- <=-pat float
-             , (realZeroNoNaN, float, (IsA ArgOne nonnegativeFloat), TT) -- <=-pat float
-             , (float, nonnegativeRealNoNaN, TT, TT) -- <=-pat float
-             , (positiveReal, float, (IsA ArgOne positiveFloat), TT) -- <=-pat float
-             , (nonnegativeReal, float, (IsA ArgOne nonnegativeFloat), TT) -- <=-pat float
-             , (nonpositiveRealNoNaN, float, TT, TT) -- <=-pat float
-             , (float, negativeReal, (IsA ArgZero negativeFloat), TT) -- <=-pat float
-             , (float, nonpositiveReal, (IsA ArgZero nonpositiveFloat), TT) -- <=-pat float
-             , (singleFloat, realZeroNoNaN, (IsA ArgZero nonpositiveSingleFloat), TT) -- <=-pat singleFloat
-             , (realZeroNoNaN, singleFloat, (IsA ArgOne nonnegativeSingleFloat), TT) -- <=-pat singleFloat
-             , (singleFloat, nonnegativeRealNoNaN, TT, TT) -- <=-pat singleFloat
-             , (positiveReal, singleFloat, (IsA ArgOne positiveSingleFloat), TT) -- <=-pat singleFloat
-             , (nonnegativeReal, singleFloat, (IsA ArgOne nonnegativeSingleFloat), TT) -- <=-pat singleFloat
-             , (nonpositiveRealNoNaN, singleFloat, TT, TT) -- <=-pat singleFloat
-             , (singleFloat, negativeReal, (IsA ArgZero negativeSingleFloat), TT) -- <=-pat singleFloat
-             , (singleFloat, nonpositiveReal, (IsA ArgZero nonpositiveSingleFloat), TT) -- <=-pat singleFloat
-             , (inexactReal, realZeroNoNaN, (IsA ArgZero nonpositiveInexactReal), TT) -- <=-pat inexactReal
-             , (realZeroNoNaN, inexactReal, (IsA ArgOne nonnegativeInexactReal), TT) -- <=-pat inexactReal
-             , (inexactReal, nonnegativeRealNoNaN, TT, TT) -- <=-pat inexactReal
-             , (positiveReal, inexactReal, (IsA ArgOne positiveInexactReal), TT) -- <=-pat inexactReal
-             , (nonnegativeReal, inexactReal, (IsA ArgOne nonnegativeInexactReal), TT) -- <=-pat inexactReal
-             , (nonpositiveRealNoNaN, inexactReal, TT, TT) -- <=-pat inexactReal
-             , (inexactReal, negativeReal, (IsA ArgZero negativeInexactReal), TT) -- <=-pat inexactReal
-             , (inexactReal, nonpositiveReal, (IsA ArgZero nonpositiveInexactReal), TT) -- <=-pat inexactReal
-             , (real, realZeroNoNaN, (IsA ArgZero nonpositiveReal), TT) -- <=-pat real
-             , (realZeroNoNaN, real, (IsA ArgOne nonnegativeReal), TT) -- <=-pat real
-             , (real, nonnegativeRealNoNaN, TT, TT) -- <=-pat real
-             , (positiveReal, real, (IsA ArgOne positiveReal), TT) -- <=-pat real
-             , (nonnegativeReal, real, (IsA ArgOne nonnegativeReal), TT) -- <=-pat real
-             , (nonpositiveRealNoNaN, real, TT, TT) -- <=-pat real
-             , (real, negativeReal, (IsA ArgZero negativeReal), TT) -- <=-pat real
-             , (real, nonpositiveReal, (IsA ArgZero nonpositiveReal), TT) -- <=-pat real
-             , (real, real, TT, TT)]))
-  ] -- end of opTypes
-
+  , ("<", (BinOp
+           [ -- general cases --
+             -- -- -- -- -- -- -- -- --
+             (realNoNaN, realNoNaN, bool)
+           , (someNaN, real, F)
+           , (real, someNaN, F)
+             -- positive/nonpositive cases --
+           , (nonpositiveRealNoNaN, positiveRealNoNaN, T)
+           , (positiveReal, nonpositiveReal, F)
+             -- zero/negative cases --
+           , (negativeRealNoNaN, realZeroNoNaN, T)
+           , (realZero, negativeReal, F)
+           -- bounded type cases --
+           , (negativeInfinity, And [realNoNaN, (Not negativeInfinity)], T)
+           , (real, negativeInfinity, F)
+           , (negativeIntegerNotFixnum, And [integer, (Not negativeIntegerNotFixnum)], T)
+           , (And [integer, (Not negativeIntegerNotFixnum)], negativeIntegerNotFixnum, F)
+           , (realZero, realZero, F)
+           , (nonpositiveRealNoNaN, one, T)
+           , (one, nonpositiveReal, F)
+           , (one, one, F)
+           , (one, And[positiveInteger, (Not one)], T)
+           , (And[positiveInteger, (Not one)], one, F)
+           , (byte, positiveIntegerNotByte, T)
+           , (positiveIntegerNotByte, byte, F)
+           , (index, positiveIntegerNotIndex, T)
+           , (positiveIntegerNotIndex, index, F)
+           , (fixnum, positiveIntegerNotFixnum, T)
+           , (positiveIntegerNotFixnum, fixnum, F)
+           , (And [realNoNaN, (Not positiveInfinity)], positiveInfinity, T)
+           , (positiveInfinity, real, F)]))]

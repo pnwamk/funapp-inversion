@@ -15,29 +15,79 @@ parseUnOpToSemantic ((d,r):ts) =
   tyAnd (parseTy (Stx.Arrow d r)) $ parseUnOpToSemantic ts
 
 
+mTyAnd :: Ty -> Maybe Ty -> Ty
+mTyAnd t Nothing = t
+mTyAnd t (Just t') = tyAnd t t'
+
+-- return type using only the first applicable arrow
+firstSynUnOpRng :: [(Stx.Ty, Stx.Ty)] -> Stx.Ty -> Maybe Ty
+firstSynUnOpRng syn arg =
+  case (find (\(d,r) ->
+                 subtype (parseTy arg) (parseTy d))
+         syn) of
+    Nothing -> Nothing
+    Just (d,r) -> Just (parseTy r)
+    
+
+-- return type using _all_ applicable arrows
+allSynUnOpRng :: [(Stx.Ty, Stx.Ty)] -> Stx.Ty -> Maybe Ty
+allSynUnOpRng [] argTy = Nothing
+allSynUnOpRng ((s1,s2):rst) arg
+  | (subtype (parseTy arg) (parseTy s1)) =
+      Just (mTyAnd
+            (parseTy s2)
+            (allSynUnOpRng rst arg))
+  | otherwise = allSynUnOpRng rst arg
+
+
+-- verifies both function types work on the
+-- same input types, and that the result for
+-- fTy1 is a subtype of the result for fTy2
 compareUnOpRes ::
-  Stx.Ty
+  [(Stx.Ty, Stx.Ty)]
+  -> ([(Stx.Ty, Stx.Ty)] -> Stx.Ty -> Maybe Ty)
+  -> [(Stx.Ty, Stx.Ty)]
+  -> ([(Stx.Ty, Stx.Ty)] -> Stx.Ty -> Maybe Ty)
   -> Stx.Ty
-  -> [(Stx.Ty, Stx.Ty)]
-  -> [(Stx.Ty, Stx.Ty)]
+  -> Stx.Ty
   -> Bool
-compareUnOpRes dom arg sem syn =
-  case (semRes, synRes) of
-    (Just semResTy, Just synResTy) ->
-      subtype semResTy synResTy
-    (Nothing, Nothing) -> False
-    (_,_) -> not (subtype argTy domTy)
-  where domTy = parseTy dom
-        argTy = parseTy arg
-        semTy = parseUnOpToSemantic sem
-        semRes = rngTy semTy argTy
-        synRes = case (find (\(d,r) ->
-                               subtype argTy (parseTy d))
-                        syn)
-                 of
-                   Nothing -> Nothing
-                   Just (d,r) -> Just (parseTy r)
-  
+compareUnOpRes fTy1 rngTy1 fTy2 rngTy2 dom arg =
+  case (res1, res2) of
+    (Just t1, Just t2) -> subtype t1 t2
+    (_,_) -> not (subtype (parseTy arg) (parseTy dom))
+  where res1 = rngTy1 fTy1 arg
+        res2 = rngTy2 fTy2 arg
+
+-- identify duplicate cases in case-> if we were
+-- to simply apply all possible arrows (returning
+-- a list of the indices of the unnecessary arrows)
+simplifyUnOp :: [(Stx.Ty, Stx.Ty)] -> [Integer]
+simplifyUnOp orig = [x | Just x <- rawDups]
+  where rawDups = (map (\(a,i) -> if dup a
+                                 then Just i
+                                 else Nothing)
+                   $ zip orig [0..])
+        dup (t1,t2) =
+          case (allSynUnOpRng (delete (t1,t2) orig) t1) of
+            Just t -> if (subtype t (parseTy t2))
+                      then True
+                      else False
+            Nothing -> False
+
+-- like simplifyUnOp
+simplifyBinOp :: [(Stx.Ty, Stx.Ty, Stx.Ty)] -> [Integer]
+simplifyBinOp orig = [x | Just x <- rawDups]
+  where rawDups = (map (\(a,i) -> if dup a
+                                 then Just i
+                                 else Nothing)
+                   $ zip orig [0..])
+        dup (t1,t2,r) =
+          case (allSynBinOpRng (delete (t1,t2,r) orig) t1 t2) of
+            Just t -> if (subtype t (parseTy r)) 
+                      then True
+                      else False
+            Nothing -> False
+
 
 parseBinOpToSemantic :: [(Stx.Ty, Stx.Ty, Stx.Ty)] -> Ty
 parseBinOpToSemantic [] = anyTy
@@ -45,34 +95,53 @@ parseBinOpToSemantic ((d1,d2,r):ts) =
   tyAnd (parseTy (Stx.Arrow (Stx.Prod d1 d2) r)) $ parseBinOpToSemantic ts
 
 
-compareBinOpRes ::
-  Stx.Ty
-  -> Stx.Ty
-  -> Stx.Ty
-  -> Stx.Ty
-  -> [(Stx.Ty, Stx.Ty, Stx.Ty)]
-  -> [(Stx.Ty, Stx.Ty, Stx.Ty)]
-  -> Bool
-compareBinOpRes dom1 dom2 arg1 arg2 sem syn =
-  case (semRes, synRes) of
-    (Just semResTy, Just synResTy) ->
-      subtype semResTy synResTy
-    (_,_) -> (not (subtype argTy1 domTy1))
-             || (not (subtype argTy2 domTy2)) 
-  where domTy1 = parseTy dom1
-        domTy2 = parseTy dom2
-        argTy1 = parseTy arg1
-        argTy2 = parseTy arg2
-        semTy = parseBinOpToSemantic sem
-        semRes = rngTy semTy $ prodTy argTy1 argTy2
-        synRes = case (find (\(d1,d2,r) ->
-                               (subtype argTy1 (parseTy d1))
-                               && (subtype argTy2 (parseTy d2)))
-                        syn)
-                 of
-                   Nothing -> Nothing
-                   Just (_,_,r) -> Just (parseTy r)
+firstSynBinOpRng ::
+  [(Stx.Ty, Stx.Ty, Stx.Ty)] ->
+  Stx.Ty ->
+  Stx.Ty ->
+  Maybe Ty
+firstSynBinOpRng syn arg1 arg2 =
+  case (find (\(d1,d2,r) ->
+                 (subtype (parseTy arg1) (parseTy d1))
+                 && (subtype (parseTy arg2) (parseTy d2)))
+         syn) of
+    Nothing -> Nothing
+    Just (d1,d2,r) -> Just (parseTy r)
 
+
+allSynBinOpRng ::
+  [(Stx.Ty, Stx.Ty, Stx.Ty)] ->
+  Stx.Ty ->
+  Stx.Ty ->
+  Maybe Ty
+allSynBinOpRng [] argTy1 argTy2 = Nothing
+allSynBinOpRng ((d1,d2,r):rst) arg1 arg2
+  | (subtype (parseTy arg1) (parseTy d1))
+    && (subtype (parseTy arg2) (parseTy d2)) =
+      Just (mTyAnd
+            (parseTy r)
+            (allSynBinOpRng rst arg1 arg2))
+  | otherwise = allSynBinOpRng rst arg1 arg2
+
+
+
+compareBinOpRes ::
+  [(Stx.Ty, Stx.Ty, Stx.Ty)]
+  -> ([(Stx.Ty, Stx.Ty, Stx.Ty)] -> Stx.Ty -> Stx.Ty -> Maybe Ty)
+  -> [(Stx.Ty, Stx.Ty, Stx.Ty)]
+  -> ([(Stx.Ty, Stx.Ty, Stx.Ty)] -> Stx.Ty -> Stx.Ty -> Maybe Ty)
+  -> Stx.Ty
+  -> Stx.Ty
+  -> Stx.Ty
+  -> Stx.Ty
+  -> Bool
+compareBinOpRes fTy1 rngTy1 fTy2 rngTy2 dom1 dom2 arg1 arg2 =
+    case (res1, res2) of
+    (Just t1, Just t2) -> subtype t1 t2
+    (_,_) -> ((not (subtype (parseTy arg1) (parseTy dom1)))
+              || (not (subtype (parseTy arg2) (parseTy dom2))))
+  where res1 = rngTy1 fTy1 arg1 arg2
+        res2 = rngTy2 fTy2 arg1 arg2
 
 argType :: Stx.Ty -> Stx.Obj -> Stx.Prop -> Ty
 argType d  _ Stx.FF = emptyTy
