@@ -62,6 +62,12 @@ data Prop =
   | Conj Prop Prop
   deriving (Eq, Show, Ord)
 
+data OpSpec =
+    UnOp [(Ty, Ty)]
+  | BinOp [(Ty, Ty, Ty)]
+  | CompOp [(Ty, Ty, Prop ,Prop)]
+  deriving (Eq, Show, Ord)
+
 baseTypes :: [Ty]
 baseTypes =
   [ T

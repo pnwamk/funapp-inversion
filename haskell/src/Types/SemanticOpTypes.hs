@@ -2,24 +2,25 @@ module Types.SemanticOpTypes where
 
 import Types.Syntax
 
-incType :: [(Ty, Ty)]
-incType = [ (zero, one)
-          , (one, byte)
-          , (byte, index)
-          , (index, fixnum)
-          , (integer, integer)
-          , (rational, rational)
-          , (float, float)
-          , (singleFloat, singleFloat)
-          , (floatComplex, floatComplex)
-          , (singleFloatComplex, singleFloatComplex)
-          , (nonnegativeReal, positiveReal)
-          , (negativeFixnum, nonpositiveFixnum)
-          , (negativeInteger, nonpositiveInteger)
-          , (number, number)]
-
-plusType :: [(Ty, Ty, Ty)]
-plusType = [ (byte, byte, index)
+opTypes :: [(String, OpSpec)]
+opTypes =
+  [ ("add1", (UnOp
+              [ (zero, one)
+              , (one, byte)
+              , (byte, index)
+              , (index, fixnum)
+              , (integer, integer)
+              , (rational, rational)
+              , (float, float)
+              , (singleFloat, singleFloat)
+              , (floatComplex, floatComplex)
+              , (singleFloatComplex, singleFloatComplex)
+              , (nonnegativeReal, positiveReal)
+              , (negativeFixnum, nonpositiveFixnum)
+              , (negativeInteger, nonpositiveInteger)
+              , (number, number)]))
+  , ("+", (BinOp
+           [ (byte, byte, index)
            , (index, index, nonnegativeFixnum)
            , (negativeFixnum, one, nonpositiveFixnum)
            , (one, negativeFixnum, nonpositiveFixnum)
@@ -44,38 +45,35 @@ plusType = [ (byte, byte, index)
            , (negativeReal, nonpositiveReal, negativeReal)
            , (nonpositiveReal, negativeReal, negativeReal)
            , (nonnegativeReal, nonnegativeReal, nonnegativeReal)
-           , (nonpositiveReal, nonpositiveReal, nonpositiveReal)]
-
-
-ltType :: [(Ty, Ty, Ty)]
-ltType = [ -- general cases --
-           -- -- -- -- -- -- -- -- --
-           (realNoNaN, realNoNaN, bool)
-         , (someNaN, real, F)
-         , (real, someNaN, F)
-           -- positive/nonpositive cases --
-         , (nonpositiveRealNoNaN, positiveRealNoNaN, T)
-         , (positiveReal, nonpositiveReal, F)
-           -- zero/negative cases --
-         , (negativeRealNoNaN, realZeroNoNaN, T)
-         , (realZero, negativeReal, F)
-         -- bounded type cases --
-         , (negativeInfinity, And [realNoNaN, (Not negativeInfinity)], T)
-         , (real, negativeInfinity, F)
-         , (negativeIntegerNotFixnum, And [integer, (Not negativeIntegerNotFixnum)], T)
-         , (And [integer, (Not negativeIntegerNotFixnum)], negativeIntegerNotFixnum, F)
-         , (realZero, realZero, F)
-         , (nonpositiveRealNoNaN, one, T)
-         , (one, nonpositiveReal, F)
-         , (one, one, F)
-         , (one, And[positiveInteger, (Not one)], T)
-         , (And[positiveInteger, (Not one)], one, F)
-         , (byte, positiveIntegerNotByte, T)
-         , (positiveIntegerNotByte, byte, F)
-         , (index, positiveIntegerNotIndex, T)
-         , (positiveIntegerNotIndex, index, F)
-         , (fixnum, positiveIntegerNotFixnum, T)
-         , (positiveIntegerNotFixnum, fixnum, F)
-         , (And [realNoNaN, (Not positiveInfinity)], positiveInfinity, T)
-         , (positiveInfinity, real, F)
-         ]
+           , (nonpositiveReal, nonpositiveReal, nonpositiveReal)]))
+  , ("<", (BinOp
+           [ -- general cases --
+             -- -- -- -- -- -- -- -- --
+             (realNoNaN, realNoNaN, bool)
+           , (someNaN, real, F)
+           , (real, someNaN, F)
+             -- positive/nonpositive cases --
+           , (nonpositiveRealNoNaN, positiveRealNoNaN, T)
+           , (positiveReal, nonpositiveReal, F)
+             -- zero/negative cases --
+           , (negativeRealNoNaN, realZeroNoNaN, T)
+           , (realZero, negativeReal, F)
+           -- bounded type cases --
+           , (negativeInfinity, And [realNoNaN, (Not negativeInfinity)], T)
+           , (real, negativeInfinity, F)
+           , (negativeIntegerNotFixnum, And [integer, (Not negativeIntegerNotFixnum)], T)
+           , (And [integer, (Not negativeIntegerNotFixnum)], negativeIntegerNotFixnum, F)
+           , (realZero, realZero, F)
+           , (nonpositiveRealNoNaN, one, T)
+           , (one, nonpositiveReal, F)
+           , (one, one, F)
+           , (one, And[positiveInteger, (Not one)], T)
+           , (And[positiveInteger, (Not one)], one, F)
+           , (byte, positiveIntegerNotByte, T)
+           , (positiveIntegerNotByte, byte, F)
+           , (index, positiveIntegerNotIndex, T)
+           , (positiveIntegerNotIndex, index, F)
+           , (fixnum, positiveIntegerNotFixnum, T)
+           , (positiveIntegerNotFixnum, fixnum, F)
+           , (And [realNoNaN, (Not positiveInfinity)], positiveInfinity, T)
+           , (positiveInfinity, real, F)]))]
