@@ -69,9 +69,7 @@ simplifyUnOp orig = [x | Just x <- rawDups]
                    $ zip orig [0..])
         dup (t1,t2) =
           case (allSynUnOpRng (delete (t1,t2) orig) t1) of
-            Just t -> if (subtype t (parseTy t2))
-                      then True
-                      else False
+            Just t -> (subtype t (parseTy t2))
             Nothing -> False
 
 -- like simplifyUnOp
@@ -83,10 +81,11 @@ simplifyBinOp orig = [x | Just x <- rawDups]
                    $ zip orig [0..])
         dup (t1,t2,r) =
           case (allSynBinOpRng (delete (t1,t2,r) orig) t1 t2) of
-            Just t -> if (subtype t (parseTy r)) 
-                      then True
-                      else False
+            Just t -> (subtype t (parseTy r))
             Nothing -> False
+
+
+
 
 
 parseBinOpToSemantic :: [(Stx.Ty, Stx.Ty, Stx.Ty)] -> Ty
@@ -137,21 +136,105 @@ compareBinOpRes ::
   -> Bool
 compareBinOpRes fTy1 rngTy1 fTy2 rngTy2 dom1 dom2 arg1 arg2 =
     case (res1, res2) of
-    (Just t1, Just t2) -> subtype t1 t2
-    (_,_) -> ((not (subtype (parseTy arg1) (parseTy dom1)))
-              || (not (subtype (parseTy arg2) (parseTy dom2))))
+      (Just t1, Just t2) -> subtype t1 t2
+      (_,_) -> ((not (subtype (parseTy arg1) (parseTy dom1)))
+                || (not (subtype (parseTy arg2) (parseTy dom2))))
   where res1 = rngTy1 fTy1 arg1 arg2
         res2 = rngTy2 fTy2 arg1 arg2
+
+
 
 argType :: Stx.Ty -> Stx.Obj -> Stx.Prop -> Ty
 argType d  _ Stx.FF = emptyTy
 argType d _ Stx.TT = parseTy d
 argType d o1 (Stx.IsA o2 t)
-  | (o1 == o2) = parseTy t
+  | (o1 == o2) = tyAnd (parseTy d) (parseTy t)
   | otherwise = parseTy d
 argType d o1 (Stx.Conj p1 p2) = tyAnd t1 t2
   where t1 = argType d o1 p1
         t2 = argType d o1 p2
+
+
+firstSynCompOpProps ::
+  [(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)] ->
+  Stx.Ty ->
+  Stx.Ty ->
+  Maybe (Stx.Prop, Stx.Prop)
+firstSynCompOpProps syn arg1 arg2 =
+  case (find (\(d1,d2,pos,neg) ->
+                 (subtype (parseTy arg1) (parseTy d1))
+                 && (subtype (parseTy arg2) (parseTy d2)))
+         syn) of
+    Nothing -> Nothing
+    Just (d1,d2,pos, neg) -> Just (pos,neg)
+
+
+allSynCompOpProps ::
+  [(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)] ->
+  Stx.Ty ->
+  Stx.Ty ->
+  Maybe (Stx.Prop, Stx.Prop)
+allSynCompOpProps [] argTy1 argTy2 = Nothing
+allSynCompOpProps ((d1,d2,pos,neg):rst) arg1 arg2
+  | (subtype (parseTy arg1) (parseTy d1))
+    && (subtype (parseTy arg2) (parseTy d2)) =
+    case (allSynCompOpProps rst arg1 arg2) of
+      Just (pos',neg') -> Just (Stx.Conj pos pos', Stx.Conj neg neg') 
+      Nothing -> Just (pos, neg)
+  | otherwise = allSynCompOpProps rst arg1 arg2
+
+
+-- Binary comparisons produce logical info about the first and second
+-- argument. This function checks pos1 and neg1 are at least as strong
+-- propositions as pos2 and neg2 (where pos are the props from getting
+-- a truthy value back, and neg is the props from getting false back).
+subProps :: Stx.Ty -> Stx.Ty -> Stx.Prop -> Stx.Prop -> Stx.Prop -> Stx.Prop -> Bool
+subProps dom1 dom2 pos1 neg1 pos2 neg2 =
+  (subtype
+    (argType dom1 Stx.ArgZero pos1)
+    (argType dom1 Stx.ArgZero pos2))
+  && (subtype
+       (argType dom1 Stx.ArgZero neg1)
+       (argType dom1 Stx.ArgZero neg2))
+  && (subtype
+       (argType dom2 Stx.ArgOne pos1)
+       (argType dom2 Stx.ArgOne pos2))
+  && (subtype
+       (argType dom2 Stx.ArgOne neg1)
+       (argType dom2 Stx.ArgOne neg2))
+  
+compareCompOpRes ::
+  [(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)]
+  -> ([(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)] -> Stx.Ty -> Stx.Ty -> Maybe (Stx.Prop, Stx.Prop))
+  -> [(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)]
+  -> ([(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)] -> Stx.Ty -> Stx.Ty -> Maybe (Stx.Prop, Stx.Prop))
+  -> Stx.Ty
+  -> Stx.Ty
+  -> Stx.Ty
+  -> Stx.Ty
+  -> Bool
+compareCompOpRes fTy1 rngTy1 fTy2 rngTy2 dom1 dom2 arg1 arg2 =
+  case (res1, res2) of
+    (Just (pos1, neg1), Just (pos2, neg2)) ->
+      subProps arg1 arg2 pos1 neg1 pos2 neg2
+    (_,_) -> ((not (subtype (parseTy arg1) (parseTy dom1)))
+              || (not (subtype (parseTy arg2) (parseTy dom2))))
+  where res1 = rngTy1 fTy1 arg1 arg2
+        res2 = rngTy2 fTy2 arg1 arg2
+
+
+
+simplifyCompOp :: Stx.Ty -> Stx.Ty -> [(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)] -> [Integer]
+simplifyCompOp dom1 dom2 orig = [x | Just x <- rawDups]
+  where rawDups = (map (\(a,i) -> if dup a
+                                 then Just i
+                                 else Nothing)
+                   $ zip orig [0..])
+        dup (t1,t2,pos,neg) =
+          case (allSynCompOpProps (delete (t1,t2,pos,neg) orig) t1 t2) of
+            Just (pos', neg') -> subProps t1 t2 pos' neg' pos neg
+            Nothing -> False
+
 
 
 compareBinPredRes ::

@@ -221,34 +221,51 @@ opTypes =
               , (real, real, real)]))
 
     
-  , ("<", (BinOp
-           [ -- general cases --
-             -- -- -- -- -- -- -- -- --
-             (realNoNaN, realNoNaN, bool)
-           , (someNaN, real, F)
-           , (real, someNaN, F)
-             -- positive/nonpositive cases --
-           , (nonpositiveRealNoNaN, positiveRealNoNaN, T)
-           , (positiveReal, nonpositiveReal, F)
-             -- zero/negative cases --
-           , (negativeRealNoNaN, realZeroNoNaN, T)
-           , (realZero, negativeReal, F)
-           -- bounded type cases --
-           , (negativeInfinity, And [realNoNaN, (Not negativeInfinity)], T)
-           , (real, negativeInfinity, F)
-           , (negativeIntegerNotFixnum, And [integer, (Not negativeIntegerNotFixnum)], T)
-           , (And [integer, (Not negativeIntegerNotFixnum)], negativeIntegerNotFixnum, F)
-           , (realZero, realZero, F)
-           , (nonpositiveRealNoNaN, one, T)
-           , (one, nonpositiveReal, F)
-           , (one, one, F)
-           , (one, And[positiveInteger, (Not one)], T)
-           , (And[positiveInteger, (Not one)], one, F)
-           , (byte, positiveIntegerNotByte, T)
-           , (positiveIntegerNotByte, byte, F)
-           , (index, positiveIntegerNotIndex, T)
-           , (positiveIntegerNotIndex, index, F)
-           , (fixnum, positiveIntegerNotFixnum, T)
-           , (positiveIntegerNotFixnum, fixnum, F)
-           , (And [realNoNaN, (Not positiveInfinity)], positiveInfinity, T)
-           , (positiveInfinity, real, F)]))]
+  , ("<", (CompOp
+           [ (integer, one, (IsA ArgZero nonpositiveInteger), (IsA ArgZero positiveInteger))
+           , (real, zero, (IsA ArgZero negativeReal), (IsA ArgZero nonnegativeReal))
+           , (zero, real, (IsA ArgOne positiveReal), (IsA ArgOne nonpositiveReal))
+           , (nonnegativeInteger, byte, (Conj (IsA ArgZero byte) (IsA ArgOne positiveByte)), TT)
+           , (byte, nonnegativeInteger, TT, (IsA ArgOne byte))
+           , (nonnegativeInteger, index, (Conj (IsA ArgZero index) (IsA ArgOne positiveIndex)), TT)
+           , (index, nonnegativeInteger, TT, (IsA ArgOne index))
+           , (fixnum, nonnegativeInteger, TT, (Conj (IsA ArgZero nonnegativeFixnum) (IsA ArgOne nonnegativeFixnum)))
+           , (nonnegativeInteger, fixnum, (Conj (IsA ArgZero nonnegativeFixnum) (IsA ArgOne positiveFixnum)), TT)
+           , (fixnum, nonpositiveInteger, (Conj (IsA ArgZero negativeFixnum) (IsA ArgOne nonpositiveFixnum)), TT)
+           , (nonpositiveInteger, fixnum, TT, (Conj (IsA ArgZero nonpositiveFixnum) (IsA ArgOne nonpositiveFixnum)))
+           , (real, positiveInfinity, (IsA ArgZero (Not (Or [inexactRealNaN, positiveInfinity]))), (IsA ArgZero (Or [inexactRealNaN, positiveInfinity])))
+           , (negativeInfinity, real, (IsA ArgOne (Not (Or [inexactRealNaN, negativeInfinity]))), (IsA ArgOne (Or [inexactRealNaN, negativeInfinity])))
+           , (positiveInfinity, real, FF, TT)
+           , (real, negativeInfinity, FF, TT)
+           , (rational, positiveRealNoNaN, TT, (IsA ArgZero positiveRational)) -- AMK added NoNaN
+           , (rational, nonnegativeRealNoNaN, TT, (IsA ArgZero nonnegativeRational)) -- AMK added NoNaN
+           , (negativeRealNoNaN, rational, TT, (IsA ArgOne negativeRational)) -- AMK added NoNaN
+           , (nonpositiveRealNoNaN, rational, TT, (IsA ArgOne nonpositiveRational)) -- AMK added NoNaN
+           , (nonnegativeReal, real, (IsA ArgOne positiveReal), TT)
+           , (real, nonpositiveReal, (IsA ArgZero negativeReal), TT)
+           , (real, real, TT, TT)]))
+    
+  , ("<=", (CompOp
+             [ (integer, one, (IsA ArgZero (Or [nonpositiveInteger, one])), (IsA ArgZero positiveInteger))
+             , (one, integer, (IsA ArgOne positiveInteger), (IsA ArgOne nonpositiveInteger))
+             , (real, zero, (IsA ArgZero nonpositiveReal), (IsA ArgZero positiveReal))
+             , (zero, real, (IsA ArgOne nonnegativeReal), (IsA ArgOne negativeReal))
+             , (nonnegativeInteger, byte, (IsA ArgZero byte), TT)
+             , (byte, nonnegativeInteger, TT, (Conj (IsA ArgZero positiveByte) (IsA ArgOne byte)))
+             , (nonnegativeInteger, index, (IsA ArgZero index), TT)
+             , (index, nonnegativeInteger, TT, (Conj (IsA ArgZero positiveIndex) (IsA ArgOne index)))
+             , (nonnegativeInteger, fixnum, (Conj (IsA ArgZero nonnegativeFixnum) (IsA ArgOne nonnegativeFixnum)), TT)
+             , (fixnum, nonnegativeInteger, TT, (Conj (IsA ArgZero positiveFixnum) (IsA ArgOne nonnegativeFixnum)))
+             , (nonpositiveInteger, fixnum, TT, (Conj (IsA ArgZero nonpositiveFixnum) (IsA ArgOne negativeFixnum)))
+             , (fixnum, nonpositiveInteger, (Conj (IsA ArgZero nonpositiveFixnum) (IsA ArgOne nonpositiveFixnum)), TT)
+             , (real, positiveInfinity, (IsA ArgZero (Not inexactRealNaN)), (IsA ArgZero inexactRealNaN))
+             , (negativeInfinity, real, (IsA ArgOne (Not inexactRealNaN)), (IsA ArgOne inexactRealNaN))
+             , (positiveInfinity, real, (IsA ArgOne positiveInfinity), (IsA ArgOne (Not positiveInfinity)))
+             , (real, negativeInfinity, (IsA ArgZero negativeInfinity), (IsA ArgZero (Not negativeInfinity)))
+             , (rational, nonnegativeRealNoNaN, TT, (IsA ArgZero positiveRational)) -- <=-pat rational
+             , (nonpositiveRealNoNaN, rational, TT, (IsA ArgOne negativeRational)) -- <=-pat rational
+             , (positiveReal, real, (IsA ArgOne positiveReal), TT) -- <=-pat real
+             , (nonnegativeReal, real, (IsA ArgOne nonnegativeReal), TT) -- <=-pat real
+             , (real, negativeReal, (IsA ArgZero negativeReal), TT) -- <=-pat real
+             , (real, nonpositiveReal, (IsA ArgZero nonpositiveReal), TT) -- <=-pat real
+             , (real, real, TT, TT)]))]

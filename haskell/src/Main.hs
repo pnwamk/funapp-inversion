@@ -85,6 +85,9 @@ binOps = [ ("+", number, number)
          , ("max", real, real)
          , ("min", real, real)]
 
+compOps :: [(String, Ty, Ty)]
+compOps = [ ("<", real, real)
+          , ("<=", real, real)]
 
 getUnOpType :: String -> [(String, OpSpec)] -> [(Ty, Ty)]
 getUnOpType name table =
@@ -152,20 +155,60 @@ compareBinOps ts1 rngTy1 ts2 rngTy2 description = do
                             ++ argName2 ++ ")"))
   putStrLn "Complete!"
 
+getCompOpType :: String -> [(String, OpSpec)] -> [(Ty, Ty, Prop, Prop)]
+getCompOpType name table =
+  case (lookup name table)  of
+    Just (CompOp s) -> s
+    Nothing -> error ("missing CompOp spec for " ++ name)
+
+compareCompOps ::
+  [(String, OpSpec)] ->
+  ([(Ty, Ty, Prop, Prop)] -> Ty -> Ty -> Maybe (Prop, Prop)) ->
+  [(String, OpSpec)] ->
+  ([(Ty, Ty, Prop, Prop)] -> Ty -> Ty -> Maybe (Prop, Prop)) ->
+  String ->
+  IO ()
+compareCompOps ts1 rngTy1 ts2 rngTy2 description = do
+  putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
+  putStr ("Comparing CompOps (" ++ description ++ ")")
+  forM_ compOps $ \(opName, opDom1, opDom2) -> do
+    forM_ numericTypes $ \(argName1, argTy1) -> do
+      forM_ numericTypes $ \(argName2, argTy2) -> do
+        putStr (if (compareCompOpRes
+                    (getCompOpType opName ts1)
+                    rngTy1
+                    (getCompOpType opName ts2)
+                    rngTy2
+                    opDom1
+                    opDom2
+                    argTy1
+                    argTy2)
+                then "."
+                else error ("test failed for ("
+                            ++ opName ++ " "
+                            ++ argName1 ++ " "
+                            ++ argName2 ++ ")"))
+  putStrLn "Complete!"
 
 main :: IO ()
 main = do
-  (compareUnOps
+  -- (compareUnOps
+  --  SynP.opTypes
+  --  allSynUnOpRng
+  --  Syn.opTypes
+  --  firstSynUnOpRng
+  --  "Syntactic/Syntactic+")
+  -- (compareBinOps
+  --  SynP.opTypes
+  --  allSynBinOpRng
+  --  Syn.opTypes
+  --  firstSynBinOpRng
+  --  "Syntactic/Syntactic+")
+  (compareCompOps
    SynP.opTypes
-   allSynUnOpRng
+   allSynCompOpProps
    Syn.opTypes
-   firstSynUnOpRng
-   "Syntactic/Syntactic+")
-  (compareBinOps
-   SynP.opTypes
-   allSynBinOpRng
-   Syn.opTypes
-   firstSynBinOpRng
+   firstSynCompOpProps
    "Syntactic/Syntactic+")
   --timeInc
   --timePlus
