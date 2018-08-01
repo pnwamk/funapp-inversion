@@ -6,6 +6,7 @@ import Types.Subtype
 import Types.Metafunctions
 import qualified Types.SyntacticOpTypes as Syn
 import qualified Types.SyntacticOpTypesPlus as SynP
+import qualified Types.SemanticOpTypes as Sem
 import Types.CompareOpTypes
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import Data.Foldable
@@ -79,11 +80,11 @@ unOps = [ ("add1", number)
 
 binOps :: [(String, Ty, Ty)]
 binOps = [ ("+", number, number)
-         , ("-", number, number)
-         , ("*", number, number)
-         , ("/", number, number)
-         , ("max", real, real)
-         , ("min", real, real)]
+         , ("-", number, number)]
+         --, ("*", number, number)
+         --, ("/", number, number)
+         --, ("max", real, real)
+         --, ("min", real, real)]
 
 compOps :: [(String, Ty, Ty)]
 compOps = [ ("<", real, real)
@@ -190,26 +191,53 @@ compareCompOps ts1 rngTy1 ts2 rngTy2 description = do
                             ++ argName2 ++ ")"))
   putStrLn "Complete!"
 
+compareSyntacticUnOps descr =
+  (compareUnOps
+   SynP.opTypes
+   allSynUnOpRng
+   Syn.opTypes
+   firstSynUnOpRng
+   descr)
+
+compareSyntacticBinOps descr =
+  (compareBinOps
+   SynP.opTypes
+   allSynBinOpRng
+   Syn.opTypes
+   firstSynBinOpRng
+   "Syntactic/Syntactic+")
+
+compareSyntacticCompOps descr = 
+  (compareCompOps
+    SynP.opTypes
+    allSynCompOpProps
+    Syn.opTypes
+    firstSynCompOpProps
+    descr)
+
+compareSemanticUnOps descr =
+  (compareUnOps
+   Sem.opTypes
+   semUnOpRng
+   SynP.opTypes
+   allSynUnOpRng
+   descr)
+
+compareSemanticBinOps descr =
+  (compareBinOps
+   Sem.opTypes
+   semBinOpRng
+   SynP.opTypes
+   allSynBinOpRng
+   descr)
+  
 main :: IO ()
 main = do
-  -- (compareUnOps
-  --  SynP.opTypes
-  --  allSynUnOpRng
-  --  Syn.opTypes
-  --  firstSynUnOpRng
-  --  "Syntactic/Syntactic+")
-  -- (compareBinOps
-  --  SynP.opTypes
-  --  allSynBinOpRng
-  --  Syn.opTypes
-  --  firstSynBinOpRng
-  --  "Syntactic/Syntactic+")
-  (compareCompOps
-   SynP.opTypes
-   allSynCompOpProps
-   Syn.opTypes
-   firstSynCompOpProps
-   "Syntactic/Syntactic+")
+  -- compareSyntacticUnOps "Syntactic/Syntactic+"
+  -- compareSyntacticBinOps "Syntactic/Syntactic+"
+  -- compareSyntacticCompOps "Syntactic/Syntactic+"
+  compareSemanticUnOps "Syntactic/Semantic"
+  compareSemanticBinOps "Syntactic/Semantic"
   --timeInc
   --timePlus
   -- timeLT inTy
