@@ -79,12 +79,12 @@ unOps = [ ("add1", number)
         , ("abs", real)]
 
 binOps :: [(String, Ty, Ty)]
-binOps = [ ("+", number, number)
-         , ("-", number, number)]
-         --, ("*", number, number)
-         --, ("/", number, number)
-         --, ("max", real, real)
-         --, ("min", real, real)]
+binOps = [("+", number, number)
+         , ("-", number, number)
+         , ("*", number, number)
+         , ("/", number, number)
+         , ("max", real, real)
+         , ("min", real, real)]
 
 compOps :: [(String, Ty, Ty)]
 compOps = [ ("<", real, real)
@@ -233,9 +233,9 @@ compareSemanticBinOps descr =
   
 main :: IO ()
 main = do
-  -- compareSyntacticUnOps "Syntactic/Syntactic+"
-  -- compareSyntacticBinOps "Syntactic/Syntactic+"
-  -- compareSyntacticCompOps "Syntactic/Syntactic+"
+  compareSyntacticUnOps "Syntactic/Syntactic+"
+  compareSyntacticBinOps "Syntactic/Syntactic+"
+  compareSyntacticCompOps "Syntactic/Syntactic+"
   compareSemanticUnOps "Syntactic/Semantic"
   compareSemanticBinOps "Syntactic/Semantic"
   --timeInc

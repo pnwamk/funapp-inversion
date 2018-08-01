@@ -52,7 +52,8 @@ compareUnOpRes ::
   -> Bool
 compareUnOpRes fTy1 rngTy1 fTy2 rngTy2 dom arg =
   case (res1, res2) of
-    (Just t1, Just t2) -> subtype t1 t2
+    (Just t1, Just t2) -> (subtype t1 t2) &&
+                          (((isEmpty t1) && (isEmpty t2)) || (overlap t1 t2))
     (_,_) -> not (subtype (parseTy arg) (parseTy dom))
   where res1 = rngTy1 fTy1 arg
         res2 = rngTy2 fTy2 arg
@@ -132,7 +133,8 @@ compareBinOpRes ::
   -> Bool
 compareBinOpRes fTy1 rngTy1 fTy2 rngTy2 dom1 dom2 arg1 arg2 =
     case (res1, res2) of
-      (Just t1, Just t2) -> subtype t1 t2
+      (Just t1, Just t2) -> (subtype t1 t2) &&
+                            (((isEmpty t1) && (isEmpty t2)) || (overlap t1 t2))
       (_,_) -> ((not (subtype (parseTy arg1) (parseTy dom1)))
                 || (not (subtype (parseTy arg2) (parseTy dom2))))
   where res1 = rngTy1 fTy1 arg1 arg2
