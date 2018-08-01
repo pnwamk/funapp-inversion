@@ -81,7 +81,9 @@ binOps :: [(String, Ty, Ty)]
 binOps = [ ("+", number, number)
          , ("-", number, number)
          , ("*", number, number)
-         , ("/", number, number)]
+         , ("/", number, number)
+         , ("max", real, real)
+         , ("min", real, real)]
 
 
 getUnOpType :: String -> [(String, OpSpec)] -> [(Ty, Ty)]
