@@ -105,8 +105,10 @@ compareUnOps ::
   IO ()
 compareUnOps ts1 rngTy1 ts2 rngTy2 description = do
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
-  putStr ("Comparing UnOps (" ++ description ++ ")")
+  putStrLn ("Comparing UnOps (" ++ description ++ ")")
+  putStr "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   forM_ unOps $ \(opName, opDom) -> do
+    putStr $ "\n" ++ opName
     forM_ numericTypes $ \(argName, argTy) -> do
       putStr (if (compareUnOpRes
                   (getUnOpType opName ts1)
@@ -118,7 +120,7 @@ compareUnOps ts1 rngTy1 ts2 rngTy2 description = do
               then "."
               else error ("test failed for ("
                           ++ opName ++ " " ++ argName ++ ")"))
-  putStrLn "Complete!"
+  putStrLn "\nComplete!"
 
 
 getBinOpType :: String -> [(String, OpSpec)] -> [(Ty, Ty, Ty)]
@@ -136,9 +138,12 @@ compareBinOps ::
   IO ()
 compareBinOps ts1 rngTy1 ts2 rngTy2 description = do
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
-  putStr ("Comparing BinOps (" ++ description ++ ")")
+  putStrLn ("Comparing BinOps (" ++ description ++ ")")
+  putStr "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   forM_ binOps $ \(opName, opDom1, opDom2) -> do
+    putStr $ "\n" ++ opName
     forM_ numericTypes $ \(argName1, argTy1) -> do
+      putStr "."
       forM_ numericTypes $ \(argName2, argTy2) -> do
         putStr (if (compareBinOpRes
                     (getBinOpType opName ts1)
@@ -149,12 +154,12 @@ compareBinOps ts1 rngTy1 ts2 rngTy2 description = do
                     opDom2
                     argTy1
                     argTy2)
-                then "."
+                then ""
                 else error ("test failed for ("
                             ++ opName ++ " "
                             ++ argName1 ++ " "
                             ++ argName2 ++ ")"))
-  putStrLn "Complete!"
+  putStrLn "\nComplete!"
 
 getSynCompOpType :: String -> [(String, OpSpec)] -> [(Ty, Ty, Prop, Prop)]
 getSynCompOpType name table =
@@ -171,9 +176,12 @@ compareCompOps ::
   IO ()
 compareCompOps getType1 rngTy1 getType2 rngTy2 description = do
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
-  putStr ("Comparing CompOps (" ++ description ++ ")")
+  putStrLn ("Comparing CompOps (" ++ description ++ ")")
+  putStr "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   forM_ compOps $ \(opName, opDom1, opDom2) -> do
+    putStr $ "\n" ++ opName
     forM_ numericTypes $ \(argName1, argTy1) -> do
+      putStr "."
       forM_ numericTypes $ \(argName2, argTy2) -> do
         putStr (if (compareCompOpRes
                     (getType1 opName)
@@ -184,12 +192,12 @@ compareCompOps getType1 rngTy1 getType2 rngTy2 description = do
                     opDom2
                     argTy1
                     argTy2)
-                then "."
+                then ""
                 else error ("test failed for ("
                             ++ opName ++ " "
                             ++ argName1 ++ " "
                             ++ argName2 ++ ")"))
-  putStrLn "Complete!"
+  putStrLn "\nComplete!"
 
 compareSyntacticUnOps :: String -> IO ()
 compareSyntacticUnOps descr =
