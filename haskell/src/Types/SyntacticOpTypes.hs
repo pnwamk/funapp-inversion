@@ -290,7 +290,8 @@ opTypes =
             , (number, number, number)]))
 
   , ("/", (BinOp
-            [ (zero, number, zero)
+            [ (number, zero, Empty)
+            , (zero, number, zero)
             , (one, one, one)
             , (positiveRational, positiveRational, positiveRational)
             , (nonnegativeRational, nonnegativeRational, nonnegativeRational)

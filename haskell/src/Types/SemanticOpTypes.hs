@@ -102,10 +102,7 @@ opTypes =
             , (number, zero, zero)
             , (byte, byte, index)
             , (integer, integer, integer)
-            , (positiveRational, positiveRational, positiveRational)
-            , (negativeRational, negativeRational, positiveRational)
-            , (negativeRational, positiveRational, negativeRational)
-            , (positiveRational, negativeRational, negativeRational)
+            , (And [rational, (Not zero)], And [rational, (Not zero)], And [rational, (Not zero)])
             , (float, (Or [positiveReal, negativeReal]), float)
             , ((Or [positiveReal, negativeReal]), float, float)
             , (float, float, float)
@@ -116,7 +113,6 @@ opTypes =
             , (nonpositiveReal, nonpositiveReal, nonnegativeReal)
             , (nonpositiveReal, nonnegativeReal, nonpositiveReal)
             , (nonnegativeReal, nonpositiveReal, nonpositiveReal)
-            --, (real, real, real)
             , (floatComplex, (Or [inexactComplex, inexactReal, positiveRational, negativeRational]), floatComplex)
             , ((Or [inexactComplex, inexactReal, positiveRational, negativeRational]), floatComplex, floatComplex)
             , (singleFloatComplex, (Or [singleFloatComplex, singleFloat, positiveRational, negativeRational]), singleFloatComplex)
@@ -126,16 +122,10 @@ opTypes =
             , (number, number, number)]))
 
   , ("/", (BinOp
-            [ (zero, number, zero)
+            [ (number, zero, Empty)
+            , (zero, number, zero)
             , (one, one, one)
-            , (positiveRational, positiveRational, positiveRational)
-            , (nonnegativeRational, nonnegativeRational, nonnegativeRational)
-            , (negativeRational, negativeRational, positiveRational)
-            , (negativeRational, positiveRational, negativeRational)
-            , (positiveRational, negativeRational, negativeRational)
-            , (nonpositiveRational, nonpositiveRational, nonnegativeRational)
-            , (nonpositiveRational, nonnegativeRational, nonpositiveRational)
-            , (nonnegativeRational, nonpositiveRational, nonpositiveRational)
+            , (And [rational, (Not zero)], And [rational, (Not zero)], And [rational, (Not zero)])
             , ((Or [positiveReal, negativeReal, float]), float, float)
             , (float, real, float) -- if any argument after the first is exact 0, not a problem
             , (singleFloat, (Or [positiveRational, negativeRational, singleFloat]), singleFloat)
@@ -145,7 +135,6 @@ opTypes =
             , (negativeReal, negativeReal, nonnegativeReal) -- 0.0 is non-neg, but doesn't preserve sign
             , (negativeReal, positiveReal, nonpositiveReal) -- idem
             , (positiveReal, negativeReal, nonpositiveReal) -- idem
-            , (real, real, real)
             , ((Or [inexactComplex, inexactReal, positiveRational, negativeRational]), floatComplex, floatComplex)
             , (floatComplex, number, floatComplex) -- if any argument after the first is exact 0, not a problem
             , (singleFloatComplex, (Or [singleFloatComplex, singleFloat, positiveRational, negativeRational]), singleFloatComplex)
