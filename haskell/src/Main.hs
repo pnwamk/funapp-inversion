@@ -156,29 +156,29 @@ compareBinOps ts1 rngTy1 ts2 rngTy2 description = do
                             ++ argName2 ++ ")"))
   putStrLn "Complete!"
 
-getCompOpType :: String -> [(String, OpSpec)] -> [(Ty, Ty, Prop, Prop)]
-getCompOpType name table =
+getSynCompOpType :: String -> [(String, OpSpec)] -> [(Ty, Ty, Prop, Prop)]
+getSynCompOpType name table =
   case (lookup name table)  of
     Just (CompOp s) -> s
     Nothing -> error ("missing CompOp spec for " ++ name)
 
 compareCompOps ::
-  [(String, OpSpec)] ->
-  ([(Ty, Ty, Prop, Prop)] -> Ty -> Ty -> Maybe (Prop, Prop)) ->
-  [(String, OpSpec)] ->
-  ([(Ty, Ty, Prop, Prop)] -> Ty -> Ty -> Maybe (Prop, Prop)) ->
+  (String -> a) ->
+  (a -> Ty -> Ty -> Maybe (BDD.Ty, BDD.Ty, BDD.Ty, BDD.Ty)) ->
+  (String -> b) ->
+  (b -> Ty -> Ty -> Maybe (BDD.Ty, BDD.Ty, BDD.Ty, BDD.Ty)) ->
   String ->
   IO ()
-compareCompOps ts1 rngTy1 ts2 rngTy2 description = do
+compareCompOps getType1 rngTy1 getType2 rngTy2 description = do
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   putStr ("Comparing CompOps (" ++ description ++ ")")
   forM_ compOps $ \(opName, opDom1, opDom2) -> do
     forM_ numericTypes $ \(argName1, argTy1) -> do
       forM_ numericTypes $ \(argName2, argTy2) -> do
         putStr (if (compareCompOpRes
-                    (getCompOpType opName ts1)
+                    (getType1 opName)
                     rngTy1
-                    (getCompOpType opName ts2)
+                    (getType2 opName)
                     rngTy2
                     opDom1
                     opDom2
@@ -191,6 +191,7 @@ compareCompOps ts1 rngTy1 ts2 rngTy2 description = do
                             ++ argName2 ++ ")"))
   putStrLn "Complete!"
 
+compareSyntacticUnOps :: String -> IO ()
 compareSyntacticUnOps descr =
   (compareUnOps
    SynP.opTypes
@@ -199,6 +200,7 @@ compareSyntacticUnOps descr =
    firstSynUnOpRng
    descr)
 
+compareSyntacticBinOps :: String -> IO ()
 compareSyntacticBinOps descr =
   (compareBinOps
    SynP.opTypes
@@ -207,14 +209,16 @@ compareSyntacticBinOps descr =
    firstSynBinOpRng
    "Syntactic/Syntactic+")
 
+compareSyntacticCompOps :: String -> IO ()
 compareSyntacticCompOps descr = 
   (compareCompOps
-    SynP.opTypes
-    allSynCompOpProps
-    Syn.opTypes
-    firstSynCompOpProps
+    (\name -> (getSynCompOpType name SynP.opTypes))
+    allSynCompOpTypes
+    (\name -> (getSynCompOpType name Syn.opTypes))
+    firstSynCompOpTypes
     descr)
 
+compareSemanticUnOps :: String -> IO ()
 compareSemanticUnOps descr =
   (compareUnOps
    Sem.opTypes
@@ -223,6 +227,7 @@ compareSemanticUnOps descr =
    allSynUnOpRng
    descr)
 
+compareSemanticBinOps :: String -> IO ()
 compareSemanticBinOps descr =
   (compareBinOps
    Sem.opTypes
@@ -230,6 +235,16 @@ compareSemanticBinOps descr =
    SynP.opTypes
    allSynBinOpRng
    descr)
+
+compareSemanticCompOps :: (BDD.Ty -> BDD.Ty -> BDD.Ty -> Maybe BDD.Ty) -> String -> IO ()
+compareSemanticCompOps inputTy descr = 
+  (compareCompOps
+    (\name -> (getBinOpType name Sem.opTypes))
+    (semCompOpTypes inputTy)
+    (\name -> (getSynCompOpType name Syn.opTypes))
+    firstSynCompOpTypes
+    descr)
+
   
 main :: IO ()
 main = do
@@ -238,9 +253,7 @@ main = do
   compareSyntacticCompOps "Syntactic/Syntactic+"
   compareSemanticUnOps "Syntactic/Semantic"
   compareSemanticBinOps "Syntactic/Semantic"
-  --timeInc
-  --timePlus
-  -- timeLT inTy
-  -- timeLT cInTy
+  compareSemanticCompOps inTy "Syntactic/Semantic (inTy)"
+  compareSemanticCompOps cInTy "Syntactic/Semantic (cInTy)"
 
   

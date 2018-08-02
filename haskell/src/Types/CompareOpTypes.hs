@@ -153,68 +153,62 @@ argType d o1 (Stx.Conj p1 p2) = tyAnd t1 t2
         t2 = argType d o1 p2
 
 
-firstSynCompOpProps ::
+firstSynCompOpTypes ::
   [(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)] ->
   Stx.Ty ->
   Stx.Ty ->
-  Maybe (Stx.Prop, Stx.Prop)
-firstSynCompOpProps syn arg1 arg2 =
+  Maybe (Ty, Ty, Ty, Ty)
+firstSynCompOpTypes syn arg1 arg2 =
   case (find (\(d1,d2,pos,neg) ->
                  (subtype (parseTy arg1) (parseTy d1))
                  && (subtype (parseTy arg2) (parseTy d2)))
          syn) of
     Nothing -> Nothing
-    Just (d1,d2,pos, neg) -> Just (pos,neg)
+    Just (d1,d2, pos, neg) -> Just ((argType arg1 Stx.ArgZero pos),
+                                    (argType arg2 Stx.ArgOne pos),
+                                    (argType arg1 Stx.ArgZero neg),
+                                    (argType arg2 Stx.ArgOne neg))
 
 
-allSynCompOpProps ::
+allSynCompOpTypes ::
   [(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)] ->
   Stx.Ty ->
   Stx.Ty ->
-  Maybe (Stx.Prop, Stx.Prop)
-allSynCompOpProps [] argTy1 argTy2 = Nothing
-allSynCompOpProps ((d1,d2,pos,neg):rst) arg1 arg2
+  Maybe (Ty, Ty, Ty, Ty)
+allSynCompOpTypes [] argTy1 argTy2 = Nothing
+allSynCompOpTypes ((d1,d2,pos,neg):rst) arg1 arg2
   | (subtype (parseTy arg1) (parseTy d1))
     && (subtype (parseTy arg2) (parseTy d2)) =
-    case (allSynCompOpProps rst arg1 arg2) of
-      Just (pos',neg') -> Just (Stx.Conj pos pos', Stx.Conj neg neg') 
-      Nothing -> Just (pos, neg)
-  | otherwise = allSynCompOpProps rst arg1 arg2
+    case (allSynCompOpTypes rst arg1 arg2) of
+      Just (pos1, pos2, neg1, neg2) ->
+        Just (tyAnd pos1 (argType arg1 Stx.ArgZero pos),
+              tyAnd pos2 (argType arg2 Stx.ArgOne pos),
+              tyAnd neg1 (argType arg1 Stx.ArgZero neg),
+              tyAnd neg2 (argType arg2 Stx.ArgOne neg)) 
+      Nothing -> Just ((argType arg1 Stx.ArgZero pos),
+                       (argType arg2 Stx.ArgOne pos),
+                       (argType arg1 Stx.ArgZero neg),
+                       (argType arg2 Stx.ArgOne neg))
+  | otherwise = allSynCompOpTypes rst arg1 arg2
 
-
--- Binary comparisons produce logical info about the first and second
--- argument. This function checks pos1 and neg1 are at least as strong
--- propositions as pos2 and neg2 (where pos are the props from getting
--- a truthy value back, and neg is the props from getting false back).
-subProps :: Stx.Ty -> Stx.Ty -> Stx.Prop -> Stx.Prop -> Stx.Prop -> Stx.Prop -> Bool
-subProps dom1 dom2 pos1 neg1 pos2 neg2 =
-  (subtype
-    (argType dom1 Stx.ArgZero pos1)
-    (argType dom1 Stx.ArgZero pos2))
-  && (subtype
-       (argType dom1 Stx.ArgZero neg1)
-       (argType dom1 Stx.ArgZero neg2))
-  && (subtype
-       (argType dom2 Stx.ArgOne pos1)
-       (argType dom2 Stx.ArgOne pos2))
-  && (subtype
-       (argType dom2 Stx.ArgOne neg1)
-       (argType dom2 Stx.ArgOne neg2))
   
 compareCompOpRes ::
-  [(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)]
-  -> ([(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)] -> Stx.Ty -> Stx.Ty -> Maybe (Stx.Prop, Stx.Prop))
-  -> [(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)]
-  -> ([(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)] -> Stx.Ty -> Stx.Ty -> Maybe (Stx.Prop, Stx.Prop))
-  -> Stx.Ty
-  -> Stx.Ty
-  -> Stx.Ty
-  -> Stx.Ty
-  -> Bool
+  a ->
+  (a -> Stx.Ty -> Stx.Ty -> Maybe (Ty, Ty, Ty, Ty)) ->
+  b ->
+  (b -> Stx.Ty -> Stx.Ty -> Maybe (Ty, Ty, Ty, Ty)) ->
+  Stx.Ty ->
+  Stx.Ty ->
+  Stx.Ty ->
+  Stx.Ty ->
+  Bool
 compareCompOpRes fTy1 rngTy1 fTy2 rngTy2 dom1 dom2 arg1 arg2 =
   case (res1, res2) of
-    (Just (pos1, neg1), Just (pos2, neg2)) ->
-      subProps arg1 arg2 pos1 neg1 pos2 neg2
+    (Just (pos1, pos2, neg1, neg2), Just (pos1', pos2', neg1', neg2')) ->
+      (subtype pos1 pos1')
+      && (subtype pos2 pos2')
+      && (subtype neg1 neg1')
+      && (subtype neg2 neg2')
     (_,_) -> ((not (subtype (parseTy arg1) (parseTy dom1)))
               || (not (subtype (parseTy arg2) (parseTy dom2))))
   where res1 = rngTy1 fTy1 arg1 arg2
@@ -229,8 +223,12 @@ simplifySynCompOp orig = [x | Just x <- rawDups]
                                  else Nothing)
                    $ zip orig [0..])
         dup (t1,t2,pos,neg) =
-          case (allSynCompOpProps (delete (t1,t2,pos,neg) orig) t1 t2) of
-            Just (pos', neg') -> subProps t1 t2 pos' neg' pos neg
+          case (allSynCompOpTypes (delete (t1,t2,pos,neg) orig) t1 t2) of
+            Just (pos1, pos2, neg1, neg2) ->
+              (subtype pos1 (argType t1 Stx.ArgZero pos))
+              && (subtype pos2 (argType t2 Stx.ArgOne pos))
+              && (subtype neg1 (argType t1 Stx.ArgZero neg))
+              && (subtype neg2 (argType t2 Stx.ArgOne neg))
             Nothing -> False
 
 
@@ -276,51 +274,30 @@ simplifySemBinOp orig = [x | Just x <- rawDups]
             Nothing -> False
 
 
-compareBinPredRes ::
+semCompOpTypes ::
   (Ty -> Ty -> Ty -> Maybe Ty) ->
-  Stx.Ty ->
-  Stx.Ty ->
-  Stx.Ty ->
-  Stx.Ty ->
   [(Stx.Ty, Stx.Ty, Stx.Ty)] ->
-  [(Stx.Ty, Stx.Ty, Stx.Prop, Stx.Prop)] ->
-  Bool
-compareBinPredRes inputTy dom1 dom2 arg1 arg2 sem syn =
-    case (semPos1,semPos2,semNeg1,semNeg2,synRes) of
+  Stx.Ty ->
+  Stx.Ty ->
+  Maybe (Ty, Ty, Ty, Ty)
+semCompOpTypes inputTy ts arg1 arg2 =
+  case (pos1,pos2,neg1,neg2) of
     (Just posTy1,
      Just posTy2,
      Just negTy1,
-     Just negTy2,
-     Just (posProp,negProp)) ->
-      (subtype posTy1 (tyAnd argTy1 (argType dom1 Stx.ArgZero posProp)))
-      && (subtype posTy2 (tyAnd argTy2 (argType dom2 Stx.ArgOne posProp)))
-      && (subtype negTy1 (tyAnd argTy1 (argType dom1 Stx.ArgZero negProp)))
-      && (subtype negTy2 (tyAnd argTy2 (argType dom2 Stx.ArgOne negProp)))
-    (_,_,_,_,_) -> (not (subtype argTy1 domTy1))
-                   || (not (subtype argTy2 domTy2))
-  where domTy1 = parseTy dom1
-        domTy2 = parseTy dom2
-        argTy1 = parseTy arg1
-        argTy2 = parseTy arg2
-        argTy = prodTy argTy1 argTy2
-        semTy = parseBinOpToSemantic sem
-        semPos = inputTy semTy argTy $ parseTy (Stx.Not Stx.F)
-        (semPos1,semPos2) =
-          case semPos of
-            Nothing -> (Nothing, Nothing)
-            Just t -> (fstProj t, sndProj t)
-        semNeg = inputTy semTy argTy $ parseTy Stx.F
-        (semNeg1,semNeg2) =
-          case semNeg of
-            Nothing -> (Nothing, Nothing)
-            Just t -> (fstProj t, sndProj t)
-        synRes = case (find (\(d1,d2,pos,neg) ->
-                               (subtype argTy1 (parseTy d1))
-                               && (subtype argTy2 (parseTy d2)))
-                        syn)
-                 of
-                   Nothing -> Nothing
-                   Just (_,_,pos,neg) -> Just (pos,neg)
-  
-
-compareBinPredResIncomplete = compareBinPredRes inTy
+     Just negTy2) -> Just (posTy1, posTy2, negTy1, negTy2)
+    (_,_,_,_) -> Nothing
+    where argTy1 = parseTy arg1
+          argTy2 = parseTy arg2
+          argTy = prodTy argTy1 argTy2
+          semTy = parseBinOpToSemantic ts
+          pos = inputTy semTy argTy $ parseTy (Stx.Not Stx.F)
+          (pos1,pos2) =
+            case pos of
+              Nothing -> (Nothing, Nothing)
+              Just t -> (fstProj t, sndProj t)
+          neg = inputTy semTy argTy $ parseTy Stx.F
+          (neg1,neg2) =
+            case neg of
+              Nothing -> (Nothing, Nothing)
+              Just t -> (fstProj t, sndProj t)
