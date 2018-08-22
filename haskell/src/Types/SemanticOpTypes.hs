@@ -246,5 +246,30 @@ opTypes =
            , (fixnum, positiveIntegerNotFixnum, T)
            , (positiveIntegerNotFixnum, fixnum, F)
            , (realNoNaN, positiveInfinity, T)
-           , (positiveInfinity, And [realNoNaN, (Not positiveInfinity)], F)]))]
+           , (positiveInfinity, And [realNoNaN, (Not positiveInfinity)], F)]))
+
+  , ("=", (BinOp
+            [ (someNaN, number, F)
+            , (number, someNaN, F)
+            , (realZero, realZero, T)
+            , (And[exactNumber, (Not realZero)], realZero, F)
+            , (realZero, And[exactNumber, (Not realZero)], F)
+            , (And[exactNumber, (Not one)], one, F)
+            , (one, And[exactNumber, (Not one)], F)
+            , (And[exactNumber, (Not byteLargerThanOne)], byteLargerThanOne, F)
+            , (byteLargerThanOne, And[exactNumber, (Not byteLargerThanOne)], F)
+            , (And[exactNumber, (Not positiveIndexNotByte)], positiveIndexNotByte, F)
+            , (positiveIndexNotByte, And[exactNumber, (Not positiveIndexNotByte)], F)
+            , (And[exactNumber, (Not fixnumNotIndex)], fixnumNotIndex, F)
+            , (fixnumNotIndex, And[exactNumber, (Not fixnumNotIndex)], F)
+            , (And[exactNumber, (Not integerNotFixnum)], integerNotFixnum, F)
+            , (integerNotFixnum, And[exactNumber, (Not integerNotFixnum)], F)
+            , (And[exactNumber, (Not rationalNotInteger)], rationalNotInteger, F)
+            , (rationalNotInteger, And[exactNumber, (Not rationalNotInteger)], F)
+            , (nonpositiveReal, positiveReal, F)
+            , (positiveReal, nonpositiveReal, F)
+            , (nonnegativeReal, negativeReal, F)
+            , (negativeReal, nonnegativeReal, F)
+            , (number, number, bool)]))
+  ]
 

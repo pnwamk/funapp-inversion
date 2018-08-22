@@ -263,4 +263,39 @@ opTypes =
              , (nonnegativeReal, real, (IsA ArgOne nonnegativeReal), TT) -- <=-pat real
              , (real, negativeReal, (IsA ArgZero negativeReal), TT) -- <=-pat real
              , (real, nonpositiveReal, (IsA ArgZero nonpositiveReal), TT) -- <=-pat real
-             , (real, real, TT, TT)]))]
+             , (real, real, TT, TT)]))
+
+  , ("=", (CompOp
+            [ (real, realZero, (IsA ArgZero realZeroNoNaN), (IsA ArgZero (Not realZeroNoNaN)))
+            , (realZero, real, (IsA ArgOne realZeroNoNaN), (IsA ArgOne (Not realZeroNoNaN)))
+            , (exactNumber, one, (IsA ArgZero one), (IsA ArgZero (Not one)))
+            , (one, exactNumber, (IsA ArgOne one), (IsA ArgOne (Not one)))
+            , (exactNumber, byte, (IsA ArgZero byte), TT)
+            , (byte, exactNumber, (IsA ArgOne byte), TT)
+            , (exactNumber, index, (IsA ArgZero index), TT)
+            , (index, exactNumber, (IsA ArgOne index), TT)
+            , (exactNumber, fixnum, (IsA ArgZero fixnum), TT)
+            , (fixnum, exactNumber, (IsA ArgOne fixnum), TT)
+            , (exactNumber, integer, (IsA ArgZero integer), TT)
+            , (integer, exactNumber, (IsA ArgOne integer), TT)
+            , (exactNumber, positiveRational, (IsA ArgZero positiveRational), TT)
+            , (positiveRational, exactNumber, (IsA ArgOne positiveRational), TT)
+            , (exactNumber, nonnegativeRational, (IsA ArgZero nonnegativeRational), TT)
+            , (nonnegativeRational, exactNumber, (IsA ArgOne nonnegativeRational), TT)
+            , (exactNumber, negativeRational, (IsA ArgZero negativeRational), TT)
+            , (negativeRational, exactNumber, (IsA ArgOne negativeRational), TT)
+            , (exactNumber, nonpositiveRational, (IsA ArgZero nonpositiveRational), TT)
+            , (nonpositiveRational, exactNumber, (IsA ArgOne nonpositiveRational), TT)
+            , (exactNumber, rational, (IsA ArgZero rational), TT)
+            , (rational, exactNumber, (IsA ArgOne rational), TT)
+            , (real, positiveReal, (IsA ArgZero positiveReal), TT)
+            , (positiveReal, real, (IsA ArgOne positiveReal), TT)
+            , (real, nonnegativeReal, (IsA ArgZero nonnegativeReal), TT)
+            , (nonnegativeReal, real, (IsA ArgOne nonnegativeReal), TT)
+            , (real, negativeReal, (IsA ArgZero negativeReal), TT)
+            , (negativeReal, real, (IsA ArgOne negativeReal), TT)
+            , (real, nonpositiveReal, (IsA ArgZero nonpositiveReal), TT)
+            , (nonpositiveReal, real, (IsA ArgOne nonpositiveReal), TT)
+            , (number, number, TT, TT)]))
+
+  ] -- end of opTypes

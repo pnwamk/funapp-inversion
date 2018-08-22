@@ -88,7 +88,8 @@ binOps = [("+", number, number)
 
 compOps :: [(String, Ty, Ty)]
 compOps = [ ("<", real, real)
-          , ("<=", real, real)]
+          , ("<=", real, real)
+          , ("=", number, number)]
 
 getUnOpType :: String -> [(String, OpSpec)] -> [(Ty, Ty)]
 getUnOpType name table =
@@ -106,9 +107,10 @@ compareUnOps ::
 compareUnOps ts1 rngTy1 ts2 rngTy2 description = do
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   putStrLn ("Comparing UnOps (" ++ description ++ ")")
-  putStr "* * * * * * * * * * * * * * * * * * * * * * * * * *"
+  putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   forM_ unOps $ \(opName, opDom) -> do
-    putStr $ "\n" ++ opName
+    startTime <- getCurrentTime
+    putStr opName
     forM_ numericTypes $ \(argName, argTy) -> do
       putStr (if (compareUnOpRes
                   (getUnOpType opName ts1)
@@ -120,6 +122,9 @@ compareUnOps ts1 rngTy1 ts2 rngTy2 description = do
               then "."
               else error ("test failed for ("
                           ++ opName ++ " " ++ argName ++ ")"))
+    endTime <- getCurrentTime
+    putStrLn $ "(" ++ (show (diffUTCTime endTime startTime)) ++ ")"
+
   putStrLn "\nComplete!"
 
 
@@ -139,9 +144,10 @@ compareBinOps ::
 compareBinOps ts1 rngTy1 ts2 rngTy2 description = do
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   putStrLn ("Comparing BinOps (" ++ description ++ ")")
-  putStr "* * * * * * * * * * * * * * * * * * * * * * * * * *"
+  putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   forM_ binOps $ \(opName, opDom1, opDom2) -> do
-    putStr $ "\n" ++ opName
+    startTime <- getCurrentTime
+    putStr opName
     forM_ numericTypes $ \(argName1, argTy1) -> do
       putStr "."
       forM_ numericTypes $ \(argName2, argTy2) -> do
@@ -159,6 +165,9 @@ compareBinOps ts1 rngTy1 ts2 rngTy2 description = do
                             ++ opName ++ " "
                             ++ argName1 ++ " "
                             ++ argName2 ++ ")"))
+    endTime <- getCurrentTime
+    putStrLn $ "(" ++ (show (diffUTCTime endTime startTime)) ++ ")"
+
   putStrLn "\nComplete!"
 
 getSynCompOpType :: String -> [(String, OpSpec)] -> [(Ty, Ty, Prop, Prop)]
@@ -177,9 +186,10 @@ compareCompOps ::
 compareCompOps getType1 rngTy1 getType2 rngTy2 description = do
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   putStrLn ("Comparing CompOps (" ++ description ++ ")")
-  putStr "* * * * * * * * * * * * * * * * * * * * * * * * * *"
+  putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   forM_ compOps $ \(opName, opDom1, opDom2) -> do
-    putStr $ "\n" ++ opName
+    startTime <- getCurrentTime
+    putStr opName
     forM_ numericTypes $ \(argName1, argTy1) -> do
       putStr "."
       forM_ numericTypes $ \(argName2, argTy2) -> do
@@ -197,6 +207,9 @@ compareCompOps getType1 rngTy1 getType2 rngTy2 description = do
                             ++ opName ++ " "
                             ++ argName1 ++ " "
                             ++ argName2 ++ ")"))
+    endTime <- getCurrentTime
+    putStrLn $ "(" ++ (show (diffUTCTime endTime startTime)) ++ ")"
+
   putStrLn "\nComplete!"
 
 compareSyntacticUnOps :: String -> IO ()
@@ -256,11 +269,11 @@ compareSemanticCompOps inputTy descr =
   
 main :: IO ()
 main = do
-  compareSyntacticUnOps "Syntactic/Syntactic+"
-  compareSyntacticBinOps "Syntactic/Syntactic+"
-  compareSyntacticCompOps "Syntactic/Syntactic+"
-  compareSemanticUnOps "Syntactic/Semantic"
-  compareSemanticBinOps "Syntactic/Semantic"
+  --compareSyntacticUnOps "Syntactic/Syntactic+"
+  --compareSyntacticBinOps "Syntactic/Syntactic+"
+  --compareSyntacticCompOps "Syntactic/Syntactic+"
+  --compareSemanticUnOps "Syntactic/Semantic"
+  --compareSemanticBinOps "Syntactic/Semantic"
   compareSemanticCompOps inTy "Syntactic/Semantic (inTy)"
   compareSemanticCompOps cInTy "Syntactic/Semantic (cInTy)"
 

@@ -151,6 +151,8 @@ nonnegativeFixnum = Or [positiveFixnum, zero]
 
 nonpositiveFixnum = Or [negativeFixnum, zero]
 fixnum = Or [negativeFixnum, zero, positiveFixnum]
+integerNotFixnum = Or [negativeIntegerNotFixnum, positiveIntegerNotFixnum]
+fixnumNotIndex = Or [negativeFixnum, positiveFixnumNotIndex]
 
 positiveInteger = Or [positiveIntegerNotFixnum, positiveFixnum]
 nonnegativeInteger = Or [zero, positiveInteger]
@@ -159,11 +161,14 @@ negativeInteger = Or [negativeFixnum, negativeIntegerNotFixnum]
 nonpositiveInteger = Or [negativeInteger, Zero]
 integer = Or [negativeInteger, zero, positiveInteger]
 
+
+
 positiveRational = Or [positiveRationalNotInteger, positiveInteger]
 nonnegativeRational = Or [zero, positiveRational]
 
 negativeRational = Or [negativeRationalNotInteger, negativeInteger]
 nonpositiveRational = Or [negativeRational, zero]
+rationalNotInteger = Or[negativeRationalNotInteger, positiveRationalNotInteger]
 rational = Or [negativeRational, zero, positiveRational]
 
 floatZero = Or [floatPositiveZero, floatNegativeZero, floatNaN]

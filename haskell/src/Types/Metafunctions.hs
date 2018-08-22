@@ -181,20 +181,26 @@ inTy fty@(Ty _ _ arrows) arg out =
 cInTy :: Ty -> Ty -> Ty -> Maybe Ty
 cInTy fty@(Ty _ _ arrows) arg out =
   case (domTy fty) of
-    (Just dom) | (subtype arg dom) -> Just $ tyDiff arg (input arrows [])
+    (Just dom) | (subtype arg dom) -> Just $ input arrows []
     _ -> Nothing
   where input :: (BDD Arrow) -> [Arrow] -> Ty
         input Bot p = emptyTy
-        input Top p = aux p
+        input Top p = tyDiff arg (aux arg out p)
         input (Node a l m r) p = tyOr lty $ tyOr mty rty
           where lty = input l $ a:p
                 mty = input m p
                 rty = input r p
-        aux :: [Arrow] -> Ty
-        aux [] = emptyTy
-        aux ((Arrow s1 s2):p) = tyOr neg1 neg2
-          where neg1 = if (overlap s2 out)
+        aux :: Ty -> Ty -> [Arrow] -> Ty
+        aux dom rng []
+          | (isEmpty rng) = dom
+          | otherwise     = emptyTy
+        aux dom rng ((Arrow t1 t2):p) = tyOr neg1 neg2
+          where dom' = (tyAnd t1 dom)
+                rng' = (tyAnd t2 rng)
+                neg1 = if isEmpty dom'
                        then emptyTy
-                       else s1
-                neg2 = aux p
+                       else if isEmpty rng'
+                            then dom'
+                            else emptyTy
+                neg2 = aux dom rng p
 
