@@ -65,7 +65,7 @@ data Prop =
 data OpSpec =
     UnOp [(Ty, Ty)]
   | BinOp [(Ty, Ty, Ty)]
-  | CompOp [(Ty, Ty, Prop ,Prop)]
+  | CompOp [(Ty, Ty, Prop, Prop)]
   deriving (Eq, Show, Ord)
 
 baseTypes :: [Ty]

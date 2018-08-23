@@ -56,17 +56,20 @@ isEmptyArrow Top dom pos neg = any (emptyArrow dom pos) neg
                         t1'  = (tyDiff t1 s1)
 
 
+{-# INLINE overlap #-}
 -- is [[t1]] ∩ [[t2]] ≠ ∅
 overlap :: Ty -> Ty -> Bool
 overlap t1 t2 = not (isEmpty (tyAnd t1 t2))
 
 
+{-# INLINE subtype #-}
 -- Is t1 a subtype of t2
 -- i.e. [[t1]] ⊆ [[t2]]
 subtype :: Ty -> Ty -> Bool
 subtype t1 t2 = isEmpty (tyDiff t1 t2)
 
 
+{-# INLINE equiv #-}
 -- Is t1 equivalent to t2
 -- i.e. [[t1]] ⊆ [[t2]] and [[t1]] ⊇ [[t2]]
 equiv :: Ty -> Ty -> Bool

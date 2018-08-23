@@ -50,7 +50,7 @@ deriving instance Eq x => Eq (BDD x)
 deriving instance (Eq x, Ord x) => Ord (BDD x)
 
 -- a DNF representation of types
-data Ty = Ty Base (BDD Prod) (BDD Arrow)
+data Ty = Ty !Base !(BDD Prod) !(BDD Arrow)
   deriving(Eq, Show, Ord)
 
 -- universal type
@@ -159,25 +159,28 @@ bddNot (Node a l m r) = (node a (bddAnd notL notM) Bot (bddAnd notR notM))
         notM = bddNot m
         notR = bddNot r
 
-
+{-# INLINE tyAnd #-}
 tyAnd :: Ty -> Ty -> Ty
 tyAnd (Ty base1 prod1 arrow1) (Ty base2 prod2 arrow2) =
   (Ty (baseAnd base1 base2)
     (bddAnd prod1 prod2)
     (bddAnd arrow1 arrow2))
 
+{-# INLINE tyOr #-}
 tyOr :: Ty -> Ty -> Ty
 tyOr (Ty base1 prod1 arrow1) (Ty base2 prod2 arrow2) =
   (Ty (baseOr base1 base2)
     (bddOr prod1 prod2)
     (bddOr arrow1 arrow2))
 
+{-# INLINE tyDiff #-}
 tyDiff :: Ty -> Ty -> Ty
 tyDiff (Ty base1 prod1 arrow1) (Ty base2 prod2 arrow2) =
   (Ty (baseDiff base1 base2)
     (bddDiff prod1 prod2)
     (bddDiff arrow1 arrow2))
 
+{-# INLINE tyNot #-}
 tyNot :: Ty -> Ty
 tyNot t = tyDiff anyTy t
 
@@ -194,11 +197,11 @@ parseTy (Stx.Arrow t1 t2) = (arrowTy
                                 (parseTy t1)
                                 (parseTy t2))
 parseTy (Stx.Or []) = emptyTy
-parseTy (Stx.Or (t:ts)) = (foldl tyOr
+parseTy (Stx.Or (t:ts)) = (foldr tyOr
                              (parseTy t)
                              (map parseTy ts))
 parseTy (Stx.And []) = anyTy
-parseTy (Stx.And (t:ts)) = (foldl tyAnd
+parseTy (Stx.And (t:ts)) = (foldr tyAnd
                               (parseTy t)
                               (map parseTy ts))
 parseTy (Stx.Not t) = tyNot (parseTy t)

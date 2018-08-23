@@ -37,12 +37,12 @@ isProd t = subtype t anyProd
 calcProj :: (Ty -> Ty -> Ty) -> Ty -> Maybe Ty
 calcProj select t@(Ty _ ps _)
   | not (isProd t) = Nothing
-  | otherwise = Just (foldl tyOr emptyTy (map clauseProj clauses))
+  | otherwise = Just (foldr tyOr emptyTy (map clauseProj clauses))
     where clauses :: [(Prod, [Prod])]
           clauses = flattenProds ps
           clauseProj :: (Prod, [Prod]) -> Ty
           clauseProj ((Prod t1 t2), negs) =
-            (foldl (\t negs' -> tyOr t (proj t1 t2 negs negs'))
+            (foldr (\negs' t -> tyOr t (proj t1 t2 negs negs'))
              emptyTy
              (subsets negs))
           proj :: Ty -> Ty -> [Prod] -> [Prod] -> Ty
@@ -53,9 +53,9 @@ calcProj select t@(Ty _ ps _)
             where t1' = tyAnd t1 (andNFsts negs')
                   t2' = tyAnd t2 (andNSnds (negs \\ negs'))
           andNFsts :: [Prod] -> Ty
-          andNFsts ps = foldl (\t (Prod t1 _) -> tyAnd t (tyNot t1)) anyTy ps
+          andNFsts ps = foldr (\(Prod t1 _) t -> tyAnd t (tyNot t1)) anyTy ps
           andNSnds :: [Prod] -> Ty
-          andNSnds ps = foldl (\t (Prod _ t2) -> tyAnd t (tyNot t2)) anyTy ps
+          andNSnds ps = foldr (\(Prod _ t2) t -> tyAnd t (tyNot t2)) anyTy ps
 
             
 
@@ -104,11 +104,11 @@ domTy t
         clauseDoms :: [Ty]
         clauseDoms = map clauseDom clauses
         clauseDom :: ([Arrow] , [Arrow]) -> Ty
-        clauseDom (pos, neg) = (foldl (\t (Arrow t' _) ->
+        clauseDom (pos, neg) = (foldr (\(Arrow t' _) t ->
                                          tyOr t t')
                                 emptyTy
                                 pos)
-        dom = foldl tyAnd anyTy clauseDoms
+        dom = foldr tyAnd anyTy clauseDoms
 
 -- If (1) fty is a function type and (2) argty is a subtype
 -- of its domain, what is the return type for applying
@@ -120,21 +120,21 @@ rngTy fty@(Ty _ _ arrows) argty =
     (Just dom) | (subtype argty dom) -> Just res
     _ -> Nothing
   where ps = map fst (flattenBDD arrows)
-        res = foldl (\t p -> tyOr t (calcRng p argty)) emptyTy ps
+        res = foldr (\p t -> tyOr t (calcRng p argty)) emptyTy ps
 
 
 calcRng :: [Arrow] -> Ty -> Ty
-calcRng p argty = foldl tyOr emptyTy ts
+calcRng p argty = foldr tyOr emptyTy ts
   where ps = nonEmptySubsets p
         ts = map getTy ps
         getTy :: [Arrow] -> Ty
         getTy pos
           | subtype argty compDom = emptyTy
           | otherwise = rng
-          where compDom = (foldl (\t (Arrow s1 _) -> tyOr t s1)
+          where compDom = (foldr (\(Arrow s1 _) t -> tyOr t s1)
                            emptyTy
                            (p \\ pos))
-                rng = (foldl (\t (Arrow _ s2) -> tyAnd t s2)
+                rng = (foldr (\(Arrow _ s2) t -> tyAnd t s2)
                            anyTy
                            pos)
 
@@ -144,8 +144,8 @@ inTy fty@(Ty _ _ arrows) arg out
   | not $ isFun fty = Nothing
   | otherwise = Just res
   where ps =  map fst (flattenBDD arrows)
-        res = (foldl
-                (\t p -> tyOr t (tyDiff
+        res = (foldr
+                (\p t -> tyOr t (tyDiff
                                   (calcInTy p arg out (not . isEmpty))
                                   (calcInTy p arg out isEmpty)))
                 emptyTy
@@ -153,13 +153,13 @@ inTy fty@(Ty _ _ arrows) arg out
 
 
 calcInTy :: [Arrow] -> Ty -> Ty -> (Ty -> Bool) -> Ty
-calcInTy p arg out include = foldl tyOr emptyTy (map aux (nonEmptySubsets p))
+calcInTy p arg out include = foldr tyOr emptyTy (map aux (nonEmptySubsets p))
   where aux :: [Arrow] -> Ty
         aux p' = if (include rng)
                  then dom
                  else emptyTy
-          where dom = foldl tyAnd arg (map arrowDom p')
-                rng = foldl tyAnd out (map arrowRng p')
+          where dom = foldr tyAnd arg (map arrowDom p')
+                rng = foldr tyAnd out (map arrowRng p')
                 arrowDom (Arrow t1 _) = t1 
                 arrowRng (Arrow _ t2) = t2
         

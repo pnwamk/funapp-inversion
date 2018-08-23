@@ -6,7 +6,7 @@ module Common.Primitives
 
 data Id = Ident String deriving (Eq, Show, Ord)
 
-data Const = IntC Integer | BoolC Bool
+data Const = IntC {-# UNPACK #-} !Int | BoolC !Bool
   deriving (Eq, Show, Ord)
 
 data Prim =

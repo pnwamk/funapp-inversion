@@ -59,9 +59,9 @@ isEmptyProd ps = all emptyClause (flattenProds ps)
           | subtype s2 (orSnds (negs \\ negs')) = True
           | otherwise = False
         orFsts :: [Prod] -> Ty
-        orFsts ps = foldl (\t (Prod t1 _) -> tyOr t t1) emptyTy ps
+        orFsts ps = foldr (\(Prod t1 _) t -> tyOr t t1) emptyTy ps
         orSnds :: [Prod] -> Ty
-        orSnds ps = foldl (\t (Prod _ t2) -> tyOr t t2) emptyTy ps
+        orSnds ps = foldr (\(Prod _ t2) t -> tyOr t t2) emptyTy ps
 
 
 
@@ -93,7 +93,7 @@ isEmptyArrow :: (BDD Arrow) -> Bool
 isEmptyArrow as = all emptyClause (flattenBDD as)
   where emptyClause :: ([Arrow] , [Arrow]) -> Bool
         emptyClause (pos,neg) = any (emptyArrow dom pos) neg
-          where dom = foldl (\t (Arrow s1 _) -> tyOr t s1) emptyTy pos
+          where dom = foldr (\(Arrow s1 _) t -> tyOr t s1) emptyTy pos
         emptyArrow :: Ty -> [Arrow] -> Arrow -> Bool
         emptyArrow dom pos (Arrow t1 t2) =
           (subtype t1 dom) && (all
@@ -102,10 +102,10 @@ isEmptyArrow as = all emptyClause (flattenBDD as)
         emptyHelper :: Ty -> Ty -> [Arrow] -> [Arrow] -> Bool
         emptyHelper t1 t2 pos pos' =
           (subtype t1 dom) || (subtype rng t2)
-          where dom = (foldl (\t (Arrow s1 _) -> tyOr t s1)
+          where dom = (foldr (\(Arrow s1 _) t -> tyOr t s1)
                        emptyTy
                        (pos \\ pos'))
-                rng = (foldl (\t (Arrow _ s2) -> tyAnd t s2)
+                rng = (foldr (\(Arrow _ s2) t -> tyAnd t s2)
                         anyTy
                         pos')
 
