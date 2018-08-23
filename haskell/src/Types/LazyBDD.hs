@@ -31,6 +31,7 @@ import qualified Data.List as List
 import qualified Types.Syntax as Stx
 import qualified Data.Set as Set
 import qualified Data.Bits as Bits
+import qualified Data.Map as M
 
 
 data Arrow = Arrow Ty Ty
@@ -207,7 +208,11 @@ parseTy (Stx.And (t:ts)) = (foldr tyAnd
 parseTy (Stx.Not t) = tyNot (parseTy t)
 parseTy Stx.Any = anyTy
 parseTy Stx.Empty = emptyTy
-parseTy t = case List.elemIndex t Stx.baseTypes of
-              Nothing -> error ("Not a base type: " ++ (show t))
-              Just idx -> Ty (Base True (Bits.bit idx)) Bot Bot
+parseTy t = Ty (Base True $ Stx.baseTypeIndex t) Bot Bot
+-- parseTy t = case M.lookup t Stx.baseTypesMap of
+--               Nothing -> error ("Not a base type: " ++ (show t))
+--               Just wd -> Ty (Base True wd) Bot Bot
+-- parseTy t = case List.elemIndex t Stx.baseTypes of
+--               Nothing -> error ("Not a base type: " ++ (show t))
+--               Just idx -> Ty (Base True (Bits.bit idx)) Bot Bot
 

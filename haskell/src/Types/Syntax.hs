@@ -1,7 +1,10 @@
 module Types.Syntax where
 
 import Test.QuickCheck
-
+import qualified Data.Map.Strict as M
+import Data.Word
+import Data.Bits
+    
 -- Contains ASTs for set-theoretic types that are convenient
 -- when writing tests and/or programs but are not designed
 -- for efficient computation (see LazyBDD.hs for that)
@@ -67,6 +70,47 @@ data OpSpec =
   | BinOp [(Ty, Ty, Ty)]
   | CompOp [(Ty, Ty, Prop, Prop)]
   deriving (Eq, Show, Ord)
+
+baseTypesMap :: M.Map Ty Word32
+baseTypesMap = M.fromList $ zip baseTypes $ map bit [0..]
+
+{-# INLINE baseTypeIndex #-}
+baseTypeIndex :: Ty -> Word32
+baseTypeIndex t = bit $
+    case t of
+      T -> 0
+      F -> 1
+      Zero -> 2
+      One -> 3
+      ByteLargerThanOne -> 4
+      PositiveIndexNotByte -> 5
+      PositiveFixnumNotIndex -> 6
+      NegativeFixnum -> 7
+      PositiveIntegerNotFixnum -> 8
+      NegativeIntegerNotFixnum -> 9
+      PositiveRationalNotInteger -> 10
+      NegativeRationalNotInteger -> 11
+      FloatNaN -> 12
+      FloatPositiveZero -> 13
+      FloatNegativeZero -> 14
+      PositiveFloatNumber -> 15
+      PositiveFloatInfinity -> 16
+      NegativeFloatNumber -> 17
+      NegativeFloatInfinity -> 18
+      SingleFloatNaN -> 19
+      SingleFloatPositiveZero -> 20
+      SingleFloatNegativeZero -> 21
+      PositiveSingleFloatNumber -> 22
+      PositiveSingleFloatInfinity -> 23
+      NegativeSingleFloatNumber -> 24
+      NegativeSingleFloatInfinity -> 25
+      ExactImaginary -> 26
+      ExactComplex -> 27
+      FloatImaginary -> 28
+      SingleFloatImaginary -> 29
+      FloatComplex -> 30
+      SingleFloatComplex -> 31
+      -- _oth -> error $ "Not a base type: " ++ (show t)
 
 baseTypes :: [Ty]
 baseTypes =
