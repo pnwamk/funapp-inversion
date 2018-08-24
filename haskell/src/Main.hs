@@ -1,6 +1,8 @@
 module Main where
 
+import System.IO
 import Types.Syntax
+import System.Environment as Sys
 import qualified Types.LazyBDD as BDD
 import Types.Subtype
 import Types.Metafunctions
@@ -11,66 +13,8 @@ import Types.CompareOpTypes
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import Data.Foldable
 import Control.Monad
+import Types.Parse
 
--- timeInc :: IO ()
--- timeInc = do
---   putStrLn "* * * * * * * * * * * * * * * * * * * *"
---   putStrLn "Comparing inc: "
---   incStart <- getCurrentTime
---   forM_ numericTypes $ \(name, ty) -> do
---     putStr $ "  " ++ name ++ " ... "
---     start <- getCurrentTime
---     result <- pure $! compareUnOpRes number ty Sem.incType Syn.incType
---     end <- getCurrentTime
---     putStr $ "(" ++ (show (diffUTCTime end start)) ++ ")"
---     putStrLn (if result
---               then ""
---               else error "failed!")
---   incEnd <- getCurrentTime
---   putStrLn $ "inc total time: " ++ (show (diffUTCTime incEnd incStart))
---   putStrLn "* * * * * * * * * * * * * * * * * * * *"
-
-
--- timePlus :: IO ()
--- timePlus = do
---   putStrLn "* * * * * * * * * * * * * * * * * * * *"
---   putStrLn "Comparing plus:"
---   plusStart <- getCurrentTime
---   forM_ numericTypes $ \(name1, ty1) -> do
---     forM_ numericTypes $ \(name2, ty2) -> do
---       putStr $ "  " ++ name1 ++ " x " ++ name2 ++ " ... "
---       start <- getCurrentTime
---       result <- pure $! compareBinOpRes number number ty1 ty2 Sem.plusType Syn.plusType
---       end <- getCurrentTime
---       putStr $ "(" ++ (show (diffUTCTime end start)) ++ ")"
---       putStrLn (if result
---                 then ""
---                 else error "failed!")
---   plusEnd <- getCurrentTime
---   putStrLn $ "plus total time: " ++ (show (diffUTCTime plusEnd plusStart))
---   putStrLn "* * * * * * * * * * * * * * * * * * * *"
-
-
--- timeLT :: (BDD.Ty -> BDD.Ty -> BDD.Ty -> Maybe BDD.Ty) -> IO ()
--- timeLT inputTy = do
---   putStrLn "* * * * * * * * * * * * * * * * * * * *"
---   putStrLn "Comparing less-than:"
---   ltStart <- getCurrentTime
---   forM_ numericTypes $ \(name1, ty1) -> do
---     forM_ numericTypes $ \(name2, ty2) -> do
---       when ((subtype (BDD.parseTy ty1) (BDD.parseTy real))
---             && (subtype (BDD.parseTy ty2) (BDD.parseTy real))) $ do
---         putStr $ "  " ++ name1 ++ " x " ++ name2 ++ " ... "
---         start <- getCurrentTime
---         result <- pure $! compareBinPredRes inputTy real real ty1 ty2 Sem.ltType Syn.ltType
---         end <- getCurrentTime
---         putStr $ "(" ++ (show (diffUTCTime end start)) ++ ")"
---         putStrLn (if result
---                   then ""
---                   else error "failed!")
---   ltEnd <- getCurrentTime
---   putStrLn $ "less-than total time: " ++ (show (diffUTCTime ltEnd ltStart))
---   putStrLn "* * * * * * * * * * * * * * * * * * * *"
 
 -- [(name, domain)]
 unOps :: [(String, Ty)]
@@ -266,15 +210,57 @@ compareSemanticCompOps inputTy descr =
     firstSynCompOpTypes
     descr)
 
-  
-main :: IO ()
-main = do
-  --compareSyntacticUnOps "Syntactic/Syntactic+"
-  --compareSyntacticBinOps "Syntactic/Syntactic+"
-  --compareSyntacticCompOps "Syntactic/Syntactic+"
-  --compareSemanticUnOps "Syntactic/Semantic"
-  --compareSemanticBinOps "Syntactic/Semantic"
+runComparisonTests :: IO ()
+runComparisonTests = do
+  compareSyntacticUnOps "Syntactic/Syntactic+"
+  compareSyntacticBinOps "Syntactic/Syntactic+"
+  compareSyntacticCompOps "Syntactic/Syntactic+"
+  compareSemanticUnOps "Syntactic/Semantic"
+  compareSemanticBinOps "Syntactic/Semantic"
   compareSemanticCompOps inTy "Syntactic/Semantic (inTy)"
   compareSemanticCompOps cInTy "Syntactic/Semantic (cInTy)"
 
+readTy :: String -> Maybe BDD.Ty
+readTy input = Just t
+  where (t,_) = nextTy input
+
+flushStr :: String -> IO ()
+flushStr str = putStr str >> hFlush stdout
+
+readPrompt :: String -> IO String
+readPrompt prompt = flushStr prompt >> getLine
+
+eval :: String -> [BDD.Ty] -> String
+eval opName args = opName
+
+parseExpr :: String -> Maybe (String, [BDD.Ty])
+parseExpr input = Just ((show t), [])
+  where (opName, rst) = (nextSymbol input)
+        t = nextTy input
+
+evalString :: String -> String
+evalString expr = case (parseExpr expr) of
+                    Nothing  -> "error parsing expression (see `help`, or use `quit` to abort)"
+                    Just (op, args) -> eval op args
+
+evalAndPrint :: String -> IO ()
+evalAndPrint expr =  putStrLn (evalString expr)
+
+until_ :: Monad m => (a -> Bool) -> m a -> (a -> m ()) -> m ()
+until_ pred prompt action = do 
+   result <- prompt
+   if pred result 
+      then return ()
+      else action result >> until_ pred prompt action
+
+runRepl :: IO ()
+runRepl = do
+  until_ (== "quit") (readPrompt "> ") evalAndPrint
+  
+main :: IO ()
+main = do args <- Sys.getArgs
+          case args of
+               ["test"] -> runComparisonTests
+               ["repl"] -> runRepl
+               otherwise -> putStrLn "usage: numeric-sst [test|repl]"
   

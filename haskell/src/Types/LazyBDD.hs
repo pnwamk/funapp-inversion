@@ -5,6 +5,7 @@ module Types.LazyBDD
   , Arrow(..)
   , Prod(..)
   , prodTy
+  , arrowTy
   , parseTy
   , tyAnd
   , tyOr
@@ -16,6 +17,7 @@ module Types.LazyBDD
   , anyProd
   , trueTy
   , falseTy
+  , numericTypes
   ) where
 
 -- This file implements set-theoretic types using the
@@ -208,3 +210,6 @@ parseTy t = case List.elemIndex t Stx.baseTypes of
               Nothing -> error ("Not a base type: " ++ (show t))
               Just idx -> Ty (Base True (Bits.bit idx)) Bot Bot
 
+
+numericTypes :: [(String, Ty)]
+numericTypes = map (\(name,t) -> (name, parseTy t)) Stx.numericTypes
