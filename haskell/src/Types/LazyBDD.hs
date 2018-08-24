@@ -8,7 +8,9 @@ module Types.LazyBDD
   , arrowTy
   , parseTy
   , tyAnd
+  , tyAnd'
   , tyOr
+  , tyOr'
   , tyDiff
   , tyNot
   , emptyTy
@@ -17,7 +19,6 @@ module Types.LazyBDD
   , anyProd
   , trueTy
   , falseTy
-  , numericTypes
   ) where
 
 -- This file implements set-theoretic types using the
@@ -33,6 +34,7 @@ import qualified Data.List as List
 import qualified Types.Syntax as Stx
 import qualified Data.Set as Set
 import qualified Data.Bits as Bits
+import qualified Data.Map.Strict as Map
 
 
 data Arrow = Arrow Ty Ty
@@ -168,11 +170,17 @@ tyAnd (Ty base1 prod1 arrow1) (Ty base2 prod2 arrow2) =
     (bddAnd prod1 prod2)
     (bddAnd arrow1 arrow2))
 
+tyAnd' :: [Ty] -> Ty
+tyAnd' ts = foldr tyAnd anyTy ts
+
 tyOr :: Ty -> Ty -> Ty
 tyOr (Ty base1 prod1 arrow1) (Ty base2 prod2 arrow2) =
   (Ty (baseOr base1 base2)
     (bddOr prod1 prod2)
     (bddOr arrow1 arrow2))
+
+tyOr' :: [Ty] -> Ty
+tyOr' ts = foldr tyOr emptyTy ts
 
 tyDiff :: Ty -> Ty -> Ty
 tyDiff (Ty base1 prod1 arrow1) (Ty base2 prod2 arrow2) =
@@ -196,11 +204,11 @@ parseTy (Stx.Arrow t1 t2) = (arrowTy
                                 (parseTy t1)
                                 (parseTy t2))
 parseTy (Stx.Or []) = emptyTy
-parseTy (Stx.Or (t:ts)) = (foldl tyOr
+parseTy (Stx.Or (t:ts)) = (foldr tyOr
                              (parseTy t)
                              (map parseTy ts))
 parseTy (Stx.And []) = anyTy
-parseTy (Stx.And (t:ts)) = (foldl tyAnd
+parseTy (Stx.And (t:ts)) = (foldr tyAnd
                               (parseTy t)
                               (map parseTy ts))
 parseTy (Stx.Not t) = tyNot (parseTy t)
@@ -211,5 +219,5 @@ parseTy t = case List.elemIndex t Stx.baseTypes of
               Just idx -> Ty (Base True (Bits.bit idx)) Bot Bot
 
 
-numericTypes :: [(String, Ty)]
-numericTypes = map (\(name,t) -> (name, parseTy t)) Stx.numericTypes
+
+

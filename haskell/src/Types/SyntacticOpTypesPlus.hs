@@ -1,6 +1,7 @@
 module Types.SyntacticOpTypesPlus where
 
-import Types.Syntax
+import Types.LazyBDD
+import Types.NumericTower
 
 opTypes :: [(String, OpSpec)]
 opTypes =
@@ -46,7 +47,7 @@ opTypes =
              , (float, nonnegativeFloat)
              , (singleFloat, nonnegativeSingleFloat)
              , (inexactReal, nonnegativeInexactReal)
-             , ((Or [positiveReal, negativeReal]), positiveReal)
+             , ((tyOr' [positiveReal, negativeReal]), positiveReal)
              , (real, nonnegativeReal)]))
     
   , ("+", (BinOp
@@ -59,8 +60,8 @@ opTypes =
             , (integer, integer, integer)
             , (float, real, float)
             , (real, float, float)
-            , (singleFloat, (Or [rational, singleFloat]), singleFloat)
-            , ((Or [rational, singleFloat]), singleFloat, singleFloat)
+            , (singleFloat, (tyOr' [rational, singleFloat]), singleFloat)
+            , ((tyOr' [rational, singleFloat]), singleFloat, singleFloat)
             , (inexactReal, real, inexactReal)
             , (real, inexactReal, inexactReal)
             , (positiveReal, nonnegativeReal, positiveReal)
@@ -75,10 +76,10 @@ opTypes =
             , (number, floatComplex, floatComplex)
             , (float, inexactComplex, floatComplex)
             , (inexactComplex, float, floatComplex)
-            , (singleFloatComplex, (Or [rational, singleFloat, singleFloatComplex]), singleFloatComplex)
-            , ((Or [rational, singleFloat, singleFloatComplex]), singleFloatComplex, singleFloatComplex)
-            , (inexactComplex, (Or [rational, inexactReal, inexactComplex]), inexactComplex)
-            , ((Or [rational, inexactReal, inexactComplex]), inexactComplex, inexactComplex)
+            , (singleFloatComplex, (tyOr' [rational, singleFloat, singleFloatComplex]), singleFloatComplex)
+            , ((tyOr' [rational, singleFloat, singleFloatComplex]), singleFloatComplex, singleFloatComplex)
+            , (inexactComplex, (tyOr' [rational, inexactReal, inexactComplex]), inexactComplex)
+            , ((tyOr' [rational, inexactReal, inexactComplex]), inexactComplex, inexactComplex)
             , (number, number, number)])) 
     
   , ("-", (BinOp
@@ -99,18 +100,18 @@ opTypes =
             , (nonpositiveRational, nonnegativeRational, nonpositiveRational)
             , (float, real, float)
             , (real, float, float)
-            , (singleFloat, (Or [singleFloat, rational]), singleFloat)
-            , ((Or [singleFloat, rational]), singleFloat, singleFloat)
-            , (inexactReal, (Or [inexactReal, rational]), inexactReal)
-            , ((Or [inexactReal, rational]), inexactReal, inexactReal)
+            , (singleFloat, (tyOr' [singleFloat, rational]), singleFloat)
+            , ((tyOr' [singleFloat, rational]), singleFloat, singleFloat)
+            , (inexactReal, (tyOr' [inexactReal, rational]), inexactReal)
+            , ((tyOr' [inexactReal, rational]), inexactReal, inexactReal)
             , (real, real, real)
             , (exactNumber, exactNumber, exactNumber)
             , (floatComplex, number, floatComplex)
             , (number, floatComplex, floatComplex)
-            , (singleFloatComplex, (Or [singleFloatComplex, exactNumber]), singleFloatComplex)
-            , ((Or [singleFloatComplex, exactNumber]), singleFloatComplex, singleFloatComplex)
-            , (inexactComplex, (Or [inexactComplex, exactNumber]), inexactComplex)
-            , ((Or [inexactComplex, exactNumber]), inexactComplex, inexactComplex)
+            , (singleFloatComplex, (tyOr' [singleFloatComplex, exactNumber]), singleFloatComplex)
+            , ((tyOr' [singleFloatComplex, exactNumber]), singleFloatComplex, singleFloatComplex)
+            , (inexactComplex, (tyOr' [inexactComplex, exactNumber]), inexactComplex)
+            , ((tyOr' [inexactComplex, exactNumber]), inexactComplex, inexactComplex)
             , (number, number, number)]))
 
   , ("*", (BinOp
@@ -118,55 +119,55 @@ opTypes =
             , (number, zero, zero)
             , (byte, byte, index)
             , (integer, integer, integer)
-            , (And [rational, (Not zero)], And [rational, (Not zero)], And [rational, (Not zero)])
+            , (tyAnd' [rational, (tyNot zero)], tyAnd' [rational, (tyNot zero)], tyAnd' [rational, (tyNot zero)])
             , (rational, rational, rational)
-            , (float, (Or [positiveReal, negativeReal]), float)
-            , ((Or [positiveReal, negativeReal]), float, float)
+            , (float, (tyOr' [positiveReal, negativeReal]), float)
+            , ((tyOr' [positiveReal, negativeReal]), float, float)
             , (float, float, float)
-            , (singleFloat, (Or [positiveRational, negativeRational, singleFloat]), singleFloat)
-            , ((Or [positiveRational, negativeRational, singleFloat]), singleFloat, singleFloat)
-            , (inexactReal, (Or [positiveRational, negativeRational, inexactReal]), inexactReal)
-            , ((Or [positiveRational, negativeRational, inexactReal]), inexactReal, inexactReal)
+            , (singleFloat, (tyOr' [positiveRational, negativeRational, singleFloat]), singleFloat)
+            , ((tyOr' [positiveRational, negativeRational, singleFloat]), singleFloat, singleFloat)
+            , (inexactReal, (tyOr' [positiveRational, negativeRational, inexactReal]), inexactReal)
+            , ((tyOr' [positiveRational, negativeRational, inexactReal]), inexactReal, inexactReal)
             , (nonnegativeReal, nonnegativeReal, nonnegativeReal) -- (* +inf.0 0.0) -> +nan.0
             , (nonpositiveReal, nonpositiveReal, nonnegativeReal)
             , (nonpositiveReal, nonnegativeReal, nonpositiveReal)
             , (nonnegativeReal, nonpositiveReal, nonpositiveReal)
             , (real, real, real)
-            , (floatComplex, (Or [inexactComplex, inexactReal, positiveRational, negativeRational]), floatComplex)
-            , ((Or [inexactComplex, inexactReal, positiveRational, negativeRational]), floatComplex, floatComplex)
-            , (singleFloatComplex, (Or [singleFloatComplex, singleFloat, positiveRational, negativeRational]), singleFloatComplex)
-            , ((Or [singleFloatComplex, singleFloat, positiveRational, negativeRational]), singleFloatComplex, singleFloatComplex)
-            , (inexactComplex, (Or [inexactComplex, inexactReal, positiveRational, negativeRational]), inexactComplex)
-            , ((Or [inexactComplex, inexactReal, positiveRational, negativeRational]), inexactComplex, inexactComplex)
+            , (floatComplex, (tyOr' [inexactComplex, inexactReal, positiveRational, negativeRational]), floatComplex)
+            , ((tyOr' [inexactComplex, inexactReal, positiveRational, negativeRational]), floatComplex, floatComplex)
+            , (singleFloatComplex, (tyOr' [singleFloatComplex, singleFloat, positiveRational, negativeRational]), singleFloatComplex)
+            , ((tyOr' [singleFloatComplex, singleFloat, positiveRational, negativeRational]), singleFloatComplex, singleFloatComplex)
+            , (inexactComplex, (tyOr' [inexactComplex, inexactReal, positiveRational, negativeRational]), inexactComplex)
+            , ((tyOr' [inexactComplex, inexactReal, positiveRational, negativeRational]), inexactComplex, inexactComplex)
             , (number, number, number)]))
 
   , ("/", (BinOp
-            [ (number, zero, Empty)
+            [ (number, zero, emptyTy)
             , (zero, number, zero)
             , (one, one, one)
             , (nonnegativeRational, nonnegativeRational, nonnegativeRational)
             , (nonpositiveRational, nonpositiveRational, nonnegativeRational)
             , (nonpositiveRational, nonnegativeRational, nonpositiveRational)
             , (nonnegativeRational, nonpositiveRational, nonpositiveRational)
-            , (And [rational, (Not zero)], And [rational, (Not zero)], And [rational, (Not zero)])
+            , (tyAnd' [rational, (tyNot zero)], tyAnd' [rational, (tyNot zero)], tyAnd' [rational, (tyNot zero)])
             , (rational, rational, rational)
-            , ((Or [positiveReal, negativeReal, float]), float, float)
+            , ((tyOr' [positiveReal, negativeReal, float]), float, float)
             , (float, real, float) -- if any argument after the first is exact 0, not a problem
-            , (singleFloat, (Or [positiveRational, negativeRational, singleFloat]), singleFloat)
-            , ((Or [positiveRational, negativeRational, singleFloat]), singleFloat, singleFloat)
-            , (inexactReal, (Or [positiveRational, negativeRational, inexactReal]), inexactReal)
-            , ((Or [positiveRational, negativeRational, inexactReal]), inexactReal, inexactReal)
+            , (singleFloat, (tyOr' [positiveRational, negativeRational, singleFloat]), singleFloat)
+            , ((tyOr' [positiveRational, negativeRational, singleFloat]), singleFloat, singleFloat)
+            , (inexactReal, (tyOr' [positiveRational, negativeRational, inexactReal]), inexactReal)
+            , ((tyOr' [positiveRational, negativeRational, inexactReal]), inexactReal, inexactReal)
             , (positiveReal, positiveReal, nonnegativeReal)
             , (negativeReal, negativeReal, nonnegativeReal) -- 0.0 is non-neg, but doesn't preserve sign
             , (negativeReal, positiveReal, nonpositiveReal) -- idem
             , (positiveReal, negativeReal, nonpositiveReal) -- idem
             , (real, real, real)
-            , ((Or [inexactComplex, inexactReal, positiveRational, negativeRational]), floatComplex, floatComplex)
+            , ((tyOr' [inexactComplex, inexactReal, positiveRational, negativeRational]), floatComplex, floatComplex)
             , (floatComplex, number, floatComplex) -- if any argument after the first is exact 0, not a problem
-            , (singleFloatComplex, (Or [singleFloatComplex, singleFloat, positiveRational, negativeRational]), singleFloatComplex)
-            , ((Or [singleFloatComplex, singleFloat, positiveRational, negativeRational]), singleFloatComplex, singleFloatComplex)
-            , (inexactComplex, (Or [inexactComplex, inexactReal, positiveRational, negativeRational]), inexactComplex)
-            , ((Or [inexactComplex, inexactReal, positiveRational, negativeRational]), inexactComplex, inexactComplex)
+            , (singleFloatComplex, (tyOr' [singleFloatComplex, singleFloat, positiveRational, negativeRational]), singleFloatComplex)
+            , ((tyOr' [singleFloatComplex, singleFloat, positiveRational, negativeRational]), singleFloatComplex, singleFloatComplex)
+            , (inexactComplex, (tyOr' [inexactComplex, inexactReal, positiveRational, negativeRational]), inexactComplex)
+            , ((tyOr' [inexactComplex, inexactReal, positiveRational, negativeRational]), inexactComplex, inexactComplex)
             , (number, number, number)]))
 
   , ("max", (BinOp
@@ -228,8 +229,8 @@ opTypes =
            , (nonnegativeInteger, fixnum, (Conj (IsA ArgZero nonnegativeFixnum) (IsA ArgOne positiveFixnum)), TT)
            , (fixnum, nonpositiveInteger, (Conj (IsA ArgZero negativeFixnum) (IsA ArgOne nonpositiveFixnum)), TT)
            , (nonpositiveInteger, fixnum, TT, (Conj (IsA ArgZero nonpositiveFixnum) (IsA ArgOne nonpositiveFixnum)))
-           , (real, positiveInfinity, (IsA ArgZero (Not (Or [inexactRealNaN, positiveInfinity]))), (IsA ArgZero (Or [inexactRealNaN, positiveInfinity])))
-           , (negativeInfinity, real, (IsA ArgOne (Not (Or [inexactRealNaN, negativeInfinity]))), (IsA ArgOne (Or [inexactRealNaN, negativeInfinity])))
+           , (real, positiveInfinity, (IsA ArgZero (tyNot (tyOr' [inexactRealNaN, positiveInfinity]))), (IsA ArgZero (tyOr' [inexactRealNaN, positiveInfinity])))
+           , (negativeInfinity, real, (IsA ArgOne (tyNot (tyOr' [inexactRealNaN, negativeInfinity]))), (IsA ArgOne (tyOr' [inexactRealNaN, negativeInfinity])))
            , (positiveInfinity, real, FF, TT)
            , (real, negativeInfinity, FF, TT)
            , (rational, positiveRealNoNaN, TT, (IsA ArgZero positiveRational)) -- AMK added NoNaN
@@ -241,7 +242,7 @@ opTypes =
            , (real, real, TT, TT)]))
     
   , ("<=", (CompOp
-             [ (integer, one, (IsA ArgZero (Or [nonpositiveInteger, one])), (IsA ArgZero positiveInteger))
+             [ (integer, one, (IsA ArgZero (tyOr' [nonpositiveInteger, one])), (IsA ArgZero positiveInteger))
              , (one, integer, (IsA ArgOne positiveInteger), (IsA ArgOne nonpositiveInteger))
              , (real, zero, (IsA ArgZero nonpositiveReal), (IsA ArgZero positiveReal))
              , (zero, real, (IsA ArgOne nonnegativeReal), (IsA ArgOne negativeReal))
@@ -253,10 +254,10 @@ opTypes =
              , (fixnum, nonnegativeInteger, TT, (Conj (IsA ArgZero positiveFixnum) (IsA ArgOne nonnegativeFixnum)))
              , (nonpositiveInteger, fixnum, TT, (Conj (IsA ArgZero nonpositiveFixnum) (IsA ArgOne negativeFixnum)))
              , (fixnum, nonpositiveInteger, (Conj (IsA ArgZero nonpositiveFixnum) (IsA ArgOne nonpositiveFixnum)), TT)
-             , (real, positiveInfinity, (IsA ArgZero (Not inexactRealNaN)), (IsA ArgZero inexactRealNaN))
-             , (negativeInfinity, real, (IsA ArgOne (Not inexactRealNaN)), (IsA ArgOne inexactRealNaN))
-             , (positiveInfinity, real, (IsA ArgOne positiveInfinity), (IsA ArgOne (Not positiveInfinity)))
-             , (real, negativeInfinity, (IsA ArgZero negativeInfinity), (IsA ArgZero (Not negativeInfinity)))
+             , (real, positiveInfinity, (IsA ArgZero (tyNot inexactRealNaN)), (IsA ArgZero inexactRealNaN))
+             , (negativeInfinity, real, (IsA ArgOne (tyNot inexactRealNaN)), (IsA ArgOne inexactRealNaN))
+             , (positiveInfinity, real, (IsA ArgOne positiveInfinity), (IsA ArgOne (tyNot positiveInfinity)))
+             , (real, negativeInfinity, (IsA ArgZero negativeInfinity), (IsA ArgZero (tyNot negativeInfinity)))
              , (rational, nonnegativeRealNoNaN, TT, (IsA ArgZero positiveRational)) -- <=-pat rational
              , (nonpositiveRealNoNaN, rational, TT, (IsA ArgOne negativeRational)) -- <=-pat rational
              , (positiveReal, real, (IsA ArgOne positiveReal), TT) -- <=-pat real
@@ -266,10 +267,10 @@ opTypes =
              , (real, real, TT, TT)]))
 
   , ("=", (CompOp
-            [ (real, realZero, (IsA ArgZero realZeroNoNaN), (IsA ArgZero (Not realZeroNoNaN)))
-            , (realZero, real, (IsA ArgOne realZeroNoNaN), (IsA ArgOne (Not realZeroNoNaN)))
-            , (exactNumber, one, (IsA ArgZero one), (IsA ArgZero (Not one)))
-            , (one, exactNumber, (IsA ArgOne one), (IsA ArgOne (Not one)))
+            [ (real, realZero, (IsA ArgZero realZeroNoNaN), (IsA ArgZero (tyNot realZeroNoNaN)))
+            , (realZero, real, (IsA ArgOne realZeroNoNaN), (IsA ArgOne (tyNot realZeroNoNaN)))
+            , (exactNumber, one, (IsA ArgZero one), (IsA ArgZero (tyNot one)))
+            , (one, exactNumber, (IsA ArgOne one), (IsA ArgOne (tyNot one)))
             , (exactNumber, byte, (IsA ArgZero byte), TT)
             , (byte, exactNumber, (IsA ArgOne byte), TT)
             , (exactNumber, index, (IsA ArgZero index), TT)
