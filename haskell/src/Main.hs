@@ -13,6 +13,8 @@ import Types.CompareOpTypes
 import Data.Foldable
 import Types.Parse
 import Data.Char
+import Repl.Parser
+import Repl.Commands
 
 
 runComparisonTests :: IO ()
@@ -61,8 +63,8 @@ getSexp = do
 readPrompt :: String -> IO (Maybe String)
 readPrompt prompt = flushStr prompt >> getSexp
 
-eval :: String -> [BDD.Ty] -> String
-eval opName args = opName
+eval :: Cmd -> String
+eval cmd = show cmd
 
 parseExpr :: String -> Maybe (String, [BDD.Ty])
 parseExpr input = Just ((show t), [])
@@ -70,16 +72,16 @@ parseExpr input = Just ((show t), [])
         t = nextTy input
 
 evalString :: String -> String
-evalString expr = case (parseExpr expr) of
-                    Nothing  -> "error parsing expression (see `help`, or use `quit` to abort)"
-                    Just (op, args) -> eval op args
+evalString expr = case (parseCmd expr) of
+                    Left msg  -> "error parsing expression (see `Help`, or use `Quit` to abort)\n (Error: " ++ msg ++ ")"
+                    Right cmd -> eval cmd
 
 runRepl :: IO ()
 runRepl = do
   result <- readPrompt "> "
   case result of
     Nothing -> do
-      putStrLn "ERROR: invalid s-expression input! (Try `(help)` or `(quit)`)"
+      putStrLn "ERROR: invalid s-expression input! (Try `(Help)` or `(Quit)`)"
       runRepl
     Just "(quit)" -> putStrLn "Goodbye!"
     Just "(exit)" -> putStrLn "Goodbye!"

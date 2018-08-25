@@ -3,6 +3,7 @@ module Types.NumericTower where
 import qualified Types.Syntax as Stx
 import Types.LazyBDD
 import Types.Subtype
+import qualified Data.Map as Map
 
 data Obj = ArgZero | ArgOne
   deriving (Eq, Show, Ord)
@@ -232,6 +233,18 @@ numericTypes =
   , ("Imaginary", imaginary)
   , ("InexactComplex", inexactComplex)
   , ("Number", number)]
+
+nameMap :: Map.Map String Ty
+nameMap = Map.fromList $
+          numericTypes ++
+          [ ("Any", anyTy)
+          , ("Empty", emptyTy)
+          , ("True", true)
+          , ("False", false)
+          , ("Boolean", bool)]
+
+nameToTy :: String -> Maybe Ty
+nameToTy name = Map.lookup name nameMap
 
 realTypes :: [(String, Ty)]
 realTypes = filter (\(_,t) -> subtype t real) numericTypes
