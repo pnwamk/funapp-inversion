@@ -50,7 +50,8 @@ cmdParser = do
       closeParen
       return $ Subtype t1 t2
     "Project" -> do
-      i <- char '1' <|> char '2' <?> "a 1 or 2"
+      char ' '
+      i <- char '1' <|> char '2'
       spaces
       t <- parseTy
       closeParen
@@ -94,7 +95,6 @@ parseTyName = do
 parseTyList :: Parser [BDD.Ty]
 parseTyList = do
   spaces
-  t <- parseTy
   sepBy parseTy space
 
 

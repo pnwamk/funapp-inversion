@@ -63,9 +63,6 @@ getSexp = do
 readPrompt :: String -> IO (Maybe String)
 readPrompt prompt = flushStr prompt >> getSexp
 
-eval :: Cmd -> String
-eval cmd = show cmd
-
 parseExpr :: String -> Maybe (String, [BDD.Ty])
 parseExpr input = Just ((show t), [])
   where (opName, rst) = (nextSymbol input)
@@ -74,7 +71,7 @@ parseExpr input = Just ((show t), [])
 evalString :: String -> String
 evalString expr = case (parseCmd expr) of
                     Left msg  -> "error parsing expression (see `Help`, or use `Quit` to abort)\n (Error: " ++ msg ++ ")"
-                    Right cmd -> eval cmd
+                    Right cmd -> execCmd cmd
 
 runRepl :: IO ()
 runRepl = do

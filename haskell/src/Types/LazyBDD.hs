@@ -19,6 +19,7 @@ module Types.LazyBDD
   , anyProd
   , trueTy
   , falseTy
+  , readBackTy
   ) where
 
 -- This file implements set-theoretic types using the
@@ -218,6 +219,59 @@ parseTy t = case List.elemIndex t Stx.baseTypes of
               Nothing -> error ("Not a base type: " ++ (show t))
               Just idx -> Ty (Base True (Bits.bit idx)) Bot Bot
 
+
+
+-- reads a Ty (from LazyBDD) into an sexpression
+-- that Repl/Parser.hs can read in
+readBackTy :: Ty -> String
+readBackTy (Ty bs ps as) = strOr t1 $ strOr t2 t3
+  where t1 = readBackBase bs
+        t2 = readBackBDD readBackProd ps
+        t3 = readBackBDD readBackArrow as
+
+strOr :: String -> String -> String
+strOr "Any" _ = "Any"
+strOr _ "Any" = "Any"
+strOr "Empty" str = str
+strOr str "Empty" = str
+strOr str1 str2 = "(Or " ++ str1 ++ " " ++  str2 ++  ")"
+
+strAnd :: String -> String -> String
+strAnd "Empty" _ = "Empty"
+strAnd _ "Empty" = "Empty"
+strAnd "Any" str = str
+strAnd str "Any" = str
+strAnd str1 str2 = "(And " ++ str1 ++ " " ++  str2 ++  ")"
+
+strNot :: String -> String
+strNot str = "(Not " ++ str ++ ")"
+
+readBackBDD :: (x -> String) -> (BDD x) -> String
+readBackBDD readBackAtom Top = "Any"
+readBackBDD readBackAtom Bot = "Empty"
+readBackBDD readBackAtom (Node a l m r) = strOr t1 $ strOr t2 t3
+  where aStr = readBackAtom a
+        t1 = strAnd aStr $ continue l
+        t2 = continue m
+        t3 = strAnd (strNot aStr) $ continue r
+        continue = readBackBDD readBackAtom
+        
+
+readBackBase :: Base -> String
+readBackBase (Base b 0) = if b then "Empty" else "Any"
+readBackBase (Base True b) = "(Or " ++ elems ++ ")"
+  where elems = foldr (++) [] $ List.intersperse " " bases
+        bases = [Stx.baseTyStr t | (t,idx) <- zip Stx.baseTypes [0..], Bits.testBit b idx]
+
+readBackArrow :: Arrow -> String
+readBackArrow (Arrow t1 t2) = "(Arrow " ++ str1 ++ " " ++ str2 ++ ")"
+  where str1 = readBackTy t1
+        str2 = readBackTy t2
+
+readBackProd :: Prod -> String
+readBackProd (Prod t1 t2) = "(Prod " ++ str1 ++ " " ++ str2 ++ ")"
+  where str1 = readBackTy t1
+        str2 = readBackTy t2
 
 
 

@@ -5,6 +5,8 @@ module Repl.Commands where
 
 
 import Types.LazyBDD
+import Types.Subtype
+import Types.Metafunctions
 
 data Cmd =
   -- is t empty?
@@ -26,3 +28,21 @@ data Cmd =
   -- get help
   | Help
   deriving (Eq, Show, Ord)
+
+no = "#false"
+yes = "#true"
+answerBool True = yes
+answerBool False = no
+
+answerMaybeTy Nothing = no
+answerMaybeTy (Just t) = readBackTy t
+
+execCmd :: Cmd -> String
+execCmd (Inhabited t) = answerBool $ not $ isEmpty t
+execCmd (Subtype t1 t2) = answerBool $ subtype t1 t2
+execCmd (FstProj t) = answerMaybeTy $ fstProj t
+execCmd (SndProj t) = answerMaybeTy $ sndProj t
+execCmd (FunApp t1 t2) = answerMaybeTy $ rngTy t1 t2
+execCmd (FunInv t1 t2 t3) = answerMaybeTy $ inTy t1 t2 t3
+execCmd Quit = "Goodbye!"
+execCmd Help = "No help yet... (TODO)"

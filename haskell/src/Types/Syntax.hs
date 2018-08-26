@@ -1,6 +1,7 @@
 module Types.Syntax where
 
 import Test.QuickCheck
+import Data.Map
 
 -- Contains ASTs for set-theoretic types that are convenient
 -- when writing tests and/or programs but are not designed
@@ -87,7 +88,39 @@ baseTypes =
   , FloatComplex
   , SingleFloatComplex]
 
-
+baseTyStr :: Ty -> String
+baseTyStr T = "True"
+baseTyStr F = "False"
+baseTyStr Zero = "Zero"
+baseTyStr One = "One"
+baseTyStr ByteLargerThanOne = "ByteLargerThanOne"
+baseTyStr PositiveIndexNotByte = "PositiveIndexNotByte"
+baseTyStr PositiveFixnumNotIndex = "PositiveFixnumNotIndex"
+baseTyStr NegativeFixnum = "NegativeFixnum"
+baseTyStr PositiveIntegerNotFixnum = "PositiveIntegerNotFixnum"
+baseTyStr NegativeIntegerNotFixnum = "NegativeIntegerNotFixnum"
+baseTyStr PositiveRationalNotInteger = "PositiveRationalNotInteger"
+baseTyStr NegativeRationalNotInteger = "NegativeRationalNotInteger"
+baseTyStr FloatNaN = "FloatNaN"
+baseTyStr FloatPositiveZero = "FloatPositiveZero"
+baseTyStr FloatNegativeZero = "FloatNegativeZero"
+baseTyStr PositiveFloatNumber = "PositiveFloatNumber"
+baseTyStr PositiveFloatInfinity = "PositiveFloatInfinity"
+baseTyStr NegativeFloatNumber = "NegativeFloatNumber"
+baseTyStr NegativeFloatInfinity = "NegativeFloatInfinity"
+baseTyStr SingleFloatNaN = "SingleFloatNaN"
+baseTyStr SingleFloatPositiveZero = "SingleFloatPositiveZero"
+baseTyStr SingleFloatNegativeZero = "SingleFloatNegativeZero"
+baseTyStr PositiveSingleFloatNumber = "PositiveSingleFloatNumber"
+baseTyStr PositiveSingleFloatInfinity = "PositiveSingleFloatInfinity"
+baseTyStr NegativeSingleFloatNumber = "NegativeSingleFloatNumber"
+baseTyStr NegativeSingleFloatInfinity = "NegativeSingleFloatInfinity"
+baseTyStr ExactImaginary = "ExactImaginary"
+baseTyStr ExactComplex = "ExactComplex"
+baseTyStr FloatImaginary = "FloatImaginary"
+baseTyStr SingleFloatImaginary = "SingleFloatImaginary"
+baseTyStr FloatComplex = "FloatComplex"
+baseTyStr SingleFloatComplex = "SingleFloatComplex"
 
 -- * * * * * * * * * * * * * * * * * * * * * * *
 -- QuickCheck related definitions
