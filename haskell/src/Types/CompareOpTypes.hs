@@ -184,10 +184,31 @@ compareCompOpRes ::
 compareCompOpRes applyFun1 applyFun2 dom1 dom2 arg1 arg2 =
   case (res1, res2) of
     (Just (pos1, pos2, neg1, neg2), Just (pos1', pos2', neg1', neg2')) ->
-      (subtype pos1 pos1')
-      && (subtype pos2 pos2')
-      && (subtype neg1 neg1')
-      && (subtype neg2 neg2')
+      if not (subtype pos1 pos1')
+      then error $ "prediction not a subtype for "
+           ++ (readBackTy arg1) ++ " " ++ (readBackTy arg2)
+           ++ "(pos1): "
+           ++ (readBackTy pos1) ++ " </: "
+           ++ (readBackTy pos1')
+      else if not (subtype pos2 pos2')
+      then error $ "prediction not a subtype for "
+           ++ (readBackTy arg1) ++ " " ++ (readBackTy arg2)
+           ++ "(pos2): "
+           ++ (readBackTy pos2) ++ " </: "
+           ++ (readBackTy pos2')
+      else if not (subtype neg1 neg1')
+      then error $ "prediction not a subtype for "
+           ++ (readBackTy arg1) ++ " " ++ (readBackTy arg2)
+           ++ "(neg1): "
+           ++ (readBackTy neg1) ++ " </: "
+           ++ (readBackTy neg1')
+      else if not (subtype neg2 neg2')
+      then error $ "prediction not a subtype for "
+           ++ (readBackTy arg1) ++ " " ++ (readBackTy arg2)
+           ++ "(neg2): "
+           ++ (readBackTy neg2) ++ " </: "
+           ++ (readBackTy neg2')
+      else True
     (_,_) -> ((not (subtype arg1 dom1))
               || (not (subtype arg2 dom2)))
   where res1 = applyFun1 arg1 arg2
@@ -267,12 +288,12 @@ semCompOpTypes inputTy ts arg1 arg2 =
     (_,_,_,_) -> Nothing
     where argTy = prodTy arg1 arg2
           semTy = parseBinOpToSemantic ts
-          pos = inputTy semTy argTy $ tyNot false
+          pos = inputTy semTy argTy $ tyNot falseTy
           (pos1,pos2) =
             case pos of
               Nothing -> (Nothing, Nothing)
               Just t -> (fstProj t, sndProj t)
-          neg = inputTy semTy argTy false
+          neg = inputTy semTy argTy falseTy
           (neg1,neg2) =
             case neg of
               Nothing -> (Nothing, Nothing)

@@ -15,10 +15,12 @@ module Types.LazyBDD
   , tyNot
   , emptyTy
   , anyTy
-  , anyArrow
-  , anyProd
   , trueTy
   , falseTy
+  , stringTy
+  , boolTy
+  , anyArrowTy
+  , anyProdTy
   , readBackTy
   ) where
 
@@ -63,23 +65,26 @@ anyTy = Ty anyBase Top Top
 -- empty type
 emptyTy = Ty emptyBase Bot Bot
 
--- boolean types
+-- some base types
 trueTy  = parseTy Stx.T
 falseTy = parseTy Stx.F
+stringTy = parseTy Stx.Str
+boolTy = tyOr' [trueTy, falseTy]
+
 
 -- Constructs the type `t1 × t2`.
 prodTy :: Ty -> Ty -> Ty
 prodTy t1 t2 = (Ty emptyBase (node (Prod t1 t2) Top Bot Bot) Bot)
 
 -- universal product
-anyProd = prodTy anyTy anyTy
+anyProdTy = prodTy anyTy anyTy
 
 -- Constructs the type `t1 → t2`.
 arrowTy :: Ty -> Ty -> Ty
 arrowTy t1 t2 = (Ty emptyBase Bot (node (Arrow t1 t2) Top Bot Bot))
 
 -- universal arrow
-anyArrow = arrowTy emptyTy anyTy
+anyArrowTy = arrowTy emptyTy anyTy
 
 
 -- Smart constructor for BDD nodes, performing
@@ -227,6 +232,12 @@ anyBaseStr = "(Not (Or (Prod Any Any) (Arrow Empty Any)))"
 -- reads a Ty (from LazyBDD) into an sexpression
 -- that Repl/Parser.hs can read in
 readBackTy :: Ty -> String
+readBackTy (Ty b@(Base True n) Bot Bot)
+  | n == 0 = "Empty"
+  | otherwise = readBackBase b
+readBackTy (Ty b@(Base False n) Top Top)
+  | n == 0 = "Any"
+  | otherwise = readBackBase b
 readBackTy (Ty bs ps as) = strOr t1 $ strOr t2 t3
   where t1 = strAnd anyBaseStr $ readBackBase bs
         t2 = strAnd anyProdStr $ readBackBDD readBackProd ps

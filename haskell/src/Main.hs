@@ -71,18 +71,18 @@ parseExpr input = Just ((show t), [])
 evalString :: String -> String
 evalString expr =
   case (parseCmd expr) of
-    Left msg  -> "error parsing expressio, "
+    Left msg  -> "(ERROR parsing expression, "
                  ++ "see `(Help)`, or use `(Quit)` to abort.\n"
                  ++ "  Error: " ++ msg ++ ")"
     Right cmd -> execCmd cmd
 
-runRepl :: IO ()
-runRepl = do
-  result <- readPrompt "> "
+runRepl :: String -> IO ()
+runRepl userPrompt = do
+  result <- readPrompt userPrompt
   case result of
     Nothing -> do
-      putStrLn "ERROR: invalid s-expression input! (Try `(Help)` or `(Quit)`)"
-      runRepl
+      putStrLn "(ERROR: invalid s-expression input! Try `(Help)` or `(Quit)`)"
+      runRepl userPrompt
     Just "(Quit)" -> putStrLn "Goodbye!"
     Just "(Exit)" -> putStrLn "Goodbye!"
     Just "(Help)" -> do
@@ -103,7 +103,7 @@ runRepl = do
       putStrLn "          | Any"
       putStrLn "          | Empty"
       putStrLn ""
-      putStrLn "   Base ::= True | False | Integer | Real | Number"
+      putStrLn "   Base ::= True | False | String | Integer | Real | Number"
       putStrLn "          | Zero | One | ByteLargerThanOne"
       putStrLn "          | PositiveIndexNotByte | PositiveFixnumNotIndex"
       putStrLn "          | NegativeFixnum | PositiveIntegerNotFixnum"
@@ -137,15 +137,16 @@ runRepl = do
       putStrLn "          | PositiveReal | NonnegativeReal | NegativeReal"
       putStrLn "          | NonpositiveReal | ExactNumber"
       putStrLn "          | InexactImaginary | Imaginary | InexactComplex"
-      runRepl
+      runRepl userPrompt
     Just str -> do
       putStrLn (evalString str)
-      runRepl
+      runRepl userPrompt
     
 main :: IO ()
 main = do args <- Sys.getArgs
           case args of
                ["test"] -> runComparisonTests
-               ["repl"] -> runRepl
-               otherwise -> putStrLn "usage: numeric-sst [test|repl]"
+               ["repl"] -> runRepl "> "
+               ["pipe"] -> runRepl ""
+               otherwise -> putStrLn "usage: numeric-sst [test|repl|pipe]"
   

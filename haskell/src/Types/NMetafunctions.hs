@@ -18,11 +18,11 @@ import Common.SetOps
 
 -- Is this a function type?
 isFun :: Ty -> Bool
-isFun t = subtype t anyArrow
+isFun t = subtype t anyArrowTy
 
 -- Is this a function type?
 isProd :: Ty -> Bool
-isProd t = subtype t anyProd
+isProd t = subtype t anyProdTy
 
 
 -- Calculates the projection type for a given type

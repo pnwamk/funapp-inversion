@@ -695,8 +695,8 @@ opTypes =
              , (real, real, TT, TT)]))
 
   , ("=", (CompOp
-            [ (real, realZero, (IsA ArgZero realZeroNoNaN), (IsA ArgZero (tyNot realZeroNoNaN)))
-            , (realZero, real, (IsA ArgOne realZeroNoNaN), (IsA ArgOne (tyNot realZeroNoNaN)))
+            [ (real, realZeroNoNaN, (IsA ArgZero realZeroNoNaN), (IsA ArgZero (tyNot realZeroNoNaN)))
+            , (realZeroNoNaN, real, (IsA ArgOne realZeroNoNaN), (IsA ArgOne (tyNot realZeroNoNaN)))
             , (exactNumber, one, (IsA ArgZero one), TT)
             , (one, exactNumber, (IsA ArgOne one), TT)
             , (exactNumber, positiveByte, (IsA ArgZero positiveByte), TT)

@@ -13,6 +13,7 @@ data Ty =
   --  modify baseTypes appropriately if these change)
     T
   | F
+  | Str
   | Zero
   | One
   | ByteLargerThanOne
@@ -57,6 +58,7 @@ baseTypes :: [Ty]
 baseTypes =
   [ T
   , F
+  , Str
   , Zero
   , One
   , ByteLargerThanOne
@@ -91,6 +93,7 @@ baseTypes =
 baseTyStr :: Ty -> String
 baseTyStr T = "True"
 baseTyStr F = "False"
+baseTyStr Str = "String"
 baseTyStr Zero = "Zero"
 baseTyStr One = "One"
 baseTyStr ByteLargerThanOne = "ByteLargerThanOne"

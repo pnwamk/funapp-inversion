@@ -14,7 +14,7 @@ import Data.Bits
 (.\\.) :: Bits a => a -> a -> a
 b1 .\\. b2 = b1 .&. (complement b2)
 
-data Base = Base Bool Word32
+data Base = Base Bool Word64
   deriving (Eq, Show, Ord)
 
 emptyBase = Base True 0

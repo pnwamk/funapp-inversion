@@ -57,11 +57,6 @@ singleFloatImaginary = parseTy Stx.SingleFloatImaginary
 floatComplex = parseTy Stx.FloatComplex
 singleFloatComplex = parseTy Stx.SingleFloatComplex
 
-
-true = parseTy Stx.T
-false = parseTy Stx.F
-bool = tyOr' [true , false]
-
 positiveByte = tyOr' [one, byteLargerThanOne]
 byte = tyOr' [zero, positiveByte]
 
@@ -239,9 +234,10 @@ nameMap = Map.fromList $
           numericTypes ++
           [ ("Any", anyTy)
           , ("Empty", emptyTy)
-          , ("True", true)
-          , ("False", false)
-          , ("Boolean", bool)]
+          , ("True", trueTy)
+          , ("String", stringTy)
+          , ("False", falseTy)
+          , ("Boolean", boolTy)]
 
 nameToTy :: String -> Maybe Ty
 nameToTy name = Map.lookup name nameMap

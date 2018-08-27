@@ -16,11 +16,11 @@ import Types.Subtype
 
 -- Is this a function type?
 isFun :: Ty -> Bool
-isFun t = subtype t anyArrow
+isFun t = subtype t anyArrowTy
 
 -- Is this a function type?
 isProd :: Ty -> Bool
-isProd t = subtype t anyProd
+isProd t = subtype t anyProdTy
 
 
 -- Is this a function for a predicate?  If so, return `Just t` where
