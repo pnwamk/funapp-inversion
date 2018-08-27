@@ -227,7 +227,7 @@ numericTypes =
   , ("NonnegativeReal", nonnegativeReal)
   , ("NegativeReal", negativeReal)
   , ("NonpositiveReal", nonpositiveReal)
-  , ("Neal", real)
+  , ("Real", real)
   , ("ExactNumber", exactNumber)
   , ("InexactImaginary", inexactImaginary)
   , ("Imaginary", imaginary)

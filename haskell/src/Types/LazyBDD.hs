@@ -259,9 +259,8 @@ readBackBDD readBackAtom (Node a l m r) = strOr t1 $ strOr t2 t3
 
 readBackBase :: Base -> String
 readBackBase (Base b 0) = if b then "Empty" else "Any"
-readBackBase (Base True b) = "(Or " ++ elems ++ ")"
-  where elems = foldr (++) [] $ List.intersperse " " bases
-        bases = [Stx.baseTyStr t | (t,idx) <- zip Stx.baseTypes [0..], Bits.testBit b idx]
+readBackBase (Base True b) = foldr strOr "Empty" bases
+  where bases = [Stx.baseTyStr t | (t,idx) <- zip Stx.baseTypes [0..], Bits.testBit b idx]
 
 readBackArrow :: Arrow -> String
 readBackArrow (Arrow t1 t2) = "(Arrow " ++ str1 ++ " " ++ str2 ++ ")"

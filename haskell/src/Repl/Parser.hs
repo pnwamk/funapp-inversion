@@ -74,12 +74,6 @@ cmdParser = do
       t3 <- parseTy
       closeParen
       return $ FunInv t1 t2 t3
-    "Quit" -> do
-      closeParen
-      return Quit
-    "Help" -> do
-      closeParen
-      return Help
     _ -> parserFail $ "'" ++ cmd ++ "' is not a valid command!"
 
 parseTy :: Parser BDD.Ty

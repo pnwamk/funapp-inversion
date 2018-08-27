@@ -44,5 +44,3 @@ execCmd (FstProj t) = answerMaybeTy $ fstProj t
 execCmd (SndProj t) = answerMaybeTy $ sndProj t
 execCmd (FunApp t1 t2) = answerMaybeTy $ rngTy t1 t2
 execCmd (FunInv t1 t2 t3) = answerMaybeTy $ inTy t1 t2 t3
-execCmd Quit = "Goodbye!"
-execCmd Help = "No help yet... (TODO)"

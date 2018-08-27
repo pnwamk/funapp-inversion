@@ -69,9 +69,12 @@ parseExpr input = Just ((show t), [])
         t = nextTy input
 
 evalString :: String -> String
-evalString expr = case (parseCmd expr) of
-                    Left msg  -> "error parsing expression (see `Help`, or use `Quit` to abort)\n (Error: " ++ msg ++ ")"
-                    Right cmd -> execCmd cmd
+evalString expr =
+  case (parseCmd expr) of
+    Left msg  -> "error parsing expressio, "
+                 ++ "see `(Help)`, or use `(Quit)` to abort.\n"
+                 ++ "  Error: " ++ msg ++ ")"
+    Right cmd -> execCmd cmd
 
 runRepl :: IO ()
 runRepl = do
@@ -80,10 +83,60 @@ runRepl = do
     Nothing -> do
       putStrLn "ERROR: invalid s-expression input! (Try `(Help)` or `(Quit)`)"
       runRepl
-    Just "(quit)" -> putStrLn "Goodbye!"
-    Just "(exit)" -> putStrLn "Goodbye!"
-    Just "(help)" -> do
-      putStrLn "Help not implemented yet..."
+    Just "(Quit)" -> putStrLn "Goodbye!"
+    Just "(Exit)" -> putStrLn "Goodbye!"
+    Just "(Help)" -> do
+      putStrLn "Enter a Command, or type `(Quit)` to exit."
+      putStrLn ""
+      putStrLn "Command ::= (Inhabited Ty)"
+      putStrLn "          | (Subtype Ty Ty)"
+      putStrLn "          | (Project [1|2] Ty)"
+      putStrLn "          | (Apply Ty Ty)"
+      putStrLn "          | (Inversion Ty Ty Ty)"
+      putStrLn ""
+      putStrLn "     Ty ::= Base"
+      putStrLn "          | (Arrow Ty Ty)"
+      putStrLn "          | (Prod Ty Ty)"
+      putStrLn "          | (Or Ty ...)"
+      putStrLn "          | (And Ty ...)"
+      putStrLn "          | (Not Ty)"
+      putStrLn "          | Any"
+      putStrLn "          | Empty"
+      putStrLn ""
+      putStrLn "   Base ::= True | False | Integer | Real | Number"
+      putStrLn "          | Zero | One | ByteLargerThanOne"
+      putStrLn "          | PositiveIndexNotByte | PositiveFixnumNotIndex"
+      putStrLn "          | NegativeFixnum | PositiveIntegerNotFixnum"
+      putStrLn "          | NegativeIntegerNotFixnum | PositiveRationalNotInteger"
+      putStrLn "          | NegativeRationalNotInteger | FloatNaN"
+      putStrLn "          | FloatPositiveZero | FloatNegativeZero"
+      putStrLn "          | PositiveFloatNumber | PositiveFloatInfinity"
+      putStrLn "          | NegativeFloatNumber | NegativeFloatInfinity"
+      putStrLn "          | SingleFloatNaN | SingleFloatPositiveZero"
+      putStrLn "          | SingleFloatNegativeZero | PositiveSingleFloatNumber"
+      putStrLn "          | PositiveSingleFloatInfinity | NegativeSingleFloatNumber"
+      putStrLn "          | NegativeSingleFloatInfinity | ExactImaginary"
+      putStrLn "          | ExactComplex | FloatImaginary | SingleFloatImaginary"
+      putStrLn "          | FloatComplex | SingleFloatComplex | PositiveByte"
+      putStrLn "          | Byte | PositiveIndex | Index | PositiveFixnum"
+      putStrLn "          | NonnegativeFixnum | NonpositiveFixnum | Fixnum"
+      putStrLn "          | PositiveInteger | NonnegativeInteger | NegativeInteger"
+      putStrLn "          | NonpositiveInteger | PositiveRational"
+      putStrLn "          | NonnegativeRational | NegativeRational"
+      putStrLn "          | NonpositiveRational | Rational | FloatZero"
+      putStrLn "          | PositiveFloat | NonnegativeFloat | NegativeFloat"
+      putStrLn "          | NonpositiveFloat | Float | SingleFloatZero"
+      putStrLn "          | InexactRealNaN | InexactRealPositiveZero"
+      putStrLn "          | InexactRealNegativeZero | InexactRealZero"
+      putStrLn "          | PositiveSingleFloat | PositiveInexactReal"
+      putStrLn "          | NonnegativeSingleFloat | NonnegativeInexactReal"
+      putStrLn "          | NegativeSingleFloat | NegativeInexactReal"
+      putStrLn "          | NonpositiveSingleFloat | NonpositiveInexactReal"
+      putStrLn "          | SingleFloat | InexactReal | PositiveInfinity"
+      putStrLn "          | NegativeInfinity | RealZero | RealZeroNoNaN"
+      putStrLn "          | PositiveReal | NonnegativeReal | NegativeReal"
+      putStrLn "          | NonpositiveReal | ExactNumber"
+      putStrLn "          | InexactImaginary | Imaginary | InexactComplex"
       runRepl
     Just str -> do
       putStrLn (evalString str)
