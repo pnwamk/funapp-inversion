@@ -1,4 +1,4 @@
-module Repl.Parser ( parseCmd ) where
+module Repl.Parser ( parseCmd, strToTy ) where
 
 import Repl.Commands
 import qualified Types.LazyBDD as BDD
@@ -7,14 +7,19 @@ import Text.Parsec.Prim (parserZero, parserFail)
 import Text.ParserCombinators.Parsec hiding (spaces)
 import System.Environment
 
+parseCmd :: String -> Either String Cmd
+parseCmd = run_parser cmdParser
+
+
 run_parser :: Parser a -> String -> Either String a
 run_parser p str =  case parse p "" str of
   Left err -> Left $ "parse error at " ++ (show err)
   Right val  -> Right val  
 
-
-parseCmd :: String -> Either String Cmd
-parseCmd = run_parser cmdParser
+strToTy :: String -> Maybe BDD.Ty
+strToTy str = case parse parseTy "" str of
+  Left err -> Nothing
+  Right t  -> Just t
 
 spaces :: Parser ()
 spaces = skipMany space

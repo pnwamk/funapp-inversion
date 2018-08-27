@@ -24,6 +24,9 @@ library
                      , Types.Metafunctions
                      , Common.Primitives
                      , Common.SetOps
+                     , Repl.Parser
+                     , Repl.Commands
+                     , Types.NumericTower
   build-depends:       base >= 4.7 && < 5
                      , containers
                      , time
@@ -51,6 +54,15 @@ executable numeric-sst
                , Types.Subtype
                , Types.Syntax
                , Types.NMetafunctions
+               , Repl.Commands
+               , Repl.Parser
+               , Types.CompareOpTypes
+               , Types.Metafunctions
+               , Types.NumericTower
+               , Types.Parse
+               , Types.SemanticOpTypes
+               , Types.SyntacticOpTypes
+               , Types.SyntacticOpTypesPlus
 
 test-suite numeric-sst-test
   type:                exitcode-stdio-1.0
@@ -67,4 +79,7 @@ test-suite numeric-sst-test
                    , Types.SubtypeCompSpec
                    , Types.NMetafunctionsSpec
                    , Types.MetafunctionsSpec
+                   , Types.MetafunctionTests
+                   , Types.MetafunctionsCompSpec
+                   , Types.LazyBDDSpec
   default-language:    Haskell2010

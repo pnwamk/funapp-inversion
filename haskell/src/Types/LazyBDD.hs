@@ -220,30 +220,39 @@ parseTy t = case List.elemIndex t Stx.baseTypes of
               Just idx -> Ty (Base True (Bits.bit idx)) Bot Bot
 
 
+anyProdStr = "(Prod Any Any)"
+anyArrowStr = "(Arrow Empty Any)"
+anyBaseStr = "(Not (Or (Prod Any Any) (Arrow Empty Any)))"
 
 -- reads a Ty (from LazyBDD) into an sexpression
 -- that Repl/Parser.hs can read in
 readBackTy :: Ty -> String
 readBackTy (Ty bs ps as) = strOr t1 $ strOr t2 t3
-  where t1 = readBackBase bs
-        t2 = readBackBDD readBackProd ps
-        t3 = readBackBDD readBackArrow as
+  where t1 = strAnd anyBaseStr $ readBackBase bs
+        t2 = strAnd anyProdStr $ readBackBDD readBackProd ps
+        t3 = strAnd anyArrowStr$ readBackBDD readBackArrow as
 
 strOr :: String -> String -> String
 strOr "Any" _ = "Any"
 strOr _ "Any" = "Any"
 strOr "Empty" str = str
 strOr str "Empty" = str
-strOr str1 str2 = "(Or " ++ str1 ++ " " ++  str2 ++  ")"
+strOr str1 str2 = if str1 == str2
+                  then str1
+                  else "(Or " ++ str1 ++ " " ++  str2 ++  ")"
 
 strAnd :: String -> String -> String
 strAnd "Empty" _ = "Empty"
 strAnd _ "Empty" = "Empty"
 strAnd "Any" str = str
 strAnd str "Any" = str
-strAnd str1 str2 = "(And " ++ str1 ++ " " ++  str2 ++  ")"
+strAnd str1 str2 = if str1 == str2
+                   then str1
+                   else "(And " ++ str1 ++ " " ++  str2 ++  ")"
 
 strNot :: String -> String
+strNot "Any" = "Empty"
+strNot "Empty" = "Any"
 strNot str = "(Not " ++ str ++ ")"
 
 readBackBDD :: (x -> String) -> (BDD x) -> String
@@ -261,6 +270,7 @@ readBackBase :: Base -> String
 readBackBase (Base b 0) = if b then "Empty" else "Any"
 readBackBase (Base True b) = foldr strOr "Empty" bases
   where bases = [Stx.baseTyStr t | (t,idx) <- zip Stx.baseTypes [0..], Bits.testBit b idx]
+readBackBase (Base False b) = strNot $ readBackBase (Base True b)
 
 readBackArrow :: Arrow -> String
 readBackArrow (Arrow t1 t2) = "(Arrow " ++ str1 ++ " " ++ str2 ++ ")"
