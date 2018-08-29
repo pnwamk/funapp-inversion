@@ -1,9 +1,12 @@
 {-# LANGUAGE GADTs, StandaloneDeriving #-}
 module Types.LazyBDD
   ( Ty(..)
+  , Env(..)
   , BDD(..)
   , Arrow(..)
   , Prod(..)
+  , extend
+  , resolve
   , prodTy
   , arrowTy
   , parseTy
@@ -35,10 +38,8 @@ module Types.LazyBDD
 import Types.Base
 import qualified Data.List as List
 import qualified Types.Syntax as Stx
-import qualified Data.Set as Set
 import qualified Data.Bits as Bits
 import qualified Data.Map.Strict as Map
-
 
 data Arrow = Arrow Ty Ty
   deriving (Eq, Show, Ord)
@@ -57,8 +58,19 @@ deriving instance Eq x => Eq (BDD x)
 deriving instance (Eq x, Ord x) => Ord (BDD x)
 
 -- a DNF representation of types
-data Ty = Ty Base (BDD Prod) (BDD Arrow)
-  deriving(Eq, Show, Ord)
+data Ty =
+  Ty Base (BDD Prod) (BDD Arrow)
+  | Var String  -- type variable (meaning given by an Env)
+  deriving (Eq, Show, Ord)
+
+-- type environment (i.e. mapping type names to types)
+type Env = Map.Map String -> Ty
+
+resolve :: String -> Env -> Ty
+resolve name env = env Map.! name
+
+extend :: String -> Ty -> Env -> Env
+extend name t env = Map.insert name t env
 
 -- universal type
 anyTy = Ty anyBase Top Top
@@ -170,34 +182,40 @@ bddNot (Node a l m r) = (node a (bddAnd notL notM) Bot (bddAnd notR notM))
         notR = bddNot r
 
 
-tyAnd :: Ty -> Ty -> Ty
+tyAnd :: Env -> Ty -> Ty -> Ty
 tyAnd (Ty base1 prod1 arrow1) (Ty base2 prod2 arrow2) =
   (Ty (baseAnd base1 base2)
     (bddAnd prod1 prod2)
     (bddAnd arrow1 arrow2))
+tyAnd env (Var name) t2 = tyAnd env (resolve name env) t2
+tyAnd env t1 (Var name) = tyAnd env t1 (resolve name env)
 
-tyAnd' :: [Ty] -> Ty
-tyAnd' ts = foldr tyAnd anyTy ts
+tyAnd' :: Env -> [Ty] -> Ty
+tyAnd' env ts = foldr (tyAnd env) anyTy ts
 
-tyOr :: Ty -> Ty -> Ty
+tyOr :: Env -> Ty -> Ty -> Ty
 tyOr (Ty base1 prod1 arrow1) (Ty base2 prod2 arrow2) =
   (Ty (baseOr base1 base2)
     (bddOr prod1 prod2)
     (bddOr arrow1 arrow2))
+tyOr env (Var name) t2 = tyOr env (resolve name env) t2
+tyOr env t1 (Var name) = tyOr env t1 (resolve name env)
 
-tyOr' :: [Ty] -> Ty
-tyOr' ts = foldr tyOr emptyTy ts
 
-tyDiff :: Ty -> Ty -> Ty
-tyDiff (Ty base1 prod1 arrow1) (Ty base2 prod2 arrow2) =
+tyOr' :: Env -> [Ty] -> Ty
+tyOr' env ts = foldr (tyOr env) emptyTy ts
+
+tyDiff :: Env -> Ty -> Ty -> Ty
+tyDiff env (Ty base1 prod1 arrow1) (Ty base2 prod2 arrow2) =
   (Ty (baseDiff base1 base2)
     (bddDiff prod1 prod2)
     (bddDiff arrow1 arrow2))
+tyDiff env (Var name) t2 = tyDiff env (resolve name env) t2
+tyDiff env t1 (Var name) = tyDiff env t1 (resolve name env)
 
-tyNot :: Ty -> Ty
-tyNot t = tyDiff anyTy t
 
-
+tyNot :: Env -> Ty -> Ty
+tyNot env t = tyDiff env anyTy t
 
 
 
@@ -220,10 +238,8 @@ parseTy (Stx.And (t:ts)) = (foldr tyAnd
 parseTy (Stx.Not t) = tyNot (parseTy t)
 parseTy Stx.Any = anyTy
 parseTy Stx.Empty = emptyTy
-parseTy t = case List.elemIndex t Stx.baseTypes of
-              Nothing -> error ("Not a base type: " ++ (show t))
-              Just idx -> Ty (Base True (Bits.bit idx)) Bot Bot
-
+parseTy (Stx.Var name) = Var name
+parseTy (Stx.Base b) = Ty (Base True (Bits.bit $ Stx.baseIndex b))
 
 anyProdStr = "(Prod Any Any)"
 anyArrowStr = "(Arrow Empty Any)"
@@ -242,6 +258,7 @@ readBackTy (Ty bs ps as) = strOr t1 $ strOr t2 t3
   where t1 = strAnd anyBaseStr $ readBackBase bs
         t2 = strAnd anyProdStr $ readBackBDD readBackProd ps
         t3 = strAnd anyArrowStr$ readBackBDD readBackArrow as
+readBackTy (Var name) = name
 
 strOr :: String -> String -> String
 strOr "Any" _ = "Any"

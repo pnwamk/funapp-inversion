@@ -17,11 +17,11 @@ import Data.List
 import Common.SetOps
 
 -- Is this type equivalent to ∅?
-isEmpty :: Ty -> Bool
-isEmpty (Ty b ps as) =
+isEmpty :: Env -> Ty -> Bool
+isEmpty env (Ty b ps as) =
   (b == emptyBase)
-  && (isEmptyProd ps)
-  && (isEmptyArrow as)
+  && (isEmptyProd env ps)
+  && (isEmptyArrow env as)
 
 
 
@@ -29,13 +29,13 @@ isEmpty (Ty b ps as) =
 -- list representations of the positive
 -- and negative components, e.g.:
 -- (⋃((S×S) ∩ (⋂ ¬(T×T) ...))) 
-flattenProds :: (BDD Prod) -> [(Prod , [Prod])]
-flattenProds prods = flattenAux anyTy anyTy [] prods
+flattenProds :: Env -> (BDD Prod) -> [(Prod , [Prod])]
+flattenProds env prods = flattenAux anyTy anyTy [] prods
   where flattenAux :: Ty -> Ty -> [Prod] -> (BDD Prod) -> [(Prod , [Prod])]
         flattenAux t1 t2 negAtoms Top = [((Prod t1 t2) , negAtoms)]
         flattenAux t1 t2 negAtoms Bot = []
         flattenAux t1 t2 negAtoms (Node p@(Prod t3 t4) l m r) =
-          ((flattenAux (tyAnd t1 t3) (tyAnd t2 t4) negAtoms l)
+          ((flattenAux (tyAnd env t1 t3) (tyAnd env t2 t4) negAtoms l)
            ++ (flattenAux t1 t2 negAtoms m)
            ++ (flattenAux t1 t2 (p:negAtoms) r))
 
@@ -48,20 +48,20 @@ flattenProds prods = flattenAux anyTy anyTy [] prods
 -- i.e. that all possible combinations of the negative info
 -- would produce an empty type in either the first or second
 -- field of the product type.
-isEmptyProd :: (BDD Prod) -> Bool
-isEmptyProd ps = all emptyClause (flattenProds ps)
+isEmptyProd :: Env -> (BDD Prod) -> Bool
+isEmptyProd env ps = all emptyClause (flattenProds env ps)
   where emptyClause :: (Prod , [Prod]) -> Bool
         emptyClause ((Prod s1 s2) , negs) =
           all (emptyProd s1 s2 negs) (subsets negs)
         emptyProd :: Ty -> Ty -> [Prod] -> [Prod] -> Bool
         emptyProd s1 s2 negs negs'
-          | subtype s1 (orFsts negs') = True
-          | subtype s2 (orSnds (negs \\ negs')) = True
+          | subtype env s1 (orFsts negs') = True
+          | subtype env s2 (orSnds (negs \\ negs')) = True
           | otherwise = False
         orFsts :: [Prod] -> Ty
-        orFsts ps = foldl (\t (Prod t1 _) -> tyOr t t1) emptyTy ps
+        orFsts ps = foldl (\t (Prod t1 _) -> tyOr env t t1) emptyTy ps
         orSnds :: [Prod] -> Ty
-        orSnds ps = foldl (\t (Prod _ t2) -> tyOr t t2) emptyTy ps
+        orSnds ps = foldl (\t (Prod _ t2) -> tyOr env t t2) emptyTy ps
 
 
 
@@ -89,38 +89,38 @@ flattenBDD as = flattenAux [] [] as
 -- negative info N be (¬(T₁ → T₂),...), check that for some
 -- (T₁ → T₂) ∈ N, T₁ <: ⋃(S₁ ...) and for all non-empty P' ⊆ P
 -- (T₁ <: ⋃(S₁→S₂ ∈ P\P') S₁) or (⋂(S₁→S₂ ∈ P') S₂ <: T₂)
-isEmptyArrow :: (BDD Arrow) -> Bool
-isEmptyArrow as = all emptyClause (flattenBDD as)
+isEmptyArrow :: Env -> (BDD Arrow) -> Bool
+isEmptyArrow env as = all emptyClause (flattenBDD as)
   where emptyClause :: ([Arrow] , [Arrow]) -> Bool
         emptyClause (pos,neg) = any (emptyArrow dom pos) neg
-          where dom = foldl (\t (Arrow s1 _) -> tyOr t s1) emptyTy pos
+          where dom = foldl (\t (Arrow s1 _) -> tyOr env t s1) emptyTy pos
         emptyArrow :: Ty -> [Arrow] -> Arrow -> Bool
         emptyArrow dom pos (Arrow t1 t2) =
-          (subtype t1 dom) && (all
-                               (emptyHelper t1 t2 pos)
-                               (nonEmptySubsets pos))
+          (subtype env t1 dom) && (all
+                                   (emptyHelper t1 t2 pos)
+                                   (nonEmptySubsets pos))
         emptyHelper :: Ty -> Ty -> [Arrow] -> [Arrow] -> Bool
         emptyHelper t1 t2 pos pos' =
-          (subtype t1 dom) || (subtype rng t2)
-          where dom = (foldl (\t (Arrow s1 _) -> tyOr t s1)
+          (subtype env t1 dom) || (subtype env rng t2)
+          where dom = (foldl (\t (Arrow s1 _) -> tyOr env t s1)
                        emptyTy
                        (pos \\ pos'))
-                rng = (foldl (\t (Arrow _ s2) -> tyAnd t s2)
+                rng = (foldl (\t (Arrow _ s2) -> tyAnd env t s2)
                         anyTy
                         pos')
 
 -- is [[t1]] ∩ [[t2]] ≠ ∅
-overlap :: Ty -> Ty -> Bool
-overlap t1 t2 = not (isEmpty (tyAnd t1 t2))
+overlap :: Env -> Ty -> Ty -> Bool
+overlap env t1 t2 = not (isEmpty env (tyAnd env t1 t2))
 
 
 -- Is t1 a subtype of t2
 -- i.e. [[t1]] ⊆ [[t2]]
-subtype :: Ty -> Ty -> Bool
-subtype t1 t2 = isEmpty (tyDiff t1 t2)
+subtype :: Env -> Ty -> Ty -> Bool
+subtype env t1 t2 = isEmpty env (tyDiff env t1 t2)
 
 
 -- Is t1 equivalent to t2
 -- i.e. [[t1]] ⊆ [[t2]] and [[t1]] ⊇ [[t2]]
-equiv :: Ty -> Ty -> Bool
-equiv t1 t2 = subtype t1 t2 && subtype t2 t1
+equiv :: Env -> Ty -> Ty -> Bool
+equiv env t1 t2 = subtype env t1 t2 && subtype env t2 t1
