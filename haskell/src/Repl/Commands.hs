@@ -41,10 +41,12 @@ answerBool False = no
 answerMaybeTy Nothing = no
 answerMaybeTy (Just t) = readBackTy t
 
-execCmd :: Env -> Cmd -> String
-execCmd env (Inhabited t) = answerBool $ not $ isEmpty env t
-execCmd env (Subtype t1 t2) = answerBool $ subtype env t1 t2
-execCmd env (FstProj t) = answerMaybeTy $ fstProj env t
-execCmd env (SndProj t) = answerMaybeTy $ sndProj env t
-execCmd env (FunApp t1 t2) = answerMaybeTy $ rngTy env t1 t2
-execCmd env (FunInv t1 t2 t3) = answerMaybeTy $ inTy env t1 t2 t3
+execCmd :: Env -> Cmd -> (Env, String)
+execCmd env (Inhabited t) = (env, answerBool $ not $ isEmpty env t)
+execCmd env (Subtype t1 t2) = (env, answerBool $ subtype env t1 t2)
+execCmd env (FstProj t) = (env, answerMaybeTy $ fstProj env t)
+execCmd env (SndProj t) = (env, answerMaybeTy $ sndProj env t)
+execCmd env (FunApp t1 t2) = (env, answerMaybeTy $ rngTy env t1 t2)
+execCmd env (FunInv t1 t2 t3) = (env, answerMaybeTy $ inTy env t1 t2 t3)
+execCmd env (Let name t) = (extend name t env, "Environment extended with " ++ name ++ " = " ++ (readBackTy t))
+execCmd env (LetRec _) =  (env, "Not supported yet!")

@@ -60,21 +60,22 @@ getSexp = do
 readPrompt :: String -> IO (Maybe String)
 readPrompt prompt = flushStr prompt >> getSexp
 
-evalString :: BDD.Env -> String -> String
+evalString :: BDD.Env -> String -> (BDD.Env, String)
 evalString env expr =
   case (parseCmd env expr) of
-    Left msg  -> "(ERROR parsing expression, "
-                 ++ "see `(Help)`, or use `(Quit)` to abort.\n"
-                 ++ "  Error: " ++ (show msg) ++ ")"
+    Left failMsg  -> (env, msg)
+      where msg = "(ERROR parsing expression, "
+                  ++ "see `(Help)`, or use `(Quit)` to abort."
+                  ++ "  Error: " ++ failMsg ++ ")"
     Right cmd -> execCmd env cmd
 
-runRepl :: String -> IO ()
-runRepl userPrompt = do
+runRepl :: BDD.Env -> String -> IO ()
+runRepl env userPrompt = do
   result <- readPrompt userPrompt
   case result of
     Nothing -> do
       putStrLn "(ERROR: invalid s-expression input! Try `(Help)` or `(Quit)`)"
-      runRepl userPrompt
+      runRepl env userPrompt
     Just "(Quit)" -> putStrLn "Goodbye!"
     Just "(Exit)" -> putStrLn "Goodbye!"
     Just "(Help)" -> do
@@ -129,16 +130,17 @@ runRepl userPrompt = do
       putStrLn "          | PositiveReal | NonnegativeReal | NegativeReal"
       putStrLn "          | NonpositiveReal | ExactNumber"
       putStrLn "          | InexactImaginary | Imaginary | InexactComplex"
-      runRepl userPrompt
+      runRepl env userPrompt
     Just str -> do
-      putStrLn (evalString baseEnv str)
-      runRepl userPrompt
+      (env', msg) <- return $ evalString env str
+      putStrLn msg
+      runRepl env' userPrompt
     
 main :: IO ()
 main = do args <- Sys.getArgs
           case args of
-               ["test"] -> runComparisonTests
-               ["repl"] -> runRepl "> "
-               ["pipe"] -> runRepl ""
-               otherwise -> putStrLn "usage: numeric-sst [test|repl|pipe]"
+            ["test"] -> runComparisonTests
+            ["repl"] -> runRepl baseEnv "> "
+            ["pipe"] -> runRepl baseEnv ""
+            otherwise -> putStrLn "usage: numeric-sst [test|repl|pipe]"
   
