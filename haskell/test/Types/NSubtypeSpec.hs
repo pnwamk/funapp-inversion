@@ -7,7 +7,11 @@ import qualified Types.NSubtype as N
 import qualified Types.LazyBDD as BDD
 import Types.Syntax
 import Types.SubtypeTests
-
+import Types.NumericTower
 
 spec :: Spec
-spec = genSubtypeSpec BDD.parseTy N.subtype N.overlap N.equiv
+spec = (genSubtypeSpec
+        (BDD.parseTy baseEnv)
+        (N.subtype baseEnv)
+        (N.overlap baseEnv)
+        (N.equiv baseEnv))

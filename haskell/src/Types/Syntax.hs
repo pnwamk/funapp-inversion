@@ -7,6 +7,7 @@ module Types.Syntax
   ) where
 
 import Test.QuickCheck
+import qualified Data.Map.Strict as Map
 
 -- Contains ASTs for set-theoretic types that are convenient
 -- when writing tests and/or programs but are not designed
@@ -109,41 +110,12 @@ baseTyStr F = "False"
 baseTyStr Str = "String"
 baseTyStr t = show t
 
+baseIndexMap :: Map.Map BaseTy Int
+baseIndexMap = Map.fromList $ zip baseTypes [0..]
+
 baseIndex :: BaseTy -> Int
-baseIndex T                           = 0
-baseIndex F                           = 1
-baseIndex Str                         = 2
-baseIndex Null                        = 3
-baseIndex Zero                        = 4
-baseIndex One                         = 5
-baseIndex ByteLargerThanOne           = 6
-baseIndex PositiveIndexNotByte        = 7
-baseIndex PositiveFixnumNotIndex      = 8
-baseIndex NegativeFixnum              = 9
-baseIndex PositiveIntegerNotFixnum    = 10
-baseIndex NegativeIntegerNotFixnum    = 11
-baseIndex PositiveRationalNotInteger  = 12
-baseIndex NegativeRationalNotInteger  = 13
-baseIndex FloatNaN                    = 14
-baseIndex FloatPositiveZero           = 15
-baseIndex FloatNegativeZero           = 16
-baseIndex PositiveFloatNumber         = 17
-baseIndex PositiveFloatInfinity       = 18
-baseIndex NegativeFloatNumber         = 19
-baseIndex NegativeFloatInfinity       = 20
-baseIndex SingleFloatNaN              = 21
-baseIndex SingleFloatPositiveZero     = 22
-baseIndex SingleFloatNegativeZero     = 23
-baseIndex PositiveSingleFloatNumber   = 24
-baseIndex PositiveSingleFloatInfinity = 25
-baseIndex NegativeSingleFloatNumber   = 26
-baseIndex NegativeSingleFloatInfinity = 27
-baseIndex ExactImaginary              = 28
-baseIndex ExactComplex                = 29
-baseIndex FloatImaginary              = 30
-baseIndex SingleFloatImaginary        = 31
-baseIndex FloatComplex                = 32
-baseIndex SingleFloatComplex          = 33
+baseIndex base = baseIndexMap Map.! base
+
 
 -- * * * * * * * * * * * * * * * * * * * * * * *
 -- QuickCheck related definitions

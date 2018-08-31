@@ -19,9 +19,9 @@ genSubtypeSpec parse rawSubtype rawOverlap rawEquiv = do
     it "Reflexivity" $ property $
       \t -> subtype t t
     it "Base/Prod disjoint" $ property $
-      \t1 t2 -> not (overlap T (Prod t1 t2))
+      \t1 t2 -> not (overlap (Base T) (Prod t1 t2))
     it "Base/Arrow disjoint" $ property $
-      \t1 t2 -> not (overlap T (Arrow t1 t2))
+      \t1 t2 -> not (overlap (Base T) (Arrow t1 t2))
     it "Prod/Arrow disjoint" $ property $
       \t1 t2 t3 t4 -> not (overlap (Arrow t1 t2) (Prod t3 t4))
     it "OrR1" $ property $
@@ -193,25 +193,25 @@ runSubtypeTests subtype =
 basicSubtypeTests :: [(Ty, Ty, Bool)]
 basicSubtypeTests =
   -- base types
-  [ (T , T , True)
-  , (F , F , True)
-  , (Zero , Zero , True)
-  , (T , F , False)
-  , (F , T , False)
-  , (T , F , False)
-  , (F , T , False)
-  , (F , Zero , False)
-  , (T , Zero , False)
-  , (Zero , F , False)
-  , (Zero , T , False)
+  [ ((Base T) , (Base T) , True)
+  , ((Base F) , (Base F) , True)
+  , ((Base Zero) , (Base Zero) , True)
+  , ((Base T) , (Base F) , False)
+  , ((Base F) , (Base T) , False)
+  , ((Base T) , (Base F) , False)
+  , ((Base F) , (Base T) , False)
+  , ((Base F) , (Base Zero) , False)
+  , ((Base T) , (Base Zero) , False)
+  , ((Base Zero) , (Base F) , False)
+  , ((Base Zero) , (Base T) , False)
   
   -- Any and Empty
   , (Empty , Any, True)
   , (Any , Empty, False)
-  , (Empty , T, True)
-  , (T , Empty, False)
-  , (Any , T, False)
-  , (T , Any, True)
+  , (Empty , (Base T), True)
+  , ((Base T) , Empty, False)
+  , (Any , (Base T), False)
+  , ((Base T) , Any, True)
 
   -- Prod
   , ((Prod Any Any) , (Prod Any Any) , True)
@@ -219,165 +219,165 @@ basicSubtypeTests =
   , ((Prod Any Empty) , (Prod Any Any) , True)
   , ((Prod Any Any) , (Prod Empty Any) , False)
   , ((Prod Any Any) , (Prod Any Empty) , False)
-  , ((Prod T Any) , (Prod Any Any) , True)
-  , ((Prod Any T) , (Prod Any Any) , True)
-  , ((Prod T T) , (Prod Any Any) , True)
-  , ((Prod Any Any) , (Prod T Any) , False)
-  , ((Prod Any Any) , (Prod Any T) , False)
-  , ((Prod Any Any) , (Prod T T) , False)
+  , ((Prod (Base T) Any) , (Prod Any Any) , True)
+  , ((Prod Any (Base T)) , (Prod Any Any) , True)
+  , ((Prod (Base T) (Base T)) , (Prod Any Any) , True)
+  , ((Prod Any Any) , (Prod (Base T) Any) , False)
+  , ((Prod Any Any) , (Prod Any (Base T)) , False)
+  , ((Prod Any Any) , (Prod (Base T) (Base T)) , False)
 
   -- Arrow
   , ((Arrow Any Any) , (Arrow Any Any) , True)
   , ((Arrow Empty Any) , (Arrow Any Any) , False)
   , ((Arrow Any Empty) , (Arrow Any Any) , True)
   , ((Arrow Any Any) , (Arrow Empty Any) , True)
-  , ((Arrow Any Any) , (Arrow Empty T) , True)
+  , ((Arrow Any Any) , (Arrow Empty (Base T)) , True)
   , ((Arrow Any Any) , (Arrow Any Empty) , False)
-  , ((Arrow T Any) , (Arrow Any Any) , False)
-  , ((Arrow Any T) , (Arrow Any Any) , True)
-  , ((Arrow T T) , (Arrow Any Any) , False)
-  , ((Arrow Any Any) , (Arrow T Any) , True)
-  , ((Arrow Any Any) , (Arrow Any T) , False)
-  , ((Arrow Any Any) , (Arrow T T) , False)
+  , ((Arrow (Base T) Any) , (Arrow Any Any) , False)
+  , ((Arrow Any (Base T)) , (Arrow Any Any) , True)
+  , ((Arrow (Base T) (Base T)) , (Arrow Any Any) , False)
+  , ((Arrow Any Any) , (Arrow (Base T) Any) , True)
+  , ((Arrow Any Any) , (Arrow Any (Base T)) , False)
+  , ((Arrow Any Any) , (Arrow (Base T) (Base T)) , False)
   , ((Arrow Empty Empty), Empty, False)
   , ((Arrow Empty Empty), Any, True)
   , ((Arrow Empty Any), (Arrow Empty Empty), True)
   , ((Arrow Empty Any), (Arrow Any Empty), False)
-  , ((Arrow Zero Zero), (Arrow Zero Any), True)
-  , ((Arrow Any Zero), (Arrow Zero Any), True)
-  , ((Arrow Zero Zero), (Arrow Any Zero), False)
-  , ((Arrow Zero Any), (Arrow Zero Zero), False)
+  , ((Arrow (Base Zero) (Base Zero)), (Arrow (Base Zero) Any), True)
+  , ((Arrow Any (Base Zero)), (Arrow (Base Zero) Any), True)
+  , ((Arrow (Base Zero) (Base Zero)), (Arrow Any (Base Zero)), False)
+  , ((Arrow (Base Zero) Any), (Arrow (Base Zero) (Base Zero)), False)
 
 
   
   -- Or
-  , (T , Or [T, F], True)
-  , (F , Or [T, F], True)
-  , (Or [T, F], T,  False)
-  , (Or [T, F], F,  False)
-  , (Or [T, F] , Or [T, F , Zero] , True)
-  , (Or [T, F] , Or [T, F , Zero], True)
-  , (Or [T, F , Zero], Or [T, F] , False)
-  , ((Or [Zero, T, F]), Or [T, F], False)
+  , ((Base T) , Or [(Base T), (Base F)], True)
+  , ((Base F) , Or [(Base T), (Base F)], True)
+  , (Or [(Base T), (Base F)], (Base T),  False)
+  , (Or [(Base T), (Base F)], (Base F),  False)
+  , (Or [(Base T), (Base F)] , Or [(Base T), (Base F) , (Base Zero)] , True)
+  , (Or [(Base T), (Base F)] , Or [(Base T), (Base F) , (Base Zero)], True)
+  , (Or [(Base T), (Base F) , (Base Zero)], Or [(Base T), (Base F)] , False)
+  , ((Or [(Base Zero), (Base T), (Base F)]), Or [(Base T), (Base F)], False)
 
 
   -- Or + Prod
-  , ((Prod T T) ,
-     (Prod (Or [T, F]) T) ,
+  , ((Prod (Base T) (Base T)) ,
+     (Prod (Or [(Base T), (Base F)]) (Base T)) ,
      True)
-  , ((Prod T T) ,
-      (Prod T (Or [T, F])) ,
+  , ((Prod (Base T) (Base T)) ,
+      (Prod (Base T) (Or [(Base T), (Base F)])) ,
       True)
-  , ((Prod T T) ,
-      (Prod (Or [T, F]) (Or [T, F])) ,
+  , ((Prod (Base T) (Base T)) ,
+      (Prod (Or [(Base T), (Base F)]) (Or [(Base T), (Base F)])) ,
       True)
-  , ((Or [(Prod T T), (Prod T F), (Prod F T), (Prod F F)]) ,
-      (Prod (Or [T, F]) (Or [T, F])) ,
+  , ((Or [(Prod (Base T) (Base T)), (Prod (Base T) (Base F)), (Prod (Base F) (Base T)), (Prod (Base F) (Base F))]) ,
+      (Prod (Or [(Base T), (Base F)]) (Or [(Base T), (Base F)])) ,
       True)
-  , ((Prod (Or [T, F]) (Or [T, F])) ,
-     (Or [(Prod T T), (Prod T F), (Prod F T), (Prod F F)]) ,
+  , ((Prod (Or [(Base T), (Base F)]) (Or [(Base T), (Base F)])) ,
+     (Or [(Prod (Base T) (Base T)), (Prod (Base T) (Base F)), (Prod (Base F) (Base T)), (Prod (Base F) (Base F))]) ,
       True)
-  , ((Or [(Prod (Or [T, F]) T), (Prod (Or [T, F]) F)]) ,
-      (Or [(Prod T T), (Prod T F), (Prod F T), (Prod F F)]) ,
+  , ((Or [(Prod (Or [(Base T), (Base F)]) (Base T)), (Prod (Or [(Base T), (Base F)]) (Base F))]) ,
+      (Or [(Prod (Base T) (Base T)), (Prod (Base T) (Base F)), (Prod (Base F) (Base T)), (Prod (Base F) (Base F))]) ,
       True)
-  , ((Or [(Prod T (Or [T, F])), (Prod F (Or [T, F]))]) ,
-      (Or [(Prod T T), (Prod T F), (Prod F T), (Prod F F)]) ,
+  , ((Or [(Prod (Base T) (Or [(Base T), (Base F)])), (Prod (Base F) (Or [(Base T), (Base F)]))]) ,
+      (Or [(Prod (Base T) (Base T)), (Prod (Base T) (Base F)), (Prod (Base F) (Base T)), (Prod (Base F) (Base F))]) ,
       True)
-  , ((Or [(Prod T T), (Prod T F), (Prod F T), (Prod F F)]) ,
-      (Or [(Prod (Or [T, F]) T), (Prod (Or [T, F]) F)]) ,
+  , ((Or [(Prod (Base T) (Base T)), (Prod (Base T) (Base F)), (Prod (Base F) (Base T)), (Prod (Base F) (Base F))]) ,
+      (Or [(Prod (Or [(Base T), (Base F)]) (Base T)), (Prod (Or [(Base T), (Base F)]) (Base F))]) ,
       True)
-  , ((Or [(Prod T T), (Prod T F), (Prod F T), (Prod F F)]) ,
-     (Or [(Prod T (Or [T, F])), (Prod F (Or [T, F]))]) ,
+  , ((Or [(Prod (Base T) (Base T)), (Prod (Base T) (Base F)), (Prod (Base F) (Base T)), (Prod (Base F) (Base F))]) ,
+     (Or [(Prod (Base T) (Or [(Base T), (Base F)])), (Prod (Base F) (Or [(Base T), (Base F)]))]) ,
       True)
-  , (Or [(Prod T T), (Prod F F)],
-     (Prod (Or [T, F]) (Or [T, F])),
+  , (Or [(Prod (Base T) (Base T)), (Prod (Base F) (Base F))],
+     (Prod (Or [(Base T), (Base F)]) (Or [(Base T), (Base F)])),
      True)
-  , ((Prod (Or [T, F]) (Or [T, F])),
-     Or [(Prod T T), (Prod F F)],
+  , ((Prod (Or [(Base T), (Base F)]) (Or [(Base T), (Base F)])),
+     Or [(Prod (Base T) (Base T)), (Prod (Base F) (Base F))],
      False)
 
   -- Or + Arrow
-  , (Or [(Arrow T T), (Arrow F F)],
-     (Arrow (Or [T, F]) (Or [T, F])),
+  , (Or [(Arrow (Base T) (Base T)), (Arrow (Base F) (Base F))],
+     (Arrow (Or [(Base T), (Base F)]) (Or [(Base T), (Base F)])),
      False)
-  , ((Arrow (Or [T, F]) (Or [T, F])),
-      Or [(Arrow T T), (Arrow F F)],
+  , ((Arrow (Or [(Base T), (Base F)]) (Or [(Base T), (Base F)])),
+      Or [(Arrow (Base T) (Base T)), (Arrow (Base F) (Base F))],
       False)
-  , ((Arrow (Or [T, F]) (Or [T, F])),
-      Or [(Arrow T (Or [T, F])),
-           (Arrow F (Or [T, F]))],
+  , ((Arrow (Or [(Base T), (Base F)]) (Or [(Base T), (Base F)])),
+      Or [(Arrow (Base T) (Or [(Base T), (Base F)])),
+           (Arrow (Base F) (Or [(Base T), (Base F)]))],
       True)
-  , ((Or [(Arrow (Or [T, F]) (Or [T, F])),
-          (Arrow (Or [T, Zero]) (Or [T, F]))]),
-     (Arrow T (Or [T, F])),
+  , ((Or [(Arrow (Or [(Base T), (Base F)]) (Or [(Base T), (Base F)])),
+          (Arrow (Or [(Base T), (Base Zero)]) (Or [(Base T), (Base F)]))]),
+     (Arrow (Base T) (Or [(Base T), (Base F)])),
       True)
     
   -- And
-  , (T , And [T, F], False)
-  , (And [T, F], T , True)
-  , (And [(Or [T, F]), (Or [T, Zero])], T , True)
-  , (And [(Or [T, F]), (Or [T, Zero])], F , False)
-  , (T , And [(Or [T, F]), (Or [T, Zero])], True)
-  , (T , And [(Or [T, F]), (Or [T, Zero])], True)
-  , (And [(Arrow T T), (Arrow F F)],
-     Arrow (Or [T, F]) (Or [T, F]),
+  , ((Base T) , And [(Base T), (Base F)], False)
+  , (And [(Base T), (Base F)], (Base T) , True)
+  , (And [(Or [(Base T), (Base F)]), (Or [(Base T), (Base Zero)])], (Base T) , True)
+  , (And [(Or [(Base T), (Base F)]), (Or [(Base T), (Base Zero)])], (Base F) , False)
+  , ((Base T) , And [(Or [(Base T), (Base F)]), (Or [(Base T), (Base Zero)])], True)
+  , ((Base T) , And [(Or [(Base T), (Base F)]), (Or [(Base T), (Base Zero)])], True)
+  , (And [(Arrow (Base T) (Base T)), (Arrow (Base F) (Base F))],
+     Arrow (Or [(Base T), (Base F)]) (Or [(Base T), (Base F)]),
      True)
-  , (And [(Arrow T T), (Prod F F)],
+  , (And [(Arrow (Base T) (Base T)), (Prod (Base F) (Base F))],
       Empty,
       True)
-  , (And [(Prod T Any), (Prod Any T)],
-     (Prod T T),
+  , (And [(Prod (Base T) Any), (Prod Any (Base T))],
+     (Prod (Base T) (Base T)),
      True)
-    , (And [(Prod (Or [T, F]) T),
-            (Prod T (Or [T, F]))],
-     (Prod T T),
+    , (And [(Prod (Or [(Base T), (Base F)]) (Base T)),
+            (Prod (Base T) (Or [(Base T), (Base F)]))],
+     (Prod (Base T) (Base T)),
      True)
       
   -- Not
     , (Not Any, Empty, True)
     , (Not Empty, Empty, False)
     , (Not Empty, Any, True)
-    , (Not (Or [T, F]), (Not T), True)
-    , ((Not T), Not (Or [T, F]), False)
-    , (Not (Not T), T, True)
-    , (And [(Prod (Or [T, F])
-             (Or [T, F])),
-            (Not (Prod F F))],
-        (Prod T T),
+    , (Not (Or [(Base T), (Base F)]), (Not (Base T)), True)
+    , ((Not (Base T)), Not (Or [(Base T), (Base F)]), False)
+    , (Not (Not (Base T)), (Base T), True)
+    , (And [(Prod (Or [(Base T), (Base F)])
+             (Or [(Base T), (Base F)])),
+            (Not (Prod (Base F) (Base F)))],
+        (Prod (Base T) (Base T)),
         False)
 
-    , ((Prod Zero Zero), (Prod Any Any), True)
-    , ((Prod Empty Zero), (Prod Zero Zero), True)
-    , ((Prod Zero Empty), (Prod Zero Zero), True)
-    , ((Prod Zero Zero), (Prod Zero Any), True)
-    , ((Prod Zero Zero), (Prod Any Zero), True)
-    , ((Prod Zero Zero), (Prod Zero Zero), True)
-    , ((Prod Zero Zero), (Prod Empty Zero), False)
-    , ((Prod Zero Zero), (Prod Zero Empty), False)
-    , ((Prod Zero Zero), (Prod Empty Empty), False)
-    , ((Prod Zero Zero), (Prod (Or [T,F]) Zero), False)
-    , ((Prod Zero Zero), (Prod Zero (Or [T,F])), False)
-    , ((Prod Zero Zero), (Prod (Or [Zero, T,F]) Zero), True)
+    , ((Prod (Base Zero) (Base Zero)), (Prod Any Any), True)
+    , ((Prod Empty (Base Zero)), (Prod (Base Zero) (Base Zero)), True)
+    , ((Prod (Base Zero) Empty), (Prod (Base Zero) (Base Zero)), True)
+    , ((Prod (Base Zero) (Base Zero)), (Prod (Base Zero) Any), True)
+    , ((Prod (Base Zero) (Base Zero)), (Prod Any (Base Zero)), True)
+    , ((Prod (Base Zero) (Base Zero)), (Prod (Base Zero) (Base Zero)), True)
+    , ((Prod (Base Zero) (Base Zero)), (Prod Empty (Base Zero)), False)
+    , ((Prod (Base Zero) (Base Zero)), (Prod (Base Zero) Empty), False)
+    , ((Prod (Base Zero) (Base Zero)), (Prod Empty Empty), False)
+    , ((Prod (Base Zero) (Base Zero)), (Prod (Or [(Base T),(Base F)]) (Base Zero)), False)
+    , ((Prod (Base Zero) (Base Zero)), (Prod (Base Zero) (Or [(Base T),(Base F)])), False)
+    , ((Prod (Base Zero) (Base Zero)), (Prod (Or [(Base Zero), (Base T),(Base F)]) (Base Zero)), True)
       
     -- misc
-    , ((And [(Or [T, F]), (Not T)]) , F , True)
-    , (F , (And [(Or [T, F]), (Not T)]) , True)
-    , (F , (And [(Not T), (Or [T, F])]) , True)
+    , ((And [(Or [(Base T), (Base F)]), (Not (Base T))]) , (Base F) , True)
+    , ((Base F) , (And [(Or [(Base T), (Base F)]), (Not (Base T))]) , True)
+    , ((Base F) , (And [(Not (Base T)), (Or [(Base T), (Base F)])]) , True)
 
-    , ((And [(Or [(Prod T T), (Prod T F), (Prod F T), (Prod F F)]),
-             (Not (Prod T Any))]) ,
-       (Or [(Prod F T), (Prod F F)]) ,
+    , ((And [(Or [(Prod (Base T) (Base T)), (Prod (Base T) (Base F)), (Prod (Base F) (Base T)), (Prod (Base F) (Base F))]),
+             (Not (Prod (Base T) Any))]) ,
+       (Or [(Prod (Base F) (Base T)), (Prod (Base F) (Base F))]) ,
        True)
-    , ((And [(Or [(Prod T T), (Prod T F), (Prod F T), (Prod F F)]),
-             (Prod (Not T) (Or [Zero, T,F]))]) ,
-       (Or [(Prod F T), (Prod F F)]) ,
+    , ((And [(Or [(Prod (Base T) (Base T)), (Prod (Base T) (Base F)), (Prod (Base F) (Base T)), (Prod (Base F) (Base F))]),
+             (Prod (Not (Base T)) (Or [(Base Zero), (Base T),(Base F)]))]) ,
+       (Or [(Prod (Base F) (Base T)), (Prod (Base F) (Base F))]) ,
        True)
-    , ((Or [(Prod F T), (Prod F F)]),
-       (Or [(Prod T T), (Prod T F), (Prod F T), (Prod F F)]),
+    , ((Or [(Prod (Base F) (Base T)), (Prod (Base F) (Base F))]),
+       (Or [(Prod (Base T) (Base T)), (Prod (Base T) (Base F)), (Prod (Base F) (Base T)), (Prod (Base F) (Base F))]),
        True)
-    , ((Or [(Prod F T), (Prod F F)]) ,
-       (And [(Or [(Prod T T), (Prod T F), (Prod F T), (Prod F F)]),
-             (Prod (Not T) (Or [Zero, T,F]))]) ,
+    , ((Or [(Prod (Base F) (Base T)), (Prod (Base F) (Base F))]) ,
+       (And [(Or [(Prod (Base T) (Base T)), (Prod (Base T) (Base F)), (Prod (Base F) (Base T)), (Prod (Base F) (Base F))]),
+             (Prod (Not (Base T)) (Or [(Base Zero), (Base T),(Base F)]))]) ,
        True)
     
   ]

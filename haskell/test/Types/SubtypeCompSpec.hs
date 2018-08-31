@@ -6,25 +6,26 @@ import qualified Types.Subtype as S
 import qualified Types.NSubtype as N
 import qualified Types.LazyBDD as BDD
 import Types.Syntax
+import Types.NumericTower
 
 
 compIsEmpty :: Ty -> Bool
 compIsEmpty rawt = resultN == resultS
-  where t = BDD.parseTy rawt
-        resultN = N.isEmpty t
-        resultS = S.isEmpty t
+  where t = BDD.parseTy baseEnv rawt
+        resultN = N.isEmpty baseEnv t
+        resultS = S.isEmpty baseEnv t
 
 compBinRel ::
-  (BDD.Ty -> BDD.Ty -> Bool)
-  -> (BDD.Ty -> BDD.Ty -> Bool)
+  (BDD.Env -> BDD.Ty -> BDD.Ty -> Bool)
+  -> (BDD.Env -> BDD.Ty -> BDD.Ty -> Bool)
   -> Ty
   -> Ty
   -> Bool
 compBinRel binopN binopS rawt1 rawt2 = resultN == resultS
-  where t1 = BDD.parseTy rawt1
-        t2 = BDD.parseTy rawt2
-        resultN = binopN t1 t2
-        resultS = binopS t1 t2
+  where t1 = BDD.parseTy baseEnv rawt1
+        t2 = BDD.parseTy baseEnv rawt2
+        resultN = binopN baseEnv t1 t2
+        resultS = binopS baseEnv t1 t2
 
 
 compSubtype :: Ty -> Ty -> Bool

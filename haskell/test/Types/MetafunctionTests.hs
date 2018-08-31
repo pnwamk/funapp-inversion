@@ -4,19 +4,20 @@ module Types.MetafunctionTests (genMetafunctionSpec) where
 import Test.Hspec
 import Test.QuickCheck
 import Types.Syntax
-import qualified Types.LazyBDD as Impl
+import qualified Types.LazyBDD as BDD
+import Types.NumericTower
 
 
 genMetafunctionSpec ::
-  (Ty -> Impl.Ty)
-  -> (Impl.Ty -> Impl.Ty -> Bool)
-  -> (Impl.Ty -> Impl.Ty -> Bool)
-  -> (Impl.Ty -> Impl.Ty -> Bool)
-  -> (Impl.Ty -> Maybe Impl.Ty)
-  -> (Impl.Ty -> Maybe Impl.Ty)
-  -> (Impl.Ty -> Maybe Impl.Ty)
-  -> (Impl.Ty -> Impl.Ty -> Maybe Impl.Ty)
-  -> (Impl.Ty -> Impl.Ty -> Impl.Ty -> Maybe Impl.Ty)
+  (Ty -> BDD.Ty)
+  -> (BDD.Ty -> BDD.Ty -> Bool)
+  -> (BDD.Ty -> BDD.Ty -> Bool)
+  -> (BDD.Ty -> BDD.Ty -> Bool)
+  -> (BDD.Ty -> Maybe BDD.Ty)
+  -> (BDD.Ty -> Maybe BDD.Ty)
+  -> (BDD.Ty -> Maybe BDD.Ty)
+  -> (BDD.Ty -> BDD.Ty -> Maybe BDD.Ty)
+  -> (BDD.Ty -> BDD.Ty -> BDD.Ty -> Maybe BDD.Ty)
   -> Spec
 genMetafunctionSpec
   parse
@@ -32,7 +33,8 @@ genMetafunctionSpec
     it "Projection from Empty 1" $ do
       fstProjEquiv Empty Empty `shouldBe` True
     it "Projection from Empty 2" $ do
-      fstProjEquiv (And [Prod (Or [T,Zero]) F,Not (Prod Zero Any)]) T `shouldBe` True
+      fstProjEquiv (And [Prod (Or [Base T, Base Zero]) (Base F), Not (Prod (Base Zero) Any)]) (Base T)
+        `shouldBe` True
     it "Simple Pair" $ property $
       \t -> fstProjEquiv (Prod t Any) t
     it "Union of Pairs" $ property $
@@ -76,7 +78,7 @@ genMetafunctionSpec
     it "Projection from Empty 1" $ do
       (sndProjEquiv Empty Empty) `shouldBe` True
     it "Projection from Empty 2" $ do
-      (sndProjEquiv (And [Prod F (Or [T,Zero]),Not (Prod Any Zero)]) T)
+      (sndProjEquiv (And [Prod (Base F) (Or [Base T, Base Zero]), Not (Prod Any (Base Zero))]) (Base T))
         `shouldBe`
         True
     it "Simple Pair" $ property $
@@ -130,78 +132,78 @@ genMetafunctionSpec
 
   describe "Function Range Tests" $ do
     it "Simple Arrow1" $ do
-      (rngTyEquiv (Arrow T F) T F `shouldBe` True)
+      (rngTyEquiv (Arrow (Base T) (Base F)) (Base T) (Base F) `shouldBe` True)
     it "Simple Arrow2" $ do
       (rngTyEquiv
-       (And [(Arrow (Or [T, F]) F),
-             (Arrow (Or [T, Zero]) F)])
-       T
-       F
+       (And [(Arrow (Or [(Base T), (Base F)]) (Base F)),
+             (Arrow (Or [(Base T), (Base Zero)]) (Base F))])
+       (Base T)
+       (Base F)
         `shouldBe`
         True)
     it "Simple Arrow3" $ do
       (rngTyEquiv
-       (And [(Arrow (Or [T, F]) (Or [T, F])),
-             (Arrow (Or [T, Zero]) (Or [Zero, F]))])
-       T
-       F
+       (And [(Arrow (Or [(Base T), (Base F)]) (Or [(Base T), (Base F)])),
+             (Arrow (Or [(Base T), (Base Zero)]) (Or [(Base Zero), (Base F)]))])
+       (Base T)
+       (Base F)
         `shouldBe`
         True)
     it "Simple Arrow4" $ do
       (rngTyEquiv
-       (And [(Arrow (Or [T, F]) (Or [T, F])),
-             (Arrow (Or [T, Zero]) (Or [Zero, F])),
-             (Arrow (Or [F, Zero]) T)])
-       T
-       F
+       (And [(Arrow (Or [(Base T), (Base F)]) (Or [(Base T), (Base F)])),
+             (Arrow (Or [(Base T), (Base Zero)]) (Or [(Base Zero), (Base F)])),
+             (Arrow (Or [(Base F), (Base Zero)]) (Base T))])
+       (Base T)
+       (Base F)
         `shouldBe`
         True)
         -- TODO add more
 
   describe "Input Type Tests" $ do
     it "Simple Arrow 1a" $ do
-      (inTyEquiv (Arrow T F)
-       T F T `shouldBe` True)
+      (inTyEquiv (Arrow (Base T) (Base F))
+       (Base T) (Base F) (Base T) `shouldBe` True)
     it "Simple Arrow 1b" $ do
-      (inTyEquiv (Arrow T F)
-       T (Not F) (Or []) `shouldBe` True)
+      (inTyEquiv (Arrow (Base T) (Base F))
+       (Base T) (Not (Base F)) (Or []) `shouldBe` True)
     it "Arrow Intersection 1" $ do
-      (inTyEquiv (And [(Arrow (Not F) F), (Arrow F T)])
-       Any T F `shouldBe` True)
+      (inTyEquiv (And [(Arrow (Not (Base F)) (Base F)), (Arrow (Base F) (Base T))]) 
+       Any (Base T) (Base F) `shouldBe` True)
     it "Arrow Intersection 2" $ do
-      (inTyEquiv (And [(Arrow (Not F) F), (Arrow F T)])
-       Any (Not F) F `shouldBe` True)
+      (inTyEquiv (And [(Arrow (Not (Base F)) (Base F)), (Arrow (Base F) (Base T))])
+       Any (Not (Base F)) (Base F) `shouldBe` True)
     it "Arrow Intersection 3" $ do
-      (inTyEquiv (And [(Arrow (Not F) F), (Arrow F T)])
-       Any F (Not F) `shouldBe` True)
+      (inTyEquiv (And [(Arrow (Not (Base F)) (Base F)), (Arrow (Base F) (Base T))])
+       Any (Base F) (Not (Base F)) `shouldBe` True)
     it "Arrow Intersection 4a" $ do
-      (inTyEquiv (And [(Arrow T F), (Arrow F T), (Arrow Zero One)])
-       (Or [T, F, Zero]) (Not F) (Or [F, Zero]) `shouldBe` True)
+      (inTyEquiv (And [(Arrow (Base T) (Base F)), (Arrow (Base F) (Base T)), (Arrow (Base Zero) (Base One))])
+       (Or [(Base T), (Base F), (Base Zero)]) (Not (Base F)) (Or [(Base F), (Base Zero)]) `shouldBe` True)
     it "Arrow Intersection 4b" $ do
-      (inTyEquiv (And [(Arrow T F), (Arrow F T), (Arrow Zero One)])
-       (Or [T, F]) (Not F) F `shouldBe` True)
+      (inTyEquiv (And [(Arrow (Base T) (Base F)), (Arrow (Base F) (Base T)), (Arrow (Base Zero) (Base One))])
+       (Or [(Base T), (Base F)]) (Not (Base F)) (Base F) `shouldBe` True)
     it "Arrow Intersection 5" $ do
-      (inTyEquiv (And [(Arrow T F), (Arrow F T), (Arrow Zero One)])
-       (Or [T, F, Zero]) F T `shouldBe` True)
+      (inTyEquiv (And [(Arrow (Base T) (Base F)), (Arrow (Base F) (Base T)), (Arrow (Base Zero) (Base One))])
+       (Or [(Base T), (Base F), (Base Zero)]) (Base F) (Base T) `shouldBe` True)
     it "Arrow Intersection 6a" $ do
-      (inTyEquiv (Or [(And [(Arrow T F), (Arrow F T), (Arrow Zero One)]),
-                     (And [(Arrow F F), (Arrow T T), (Arrow Zero One)])])
-                  (Or [T, F, Zero]) F (Or [T,F])
+      (inTyEquiv (Or [(And [(Arrow (Base T) (Base F)), (Arrow (Base F) (Base T)), (Arrow (Base Zero) (Base One))]),
+                     (And [(Arrow (Base F) (Base F)), (Arrow (Base T) (Base T)), (Arrow (Base Zero) (Base One))])])
+                  (Or [(Base T), (Base F), (Base Zero)]) (Base F) (Or [(Base T),(Base F)])
                   `shouldBe` True)
     it "Arrow Intersection 6b" $ do
-      (inTyEquiv (Or [(And [(Arrow T F), (Arrow F T), (Arrow Zero One)]),
-                     (And [(Arrow F F), (Arrow T T), (Arrow Zero One)])])
-                  (Or [T,Zero]) F T
+      (inTyEquiv (Or [(And [(Arrow (Base T) (Base F)), (Arrow (Base F) (Base T)), (Arrow (Base Zero) (Base One))]),
+                     (And [(Arrow (Base F) (Base F)), (Arrow (Base T) (Base T)), (Arrow (Base Zero) (Base One))])])
+                  (Or [(Base T),(Base Zero)]) (Base F) (Base T)
                   `shouldBe` True)
     it "Arrow Intersection 7a" $ do
-      (inTyEquiv (Or [(And [(Arrow T F), (Arrow F T), (Arrow Zero One)]),
-                     (And [(Arrow F F), (Arrow T T), (Arrow Zero One)])])
-                  (Or [T, F, Zero]) (Not F) (Or [Zero, T, F])
+      (inTyEquiv (Or [(And [(Arrow (Base T) (Base F)), (Arrow (Base F) (Base T)), (Arrow (Base Zero) (Base One))]),
+                     (And [(Arrow (Base F) (Base F)), (Arrow (Base T) (Base T)), (Arrow (Base Zero) (Base One))])])
+                  (Or [(Base T), (Base F), (Base Zero)]) (Not (Base F)) (Or [(Base Zero), (Base T), (Base F)])
                   `shouldBe` True)
     it "Arrow Intersection 7b" $ do
-      (inTyEquiv (Or [(And [(Arrow T F), (Arrow F T), (Arrow Zero One)]),
-                     (And [(Arrow F F), (Arrow T T), (Arrow Zero One)])])
-                  (Or [T, F]) (Not F) (Or [T, F])
+      (inTyEquiv (Or [(And [(Arrow (Base T) (Base F)), (Arrow (Base F) (Base T)), (Arrow (Base Zero) (Base One))]),
+                     (And [(Arrow (Base F) (Base F)), (Arrow (Base T) (Base T)), (Arrow (Base Zero) (Base One))])])
+                  (Or [(Base T), (Base F)]) (Not (Base F)) (Or [(Base T), (Base F)])
                   `shouldBe` True)
     it "inTyCases 1" $ property $
       \t1 t2 t3 -> (inTyCases (Arrow t1 t2) t3)
@@ -284,16 +286,16 @@ genMetafunctionSpec
               (Just resty, Just posty, Just negty) ->
                 -- verify anything not covered by posty union negty
                 -- is mapped to empty
-                (case (rawRngTy funty (Impl.tyDiff
+                (case (rawRngTy funty (BDD.tyDiff baseEnv
                                        argty
-                                       (Impl.tyOr posty negty))) of
+                                       (BDD.tyOr baseEnv posty negty))) of
                     Nothing -> False
-                    Just rng -> (rawSubtype rng Impl.emptyTy))
+                    Just rng -> (rawSubtype rng BDD.emptyTy))
                 &&
                 -- if the result is calculated to be empty, then it
                 -- should not be included in either of our input
                 -- type predictions
-                (if (rawSubtype resty Impl.emptyTy)
+                (if (rawSubtype resty BDD.emptyTy)
                  then (not ((rawOverlap argty posty)
                             || (rawOverlap argty negty)))
                   -- if the result of function application is some non-empty,
@@ -302,24 +304,24 @@ genMetafunctionSpec
                   -- should be mapped to bottom
                  else if (rawSubtype resty nonFalseTy)
                  then ((not (rawOverlap argty negty))
-                       && (case (rawRngTy funty (Impl.tyDiff argty posty)) of
+                       && (case (rawRngTy funty (BDD.tyDiff baseEnv argty posty)) of
                              Nothing -> False
-                             Just rng -> (rawSubtype rng Impl.emptyTy)))
+                             Just rng -> (rawSubtype rng BDD.emptyTy)))
                   -- if the result of function application is false,
                   -- then any part of the argument's type outside of our
                   -- predicted negative input type calculation
                   -- should be mapped to bottom
                  else if (rawSubtype resty falseTy)
                  then ((not (rawOverlap argty posty))
-                       && (case (rawRngTy funty (Impl.tyDiff argty negty)) of
+                       && (case (rawRngTy funty (BDD.tyDiff baseEnv argty negty)) of
                              Nothing -> False
-                             Just rng -> (rawSubtype rng Impl.emptyTy)))
+                             Just rng -> (rawSubtype rng BDD.emptyTy)))
                   -- otherwise we know the output is non-empty and
                   -- includes false and non-false values, so it
                   -- must overlap with both posty and negty
                   else ((rawOverlap argty posty) && (rawOverlap argty negty)))
               _ -> True
-            where nonFalseTy = (parse (Not F))
-                  falseTy = (parse F)
+            where nonFalseTy = (parse (Not (Base F)))
+                  falseTy = (parse (Base F))
                   funty = (parse rawtfunty)
                   argty = (parse rawargty)
