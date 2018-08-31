@@ -24,7 +24,7 @@ library
                      , Types.Metafunctions
                      , Common.Primitives
                      , Common.SetOps
-                     , Repl.Parser
+                     , Repl.Parse
                      , Repl.Commands
                      , Types.NumericTower
   build-depends:       base >= 4.7 && < 5
@@ -55,11 +55,10 @@ executable numeric-sst
                , Types.Syntax
                , Types.NMetafunctions
                , Repl.Commands
-               , Repl.Parser
+               , Repl.Parse
                , Types.CompareOpTypes
                , Types.Metafunctions
                , Types.NumericTower
-               , Types.Parse
                , Types.SemanticOpTypes
                , Types.SyntacticOpTypes
                , Types.SyntacticOpTypesPlus

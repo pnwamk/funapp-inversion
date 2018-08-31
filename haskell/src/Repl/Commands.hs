@@ -23,6 +23,10 @@ data Cmd =
   -- what must the argument have been if a value of t3 is
   -- produced?
   | FunInv Ty Ty Ty
+  -- define a new type alias
+  | Let String Ty
+    -- define new type aliases which can be mutually recursive
+  | LetRec [(String,Ty)]
   -- exit the Repl
   | Quit
   -- get help
@@ -37,10 +41,10 @@ answerBool False = no
 answerMaybeTy Nothing = no
 answerMaybeTy (Just t) = readBackTy t
 
-execCmd :: Cmd -> String
-execCmd (Inhabited t) = answerBool $ not $ isEmpty t
-execCmd (Subtype t1 t2) = answerBool $ subtype t1 t2
-execCmd (FstProj t) = answerMaybeTy $ fstProj t
-execCmd (SndProj t) = answerMaybeTy $ sndProj t
-execCmd (FunApp t1 t2) = answerMaybeTy $ rngTy t1 t2
-execCmd (FunInv t1 t2 t3) = answerMaybeTy $ inTy t1 t2 t3
+execCmd :: Env -> Cmd -> String
+execCmd env (Inhabited t) = answerBool $ not $ isEmpty env t
+execCmd env (Subtype t1 t2) = answerBool $ subtype env t1 t2
+execCmd env (FstProj t) = answerMaybeTy $ fstProj env t
+execCmd env (SndProj t) = answerMaybeTy $ sndProj env t
+execCmd env (FunApp t1 t2) = answerMaybeTy $ rngTy env t1 t2
+execCmd env (FunInv t1 t2 t3) = answerMaybeTy $ inTy env t1 t2 t3

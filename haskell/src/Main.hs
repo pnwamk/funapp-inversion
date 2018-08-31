@@ -10,10 +10,10 @@ import qualified Types.SyntacticOpTypes as Syn
 import qualified Types.SyntacticOpTypesPlus as SynP
 import qualified Types.SemanticOpTypes as Sem
 import Types.CompareOpTypes
+import Types.NumericTower
 import Data.Foldable
-import Types.Parse
 import Data.Char
-import Repl.Parser
+import Repl.Parse
 import Repl.Commands
 
 
@@ -27,9 +27,6 @@ runComparisonTests = do
   compareSemanticCompOps inTy "Syntactic/Semantic (inTy)"
   compareSemanticCompOps cInTy "Syntactic/Semantic (cInTy)"
 
-readTy :: String -> Maybe BDD.Ty
-readTy input = Just t
-  where (t,_) = nextTy input
 
 flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
@@ -63,18 +60,13 @@ getSexp = do
 readPrompt :: String -> IO (Maybe String)
 readPrompt prompt = flushStr prompt >> getSexp
 
-parseExpr :: String -> Maybe (String, [BDD.Ty])
-parseExpr input = Just ((show t), [])
-  where (opName, rst) = (nextSymbol input)
-        t = nextTy input
-
-evalString :: String -> String
-evalString expr =
-  case (parseCmd expr) of
+evalString :: BDD.Env -> String -> String
+evalString env expr =
+  case (parseCmd env expr) of
     Left msg  -> "(ERROR parsing expression, "
                  ++ "see `(Help)`, or use `(Quit)` to abort.\n"
-                 ++ "  Error: " ++ msg ++ ")"
-    Right cmd -> execCmd cmd
+                 ++ "  Error: " ++ (show msg) ++ ")"
+    Right cmd -> execCmd env cmd
 
 runRepl :: String -> IO ()
 runRepl userPrompt = do
@@ -139,7 +131,7 @@ runRepl userPrompt = do
       putStrLn "          | InexactImaginary | Imaginary | InexactComplex"
       runRepl userPrompt
     Just str -> do
-      putStrLn (evalString str)
+      putStrLn (evalString baseEnv str)
       runRepl userPrompt
     
 main :: IO ()

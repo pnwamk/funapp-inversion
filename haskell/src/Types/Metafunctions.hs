@@ -91,7 +91,7 @@ domTy env t
   | otherwise = let (Ty _ _ arrows) = t in
       Just (aux anyTy emptyTy arrows)
       where aux ::  Ty -> Ty -> (BDD Arrow) -> Ty
-            aux acc dom Top = tyAnd acc dom
+            aux acc dom Top = tyAnd env acc dom
             aux acc dom Bot = acc
             aux acc dom (Node (Arrow t _) l m r) = acc3
               where acc1 = aux acc (tyOr env dom t) l
@@ -121,7 +121,7 @@ rngTy env fty@(Ty _ _ arrows) argty =
         aux [] arg res
           | isEmpty env arg = emptyTy
           | otherwise = res
-        aux ((Arrow s1 s2):p) arg res = tyOr res1 res2
+        aux ((Arrow s1 s2):p) arg res = tyOr env res1 res2
           where res' = tyAnd env res s2
                 arg' = tyDiff env arg s1
                 res1 = if isEmpty env res'
@@ -148,7 +148,7 @@ inTy env fty@(Ty _ _ arrows) arg out =
         aux dom rng []
           | (isEmpty env rng) = dom
           | otherwise     = emptyTy
-        aux dom rng ((Arrow t1 t2):p) = tyOr neg1 neg2
+        aux dom rng ((Arrow t1 t2):p) = tyOr env neg1 neg2
           where dom' = (tyAnd env t1 dom)
                 rng' = (tyAnd env t2 rng)
                 neg1 = if isEmpty env dom'
@@ -158,7 +158,7 @@ inTy env fty@(Ty _ _ arrows) arg out =
                             else aux dom' rng' p
                 neg2 = aux dom rng p
 
-                  
+
 -- conservative version, linear instead of exponential search
 cInTy :: Env -> Ty -> Ty -> Ty -> Maybe Ty
 cInTy env fty@(Ty _ _ arrows) arg out =

@@ -5,6 +5,7 @@ module Types.LazyBDD
   , BDD(..)
   , Arrow(..)
   , Prod(..)
+  , mtEnv
   , extend
   , resolve
   , prodTy
@@ -21,6 +22,7 @@ module Types.LazyBDD
   , trueTy
   , falseTy
   , stringTy
+  , nullTy
   , boolTy
   , anyArrowTy
   , anyProdTy
@@ -59,15 +61,18 @@ deriving instance (Eq x, Ord x) => Ord (BDD x)
 
 -- a DNF representation of types
 data Ty =
-  Ty Base (BDD Prod) (BDD Arrow)
-  | Var String  -- type variable (meaning given by an Env)
+    Ty Base (BDD Prod) (BDD Arrow)
+  | Name String  -- type variable (meaning given by an Env)
   deriving (Eq, Show, Ord)
 
 -- type environment (i.e. mapping type names to types)
-type Env = Map.Map String -> Ty
+type Env = Map.Map String Ty
 
-resolve :: String -> Env -> Ty
-resolve name env = env Map.! name
+mtEnv :: Env
+mtEnv = Map.empty
+
+resolve :: String -> Env -> Maybe Ty
+resolve name env = Map.lookup name env 
 
 extend :: String -> Ty -> Env -> Env
 extend name t env = Map.insert name t env
@@ -78,10 +83,11 @@ anyTy = Ty anyBase Top Top
 emptyTy = Ty emptyBase Bot Bot
 
 -- some base types
-trueTy  = parseTy Stx.T
-falseTy = parseTy Stx.F
-stringTy = parseTy Stx.Str
-boolTy = tyOr' [trueTy, falseTy]
+trueTy  = parseTy mtEnv $ Stx.Base Stx.T
+falseTy = parseTy mtEnv $ Stx.Base Stx.F
+stringTy = parseTy mtEnv $ Stx.Base Stx.Str
+nullTy = parseTy mtEnv $ Stx.Base Stx.Null
+boolTy = tyOr' mtEnv [trueTy, falseTy]
 
 
 -- Constructs the type `t1 × t2`.
@@ -183,35 +189,35 @@ bddNot (Node a l m r) = (node a (bddAnd notL notM) Bot (bddAnd notR notM))
 
 
 tyAnd :: Env -> Ty -> Ty -> Ty
-tyAnd (Ty base1 prod1 arrow1) (Ty base2 prod2 arrow2) =
-  (Ty (baseAnd base1 base2)
-    (bddAnd prod1 prod2)
-    (bddAnd arrow1 arrow2))
-tyAnd env (Var name) t2 = tyAnd env (resolve name env) t2
-tyAnd env t1 (Var name) = tyAnd env t1 (resolve name env)
+tyAnd env (Ty b1 p1 a1) (Ty b2 p2 a2) = Ty b p a
+  where b = baseAnd b1 b2
+        p = bddAnd p1 p2
+        a = bddAnd a1 a2
+tyAnd env (Name name) t2 = tyAnd env (env Map.! name) t2
+tyAnd env t1 (Name name) = tyAnd env t1 (env Map.! name)
 
 tyAnd' :: Env -> [Ty] -> Ty
 tyAnd' env ts = foldr (tyAnd env) anyTy ts
 
 tyOr :: Env -> Ty -> Ty -> Ty
-tyOr (Ty base1 prod1 arrow1) (Ty base2 prod2 arrow2) =
-  (Ty (baseOr base1 base2)
-    (bddOr prod1 prod2)
-    (bddOr arrow1 arrow2))
-tyOr env (Var name) t2 = tyOr env (resolve name env) t2
-tyOr env t1 (Var name) = tyOr env t1 (resolve name env)
+tyOr env (Ty b1 p1 a1) (Ty b2 p2 a2) = Ty b p a
+  where b = baseOr b1 b2
+        p = bddOr p1 p2
+        a = bddOr a1 a2
+tyOr env (Name name) t2 = tyOr env (env Map.! name) t2
+tyOr env t1 (Name name) = tyOr env t1 (env Map.! name)
 
 
 tyOr' :: Env -> [Ty] -> Ty
 tyOr' env ts = foldr (tyOr env) emptyTy ts
 
 tyDiff :: Env -> Ty -> Ty -> Ty
-tyDiff env (Ty base1 prod1 arrow1) (Ty base2 prod2 arrow2) =
-  (Ty (baseDiff base1 base2)
-    (bddDiff prod1 prod2)
-    (bddDiff arrow1 arrow2))
-tyDiff env (Var name) t2 = tyDiff env (resolve name env) t2
-tyDiff env t1 (Var name) = tyDiff env t1 (resolve name env)
+tyDiff env (Ty b1 p1 a1) (Ty b2 p2 a2) = Ty b p a
+  where b = baseDiff b1 b2
+        p = bddDiff p1 p2
+        a = bddDiff a1 a2
+tyDiff env (Name name) t2 = tyDiff env (env Map.! name) t2
+tyDiff env t1 (Name name) = tyDiff env t1 (env Map.! name)
 
 
 tyNot :: Env -> Ty -> Ty
@@ -220,26 +226,17 @@ tyNot env t = tyDiff env anyTy t
 
 
 
-parseTy :: Stx.Ty -> Ty
-parseTy (Stx.Prod t1 t2) = (prodTy
-                               (parseTy t1)
-                               (parseTy t2))
-parseTy (Stx.Arrow t1 t2) = (arrowTy
-                                (parseTy t1)
-                                (parseTy t2))
-parseTy (Stx.Or []) = emptyTy
-parseTy (Stx.Or (t:ts)) = (foldr tyOr
-                             (parseTy t)
-                             (map parseTy ts))
-parseTy (Stx.And []) = anyTy
-parseTy (Stx.And (t:ts)) = (foldr tyAnd
-                              (parseTy t)
-                              (map parseTy ts))
-parseTy (Stx.Not t) = tyNot (parseTy t)
-parseTy Stx.Any = anyTy
-parseTy Stx.Empty = emptyTy
-parseTy (Stx.Var name) = Var name
-parseTy (Stx.Base b) = Ty (Base True (Bits.bit $ Stx.baseIndex b))
+parseTy :: Env -> Stx.Ty -> Ty
+parseTy env (Stx.Prod t1 t2) = prodTy (parseTy env t1) (parseTy env t2)
+parseTy env (Stx.Arrow t1 t2) = arrowTy (parseTy env t1) (parseTy env t2)
+parseTy env (Stx.Or ts) = foldr (tyOr env) emptyTy $ map (parseTy env) ts
+parseTy env (Stx.And ts) = foldr (tyAnd env) anyTy $ map (parseTy env) ts
+parseTy env (Stx.Not t) = tyNot env (parseTy env t)
+parseTy env Stx.Any = anyTy
+parseTy env Stx.Empty = emptyTy
+parseTy env (Stx.Var name) = Name name
+parseTy env (Stx.Base bTy) = Ty b Bot Bot
+  where b = Base True $ Bits.bit $ Stx.baseIndex bTy
 
 anyProdStr = "(Prod Any Any)"
 anyArrowStr = "(Arrow Empty Any)"
@@ -258,7 +255,7 @@ readBackTy (Ty bs ps as) = strOr t1 $ strOr t2 t3
   where t1 = strAnd anyBaseStr $ readBackBase bs
         t2 = strAnd anyProdStr $ readBackBDD readBackProd ps
         t3 = strAnd anyArrowStr$ readBackBDD readBackArrow as
-readBackTy (Var name) = name
+readBackTy (Name name) = name
 
 strOr :: String -> String -> String
 strOr "Any" _ = "Any"

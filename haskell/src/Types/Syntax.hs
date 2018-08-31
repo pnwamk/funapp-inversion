@@ -1,8 +1,6 @@
 module Types.Syntax
-  ( Ty(..)
-  , Scope
-  , abstract
-  , instantiate
+  ( BaseTy(..)
+  , Ty(..)
   , baseTypes
   , baseIndex
   , baseTyStr
@@ -56,7 +54,7 @@ data BaseTy =
   
 
 data Ty =
-  | Base BaseTy
+   Base BaseTy
   | Prod Ty Ty
   | Arrow Ty Ty
   | Or [Ty]

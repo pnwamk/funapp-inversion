@@ -38,7 +38,7 @@ isEmptyProd env Top s1 s2 neg = ((isEmpty env s1)
 -- Is a BDD of arrows equivalent to ∅?
 isEmptyArrow :: Env -> (BDD Arrow) -> Ty -> [Arrow] -> [Arrow] -> Bool
 isEmptyArrow env (Node a@(Arrow s1 s2) l m r) dom pos neg =
-  (isEmptyArrow env l (tyOr s1 dom) (a:pos) neg)
+  (isEmptyArrow env l (tyOr env s1 dom) (a:pos) neg)
   && (isEmptyArrow env m dom pos neg)
   && (isEmptyArrow env r dom pos (a:neg))
 isEmptyArrow env Bot _ _ _ = True

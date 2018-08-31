@@ -1,6 +1,5 @@
 module Types.NMetafunctions
-  ( isPred
-  , isFun
+  ( isFun
   , isProd
   , fstProj
   , sndProj
@@ -17,12 +16,12 @@ import Data.List
 import Common.SetOps
 
 -- Is this a function type?
-isFun :: Ty -> Bool
-isFun t = subtype t anyArrowTy
+isFun :: Env -> Ty -> Bool
+isFun env t = subtype env t anyArrowTy
 
 -- Is this a function type?
-isProd :: Ty -> Bool
-isProd t = subtype t anyProdTy
+isProd :: Env -> Ty -> Bool
+isProd env t = subtype env t anyProdTy
 
 
 -- Calculates the projection type for a given type
@@ -34,69 +33,51 @@ isProd t = subtype t anyProdTy
 -- Equivalent to ⋃i∈I(⋃N'⊆Nᵢ(⋂p∈Pᵢ Sₚ & ⋂n∈N' ¬Sₙ))
 -- where the original product type is
 -- ⋃i∈I(̱ ⋂p∈Pᵢ (Sₚ , Tₚ)  &  ⋂n∈Nᵢ  ¬(Sₙ , Tₙ) )
-calcProj :: (Ty -> Ty -> Ty) -> Ty -> Maybe Ty
-calcProj select t@(Ty _ ps _)
-  | not (isProd t) = Nothing
-  | otherwise = Just (foldl tyOr emptyTy (map clauseProj clauses))
-    where clauses :: [(Prod, [Prod])]
-          clauses = flattenProds ps
+calcProj :: Env -> (Ty -> Ty -> Ty) -> Ty -> Maybe Ty
+calcProj env select t@(Ty _ ps _)
+  | not (isProd env t) = Nothing
+  | otherwise = Just $ foldl (tyOr env) emptyTy clauses
+    where clauses :: [Ty]
+          clauses = map clauseProj $ flattenProds env ps
           clauseProj :: (Prod, [Prod]) -> Ty
-          clauseProj ((Prod t1 t2), negs) =
-            (foldl (\t negs' -> tyOr t (proj t1 t2 negs negs'))
-             emptyTy
-             (subsets negs))
+          clauseProj ((Prod t1 t2), negs) = foldr projOr emptyTy negss
+            where negss = subsets negs
+                  projOr negs' t = tyOr env t $ proj t1 t2 negs negs'
           proj :: Ty -> Ty -> [Prod] -> [Prod] -> Ty
           proj t1 t2 negs negs'
-            | isEmpty t1' = emptyTy
-            | isEmpty t2' = emptyTy
+            | isEmpty env t1' = emptyTy
+            | isEmpty env t2' = emptyTy
             | otherwise   = select t1' t2'
-            where t1' = tyAnd t1 (andNFsts negs')
-                  t2' = tyAnd t2 (andNSnds (negs \\ negs'))
+            where t1' = tyAnd env t1 (andNFsts negs')
+                  t2' = tyAnd env t2 (andNSnds (negs \\ negs'))
           andNFsts :: [Prod] -> Ty
-          andNFsts ps = foldl (\t (Prod t1 _) -> tyAnd t (tyNot t1)) anyTy ps
+          andNFsts ps = foldr andNotFst anyTy ps
+            where andNotFst (Prod t1 _) t = tyAnd env t (tyNot env t1)
           andNSnds :: [Prod] -> Ty
-          andNSnds ps = foldl (\t (Prod _ t2) -> tyAnd t (tyNot t2)) anyTy ps
+          andNSnds ps = foldr andNotSnd anyTy ps
+            where andNotSnd (Prod _ t2) t = tyAnd env t (tyNot env t2)
 
             
 
 -- if t is a product, what type is returned
 -- from it's first projection? If it is not
 -- a product, return Nothing.
-fstProj :: Ty -> Maybe Ty
-fstProj t = calcProj (\t1 t2 -> t1) t
+fstProj :: Env -> Ty -> Maybe Ty
+fstProj env t = calcProj env (\t1 t2 -> t1) t
 
 -- If t is a product, what type is returned
 -- from it's second projection. If it is not
 -- a product, return Nothing.
-sndProj :: Ty -> Maybe Ty
-sndProj t = calcProj (\t1 t2 -> t2) t
-
-
--- Is this a function for a predicate?  If so, return `Just t` where
--- `t` is the type it is a predicate for, otherwise return Nothing. A
--- sound... but obviously not complete implementation.
-isPred :: Ty -> Maybe Ty
-isPred (Ty b
-         Bot
-         (Node (Arrow t1 res1)
-           (Node (Arrow t2 res2) Top Bot Bot)
-           Bot
-           Top))
-  | not (b == emptyBase) = Nothing
-  | not (equiv t1 (tyNot t2)) = Nothing
-  | (subtype res1 trueTy) && (subtype res2 falseTy) = Just t1
-  | (subtype res2 trueTy) && (subtype res1 falseTy) = Just t2
-  | otherwise = Nothing
-isPred _ = Nothing
-
+sndProj :: Env -> Ty -> Maybe Ty
+sndProj env t = calcProj env (\t1 t2 -> t2) t
 
 
 -- given a type, if it is a function, return the collective
 -- domain for the function type they represent, e.g.:
 -- (⋂i∈I(⋃(Sₚ→Tₚ)∈Pᵢ Sₚ))
-domTy :: Ty -> Maybe Ty
-domTy t
-  | not (isFun t) = Nothing
+domTy :: Env -> Ty -> Maybe Ty
+domTy env t
+  | not (isFun env t) = Nothing
   | otherwise = Just dom
   where (Ty _ _ arrowsBDD) = t
         clauses :: [([Arrow] , [Arrow])]
@@ -104,64 +85,65 @@ domTy t
         clauseDoms :: [Ty]
         clauseDoms = map clauseDom clauses
         clauseDom :: ([Arrow] , [Arrow]) -> Ty
-        clauseDom (pos, neg) = (foldl (\t (Arrow t' _) ->
-                                         tyOr t t')
+        clauseDom (pos, neg) = (foldr (\(Arrow t' _) t ->
+                                         tyOr env t t')
                                 emptyTy
                                 pos)
-        dom = foldl tyAnd anyTy clauseDoms
+        dom = foldr (tyAnd env) anyTy clauseDoms
 
 -- If (1) fty is a function type and (2) argty is a subtype
 -- of its domain, what is the return type for applying
 -- an fty to an argty? If (1) and (2) are not both
 -- satisfied, return Nothing.
-rngTy :: Ty -> Ty -> Maybe Ty
-rngTy fty@(Ty _ _ arrows) argty =
-  case (domTy fty) of
-    (Just dom) | (subtype argty dom) -> Just res
+rngTy :: Env -> Ty -> Ty -> Maybe Ty
+rngTy env fty@(Ty _ _ arrows) argty =
+  case (domTy env fty) of
+    (Just dom) | (subtype env argty dom) -> Just res
     _ -> Nothing
   where ps = map fst (flattenBDD arrows)
-        res = foldl (\t p -> tyOr t (calcRng p argty)) emptyTy ps
+        res = foldr rngOr emptyTy ps
+        rngOr p t = tyOr env t (calcRng env p argty)
 
 
-calcRng :: [Arrow] -> Ty -> Ty
-calcRng p argty = foldl tyOr emptyTy ts
+calcRng :: Env -> [Arrow] -> Ty -> Ty
+calcRng env p argty = foldr (tyOr env) emptyTy ts
   where ps = nonEmptySubsets p
         ts = map getTy ps
         getTy :: [Arrow] -> Ty
         getTy pos
-          | subtype argty compDom = emptyTy
+          | subtype env argty compDom = emptyTy
           | otherwise = rng
-          where compDom = (foldl (\t (Arrow s1 _) -> tyOr t s1)
+          where compDom = (foldr (\(Arrow s1 _) t -> tyOr env t s1)
                            emptyTy
                            (p \\ pos))
-                rng = (foldl (\t (Arrow _ s2) -> tyAnd t s2)
+                rng = (foldr (\(Arrow _ s2) t -> tyAnd env t s2)
                            anyTy
                            pos)
 
 
-inTy :: Ty -> Ty -> Ty -> Maybe Ty
-inTy fty@(Ty _ _ arrows) arg out
-  | not $ isFun fty = Nothing
+inTy :: Env -> Ty -> Ty -> Ty -> Maybe Ty
+inTy env fty@(Ty _ _ arrows) arg out
+  | not $ isFun env fty = Nothing
   | otherwise = Just res
   where ps =  map fst (flattenBDD arrows)
-        res = (foldl
-                (\t p -> tyOr t (tyDiff
-                                  (calcInTy p arg out (not . isEmpty))
-                                  (calcInTy p arg out isEmpty)))
+        res = (foldr
+                (\p t -> (tyOr env t
+                          (tyDiff env
+                            (calcInTy env p arg out (not . (isEmpty env)))
+                            (calcInTy env p arg out (isEmpty env)))))
                 emptyTy
                 ps)
 
 
-calcInTy :: [Arrow] -> Ty -> Ty -> (Ty -> Bool) -> Ty
-calcInTy p arg out include = foldl tyOr emptyTy (map aux (nonEmptySubsets p))
+calcInTy :: Env -> [Arrow] -> Ty -> Ty -> (Ty -> Bool) -> Ty
+calcInTy env p arg out include = foldr (tyOr env) emptyTy (map aux (nonEmptySubsets p))
   where aux :: [Arrow] -> Ty
         aux p' = if (include rng)
                  then dom
                  else emptyTy
-          where dom = foldl tyAnd arg (map arrowDom p')
-                rng = foldl tyAnd out (map arrowRng p')
+          where dom = foldr (tyAnd env) arg (map arrowDom p')
+                rng = foldr (tyAnd env) out (map arrowRng p')
                 arrowDom (Arrow t1 _) = t1 
                 arrowRng (Arrow _ t2) = t2
-        
 
   
