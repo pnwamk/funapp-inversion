@@ -7,6 +7,7 @@ module Types.Syntax
   ) where
 
 import Test.QuickCheck
+import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
 -- Contains ASTs for set-theoretic types that are convenient
@@ -63,7 +64,7 @@ data Ty =
   | Not Ty
   | Any
   | Empty
-  | Var String -- Type variable
+  | Name String -- Type name
   deriving (Eq, Show, Ord)
 
 
@@ -110,7 +111,7 @@ baseTyStr F = "False"
 baseTyStr Str = "String"
 baseTyStr t = show t
 
-baseIndexMap :: Map.Map BaseTy Int
+baseIndexMap :: Map BaseTy Int
 baseIndexMap = Map.fromList $ zip baseTypes [0..]
 
 baseIndex :: BaseTy -> Int

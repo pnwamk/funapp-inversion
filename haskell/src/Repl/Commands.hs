@@ -3,7 +3,7 @@ module Repl.Commands where
 -- this module defines some simple data structures to
 -- represent parsed commands from the user
 
-
+import qualified Types.Syntax as Stx
 import Types.LazyBDD
 import Types.Subtype
 import Types.Metafunctions
@@ -26,7 +26,7 @@ data Cmd =
   -- define a new type alias
   | Let String Ty
     -- define new type aliases which can be mutually recursive
-  | LetRec [(String,Ty)]
+  | LetRec [(String,Stx.Ty)]
   -- exit the Repl
   | Quit
   -- get help

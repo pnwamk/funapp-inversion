@@ -41,6 +41,7 @@ import Types.Base
 import qualified Data.List as List
 import qualified Types.Syntax as Stx
 import qualified Data.Bits as Bits
+import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
 data Arrow = Arrow Ty Ty
@@ -66,7 +67,7 @@ data Ty =
   deriving (Eq, Show, Ord)
 
 -- type environment (i.e. mapping type names to types)
-type Env = Map.Map String Ty
+type Env = Map String Ty
 
 mtEnv :: Env
 mtEnv = Map.empty
@@ -234,7 +235,7 @@ parseTy env (Stx.And ts) = foldr (tyAnd env) anyTy $ map (parseTy env) ts
 parseTy env (Stx.Not t) = tyNot env (parseTy env t)
 parseTy env Stx.Any = anyTy
 parseTy env Stx.Empty = emptyTy
-parseTy env (Stx.Var name) = Name name
+parseTy env (Stx.Name name) = Name name
 parseTy env (Stx.Base bTy) = Ty b Bot Bot
   where b = Base True $ Bits.bit $ Stx.baseIndex bTy
 

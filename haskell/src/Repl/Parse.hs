@@ -4,10 +4,14 @@ module Repl.Parse ( parseCmd , parseTy ) where
 -- (or input from a Racket process) whose grammar
 -- is s-expression based
 
+import qualified Types.Syntax as Stx
 import qualified Types.LazyBDD as BDD
 import Types.NumericTower
 import Repl.Commands
+import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.Char
 import Control.Monad.Fail
 
@@ -100,54 +104,106 @@ parseCmd env (c:body)
         "LetRec" -> Left"LetRec not implemented yet"
         _ -> Left $ "invalid Command: " ++ sym
 
-  
--- parses the next type, returning the type and rest of the
--- input string if successful
-parseTy :: BDD.Env -> String -> Either String (BDD.Ty, String)
-parseTy env [] = Left $ "no type to parse"
-parseTy env input@(c:body)
-  | isSpace c = parseTy env body
-  | c == '(' = do
-      (sym, rest) <-  parseSym body
-      case sym of
-        "Or" -> do
-          (ts, rest') <- parseTyList env rest
-          Right (foldr (BDD.tyOr env) BDD.emptyTy ts, rest')
-        "And" -> do
-          (ts, rest') <- parseTyList env rest
-          Right (foldr (BDD.tyAnd env) BDD.anyTy ts, rest')
-        "Not" -> do
-          (ts, rest') <- parseTyList env rest
-          case ts of
-            [t] -> Right (BDD.tyNot env t, rest')
-            _   -> Left $ "Not requires 1 argument, given " ++ (show ts)
-        "Prod" -> do
-          (ts, rest') <- parseTyList env rest
-          case ts of
-            [t1, t2] -> Right (BDD.prodTy t1 t2, rest')
-            _   -> Left $ "Prod requires 2 arguments, given " ++ (show ts)
-        "Arrow" -> do
-          (ts, rest') <- parseTyList env rest
-          case ts of
-            [t1, t2] -> Right (BDD.arrowTy t1 t2, rest')
-            _   -> Left $ "Arrow requires 2 arguments, given " ++ (show ts)
-        _ -> Left $ "invalid type constructor: " ++ sym
-  | c == ')' = Left $ "unexpected right parenthesis"
-  | otherwise = do
-      (sym, rest) <- parseSym input
-      case BDD.resolve sym env of
-        Nothing -> Left $ "unrecognized type name: " ++ sym
-        Just t -> Right (t, rest)
-
-
 
 parseTyList :: BDD.Env -> String -> Either String ([BDD.Ty], String)
-parseTyList env input = aux input []
-  where aux :: String -> [BDD.Ty] -> Either String ([BDD.Ty], String)
-        aux [] ts = Left $ "end of input string, no closing parenthesis: " ++ input
+parseTyList env inputStr = parseList inputStr mkOr mkAnd mkNot mkProd mkArrow mkName
+  where mkOr ts = BDD.tyOr' env ts
+        mkAnd ts = BDD.tyAnd' env ts
+        mkNot t = BDD.tyNot env t
+        mkProd t1 t2 = BDD.prodTy t1 t2
+        mkArrow t1 t2 = BDD.arrowTy t1 t2
+        mkName name = BDD.resolve name env
+
+parseTy :: BDD.Env -> String -> Either String (BDD.Ty, String)
+parseTy env inputStr = parseSingle inputStr mkOr mkAnd mkNot mkProd mkArrow mkName
+  where mkOr ts = BDD.tyOr' env ts
+        mkAnd ts = BDD.tyAnd' env ts
+        mkNot t = BDD.tyNot env t
+        mkProd t1 t2 = BDD.prodTy t1 t2
+        mkArrow t1 t2 = BDD.arrowTy t1 t2
+        mkName name = BDD.resolve name env
+
+-- used to parse LetRecs, i.e. we first parse the bodies
+-- into Types.Stx types so we can ensure they are all
+-- productive types, then we can use Haskell's
+-- laziness/mutual recursion to extend the environment with
+-- all of the types simultaneously
+parseStx :: BDD.Env -> Set String -> String -> Either String (Stx.Ty, String)
+parseStx env bound inputStr = parseSingle inputStr Stx.Or Stx.And Stx.Not Stx.Prod Stx.Arrow mkName
+  where mkName name =
+          case BDD.resolve name env of
+            Nothing -> if Set.member name bound
+                       then Just $ Stx.Name name
+                       else  Nothing
+            Just t -> Just $ Stx.Name name
+
+
+parseList ::
+  (Show a, Ord a, Eq a) =>
+  String ->
+  ([a] -> a) -> -- Or constructor
+  ([a] -> a) -> -- And constructor
+  (a -> a) -> -- Not constructor
+  (a -> a -> a) -> -- Prod constructor
+  (a -> a -> a) -> -- Arrow constructor
+  (String -> Maybe a) -> -- how to handle type names
+  Either String ([a], String)
+parseList initial (mkOr) mkAnd mkNot mkProd mkArrow mkName = aux initial []
+  where aux [] ts = Left $ "end of input string, no closing parenthesis"
         aux (')':rest) ts = Right (reverse ts, rest)
         aux str@(c:rest) ts
           | isSpace c = aux rest ts
           | otherwise = do
-              (t, rest') <- parseTy env str
+              (t, rest') <- single str
               aux rest' (t:ts)
+                where single str = parseSingle str mkOr mkAnd mkNot mkProd mkArrow mkName
+
+parseSingle ::
+  (Show a, Ord a, Eq a) =>
+  String ->
+  ([a] -> a) -> -- Or constructor
+  ([a] -> a) -> -- And constructor
+  (a -> a) -> -- Not constructor
+  (a -> a -> a) -> -- Prod constructor
+  (a -> a -> a) -> -- Arrow constructor
+  (String -> Maybe a) -> -- how to handle type names
+  Either String (a, String)
+parseSingle input mkOr mkAnd mkNot mkProd mkArrow mkName =
+  let single str = parseSingle str mkOr mkAnd mkNot mkProd mkArrow mkName
+      multi  str = parseList str mkOr mkAnd mkNot mkProd mkArrow mkName in
+    case input of
+      [] -> Left $ "no type to parse"
+      (c:body) 
+        | isSpace c -> single body
+        | c == '(' -> do
+            (sym, rest) <- parseSym body
+            case sym of
+              "Or" -> do
+                (ts, rest') <- multi rest
+                Right (mkOr ts, rest')
+              "And" -> do
+                (ts, rest') <- multi rest
+                Right (mkAnd ts, rest')
+              "Not" -> do
+                (ts, rest') <- multi rest
+                case ts of
+                  [t] -> Right (mkNot t, rest')
+                  _   -> Left $ "Not requires 1 argument, given " ++ (show ts)
+              "Prod" -> do
+                (ts, rest') <- multi rest
+                case ts of
+                  [t1, t2] -> Right (mkProd t1 t2, rest')
+                  _   -> Left $ "Prod requires 2 arguments, given " ++ (show ts)
+              "Arrow" -> do
+                (ts, rest') <- multi rest
+                case ts of
+                  [t1, t2] -> Right (mkArrow t1 t2, rest')
+                  _   -> Left $ "Arrow requires 2 arguments, given " ++ (show ts)
+              _ -> Left $ "invalid type constructor: " ++ sym
+        | c == ')' -> Left $ "unexpected right parenthesis"
+        | otherwise -> do
+            (sym, rest) <- parseSym input
+            case mkName sym of
+              Nothing -> Left $ "unrecognized type name: " ++ sym
+              Just t -> Right (t, rest)
+
