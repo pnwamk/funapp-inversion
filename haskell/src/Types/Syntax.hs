@@ -7,8 +7,8 @@ module Types.Syntax
   ) where
 
 import Test.QuickCheck
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
+import Data.Map (Map)
+import qualified Data.Map as Map
 
 -- Contains ASTs for set-theoretic types that are convenient
 -- when writing tests and/or programs but are not designed

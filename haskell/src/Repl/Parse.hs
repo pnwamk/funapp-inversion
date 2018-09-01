@@ -8,12 +8,13 @@ import qualified Types.Syntax as Stx
 import qualified Types.LazyBDD as BDD
 import Types.NumericTower
 import Repl.Commands
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Char
-import Control.Monad.Fail
+import Data.Graph (Graph)
+import qualified Data.Graph as Graph
 
 -- what characters, aside from AlphaNums, are valid in symbols
 allowedChars :: String
@@ -101,7 +102,9 @@ parseCmd env (c:body)
                 [t] -> Right $ Let name t
                 _ -> Left $ "expected one type after name in Let, found " ++ (show ts)
             Just t -> Left $ "cannot redefine type name " ++ name ++ "(i.e. it is already defined)"
-        "LetRec" -> Left"LetRec not implemented yet"
+        "LetRec" -> do
+          (bindings, _) <- parseLetRec env rest
+          validateLetRecBindings bindings
         _ -> Left $ "invalid Command: " ++ sym
 
 
@@ -122,6 +125,85 @@ parseTy env inputStr = parseSingle inputStr mkOr mkAnd mkNot mkProd mkArrow mkNa
         mkProd t1 t2 = BDD.prodTy t1 t2
         mkArrow t1 t2 = BDD.arrowTy t1 t2
         mkName name = BDD.resolve name env
+
+validateLetRecBindings :: (Map String Stx.Ty) -> Either String Cmd
+validateLetRecBindings bindings = case [names | (Graph.CyclicSCC names) <- sccs] of
+                                    [] -> Right $ LetRec bindings
+                                    (names:_) -> Left $ "invalid cycle found in LetRec: " ++ show names
+  where sccs = Graph.stronglyConnComp $ map nodeInfo nodes
+        nodeInfo :: String -> (String, String, [String])
+        nodeInfo name = (name, name, Set.toList $ neighbors $ bindings Map.! name)          
+        nodes :: [String]
+        nodes = Map.keys bindings
+        neighbors :: Stx.Ty -> Set String
+        neighbors (Stx.Name name)
+          | Map.member name bindings = Set.singleton name
+          | otherwise = Set.empty
+        neighbors (Stx.Or ts)  = foldr (\t ns -> Set.union ns $ neighbors t) Set.empty ts
+        neighbors (Stx.And ts) = foldr (\t ns -> Set.union ns $ neighbors t) Set.empty ts
+        neighbors (Stx.Not t) = neighbors t
+        neighbors _ = Set.empty
+
+parseLetRec :: BDD.Env -> String -> Either String ((Map String Stx.Ty), String)
+parseLetRec env [] = Left "failed to parse LetRec bindings (they ended abruptly!)"
+parseLetRec env (c:rest)
+  | isSpace c = parseLetRec env rest
+  | not $ c == '(' = Left $ "expected to find a left parenthesis, found " ++ [c]
+  | otherwise = do
+      (rawBindings, rest') <- parseBindings env rest
+      parsedBindings <- Map.foldrWithKey (parseRhs (Map.keysSet rawBindings)) (Right Map.empty) rawBindings
+      Right (parsedBindings, rest')
+        where parseRhs :: Set String -> String -> String -> Either String (Map String Stx.Ty) -> Either String (Map String Stx.Ty)
+              parseRhs bound name rhs maybeParsed = do
+                (t, _) <- parseStx env bound rhs
+                parsed <- maybeParsed
+                Right $ Map.insert name t parsed
+
+-- after seeing `(LetRec`, this function is called to
+-- initially parse the bindings ((name rhs) ...)
+parseBindings :: BDD.Env -> String -> Either String ((Map String String), String)
+parseBindings env [] = Left "failed to parse LetRec bindings (they ended abruptly!)"
+parseBindings env (c:rest)
+  | isSpace c = parseBindings env rest
+  | c == '(' = do
+      (name, rhs, rest') <- parseBinding env rest
+      (bindings, rest'') <- parseBindings env rest'
+      if Map.member name bindings
+        then Left $ "duplicate entries given in LetRec bindings for " ++ name
+        else Right (Map.insert name rhs bindings, rest'')
+  | c == ')' = Right (Map.empty, [])
+  | otherwise = Left $ "invalid character in LetRec binding sequence: " ++ [c]
+
+
+-- parses a single (name rhs) in a LetRec binding (after the
+-- initial `(` has already been seen), returning (name, rhs,
+-- rest) where rhs is the _unparsed rhs
+parseBinding :: BDD.Env -> String -> Either String (String, String, String)
+parseBinding env input = do
+  (name, rest) <- parseSym input
+  if (BDD.envMember name env)
+    then Left $ "name is already bound in environment: " ++ name
+    else do
+    (rhs, rest') <- parseNextSexp rest
+    case (skipSpace rest') of
+      (')':rest'') -> Right (name, rhs, rest'')
+      _ -> Left "invalid end to LetRec rhs (i.e. no right parenthesis found)"
+
+-- read the next sexpression from stdin, return the rest of the string
+parseNextSexp :: String -> Either String (String, String)
+parseNextSexp inputStr = aux inputStr [] 0
+  where aux :: String -> String -> Int -> Either String (String, String)
+        aux (c:rest) [] 0
+          | c == '(' = aux rest "(" 1
+          | isSpace c = aux rest [] 0
+          | isAlphaNum c || (any (== c) allowedChars) = parseSym (c:rest)
+          | otherwise = Left "invalid LetRec rhs"
+        aux (')':_) rbuff 0 = Left "unexpected right parenthesis in LetRec binding rhs"
+        aux (')':rest) rbuff 1 = Right $ (reverse (')':rbuff), rest)
+        aux (')':rst) rbuff depth = aux rst (')':rbuff) (depth-1)
+        aux ('(':rst) rbuff depth = aux rst ('(':rbuff) (depth+1)
+        aux (c:rst) rbuff depth = aux rst (c:rbuff) depth
+        aux [] _ _ = Left "unexpected end of string while parsing LetRec rhs"
 
 -- used to parse LetRecs, i.e. we first parse the bodies
 -- into Types.Stx types so we can ensure they are all
@@ -148,14 +230,15 @@ parseList ::
   (a -> a -> a) -> -- Arrow constructor
   (String -> Maybe a) -> -- how to handle type names
   Either String ([a], String)
-parseList initial (mkOr) mkAnd mkNot mkProd mkArrow mkName = aux initial []
-  where aux [] ts = Left $ "end of input string, no closing parenthesis"
-        aux (')':rest) ts = Right (reverse ts, rest)
-        aux str@(c:rest) ts
-          | isSpace c = aux rest ts
+parseList initial (mkOr) mkAnd mkNot mkProd mkArrow mkName = aux initial
+  where aux [] = Left $ "end of input string, no closing parenthesis"
+        aux (')':rest) = Right ([], rest)
+        aux str@(c:rest)
+          | isSpace c = aux rest
           | otherwise = do
               (t, rest') <- single str
-              aux rest' (t:ts)
+              (ts, rest'') <- aux rest'
+              return (t:ts, rest'')
                 where single str = parseSingle str mkOr mkAnd mkNot mkProd mkArrow mkName
 
 parseSingle ::

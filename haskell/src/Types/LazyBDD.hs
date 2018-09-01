@@ -8,6 +8,7 @@ module Types.LazyBDD
   , mtEnv
   , extend
   , resolve
+  , envMember
   , prodTy
   , arrowTy
   , parseTy
@@ -41,8 +42,8 @@ import Types.Base
 import qualified Data.List as List
 import qualified Types.Syntax as Stx
 import qualified Data.Bits as Bits
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
+import Data.Map (Map)
+import qualified Data.Map as Map
 
 data Arrow = Arrow Ty Ty
   deriving (Eq, Show, Ord)
@@ -71,6 +72,9 @@ type Env = Map String Ty
 
 mtEnv :: Env
 mtEnv = Map.empty
+
+envMember :: String -> Env -> Bool
+envMember name env = Map.member name env
 
 resolve :: String -> Env -> Maybe Ty
 resolve name env = Map.lookup name env 

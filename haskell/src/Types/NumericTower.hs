@@ -3,8 +3,8 @@ module Types.NumericTower where
 import qualified Types.Syntax as Stx
 import Types.LazyBDD
 import Types.Subtype
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
+import Data.Map (Map)
+import qualified Data.Map as Map
 
 data Obj = ArgZero | ArgOne
   deriving (Eq, Show, Ord)
