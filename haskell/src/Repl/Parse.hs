@@ -126,6 +126,10 @@ parseTy env inputStr = parseSingle inputStr mkOr mkAnd mkNot mkProd mkArrow mkNa
         mkArrow t1 t2 = BDD.arrowTy t1 t2
         mkName name = BDD.resolve name env
 
+-- makes sure (mutually) recursive LetRec bindings are all
+-- productive (i.e. the values they describe are finite and
+-- sensical) by parsing them into a graph and ensuring their
+-- are no cyclic strongly connected components
 validateLetRecBindings :: (Map String Stx.Ty) -> Either String Cmd
 validateLetRecBindings bindings = case [names | (Graph.CyclicSCC names) <- sccs] of
                                     [] -> Right $ LetRec bindings
@@ -144,6 +148,7 @@ validateLetRecBindings bindings = case [names | (Graph.CyclicSCC names) <- sccs]
         neighbors (Stx.Not t) = neighbors t
         neighbors _ = Set.empty
 
+-- parses each name/rhs clause in a LetRec
 parseLetRec :: BDD.Env -> String -> Either String ((Map String Stx.Ty), String)
 parseLetRec env [] = Left "failed to parse LetRec bindings (they ended abruptly!)"
 parseLetRec env (c:rest)
@@ -160,7 +165,11 @@ parseLetRec env (c:rest)
                 Right $ Map.insert name t parsed
 
 -- after seeing `(LetRec`, this function is called to
--- initially parse the bindings ((name rhs) ...)
+-- initially parse the bindings ((name rhs) ...), HOWEVER
+-- the rhss are left unparsed (note they are a String and
+-- not a Stx.Ty) so that we can wait to parse them until all
+-- of the names being bound by the LetRec have been
+-- identified
 parseBindings :: BDD.Env -> String -> Either String ((Map String String), String)
 parseBindings env [] = Left "failed to parse LetRec bindings (they ended abruptly!)"
 parseBindings env (c:rest)
@@ -177,7 +186,9 @@ parseBindings env (c:rest)
 
 -- parses a single (name rhs) in a LetRec binding (after the
 -- initial `(` has already been seen), returning (name, rhs,
--- rest) where rhs is the _unparsed rhs
+-- rest) where rhs is the _unparsed_ rhs (i.e. a String not
+-- a Stx.Ty so we can parse them later once we have all the
+-- names being bound by the LetRec identified)
 parseBinding :: BDD.Env -> String -> Either String (String, String, String)
 parseBinding env input = do
   (name, rest) <- parseSym input
@@ -206,7 +217,7 @@ parseNextSexp inputStr = aux inputStr [] 0
         aux [] _ _ = Left "unexpected end of string while parsing LetRec rhs"
 
 -- used to parse LetRecs, i.e. we first parse the bodies
--- into Types.Stx types so we can ensure they are all
+-- into Types.Syntax types so we can ensure they are all
 -- productive types, then we can use Haskell's
 -- laziness/mutual recursion to extend the environment with
 -- all of the types simultaneously
