@@ -12,6 +12,6 @@ import Types.NumericTower
 spec :: Spec
 spec = (genSubtypeSpec
         (BDD.parseTy baseEnv)
-        (N.subtype baseEnv)
-        (N.overlap baseEnv)
-        (N.equiv baseEnv))
+        N.subtype
+        N.overlap
+        N.equiv)

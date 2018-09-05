@@ -286,9 +286,7 @@ genMetafunctionSpec
               (Just resty, Just posty, Just negty) ->
                 -- verify anything not covered by posty union negty
                 -- is mapped to empty
-                (case (rawRngTy funty (BDD.tyDiff baseEnv
-                                       argty
-                                       (BDD.tyOr baseEnv posty negty))) of
+                (case (rawRngTy funty (BDD.tyDiff argty (BDD.tyOr posty negty))) of
                     Nothing -> False
                     Just rng -> (rawSubtype rng BDD.emptyTy))
                 &&
@@ -304,7 +302,7 @@ genMetafunctionSpec
                   -- should be mapped to bottom
                  else if (rawSubtype resty nonFalseTy)
                  then ((not (rawOverlap argty negty))
-                       && (case (rawRngTy funty (BDD.tyDiff baseEnv argty posty)) of
+                       && (case (rawRngTy funty (BDD.tyDiff argty posty)) of
                              Nothing -> False
                              Just rng -> (rawSubtype rng BDD.emptyTy)))
                   -- if the result of function application is false,
@@ -313,7 +311,7 @@ genMetafunctionSpec
                   -- should be mapped to bottom
                  else if (rawSubtype resty falseTy)
                  then ((not (rawOverlap argty posty))
-                       && (case (rawRngTy funty (BDD.tyDiff baseEnv argty negty)) of
+                       && (case (rawRngTy funty (BDD.tyDiff argty negty)) of
                              Nothing -> False
                              Just rng -> (rawSubtype rng BDD.emptyTy)))
                   -- otherwise we know the output is non-empty and

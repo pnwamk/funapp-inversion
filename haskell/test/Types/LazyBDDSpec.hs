@@ -16,4 +16,4 @@ spec = do
       (\rawT -> (let t = parseTy baseEnv rawT in
                   case (Parse.parseTy baseEnv (readBackTy t)) of
                     Left _ -> False
-                    Right (t', _) -> equiv baseEnv t t'))
+                    Right (t', _) -> equiv t t'))

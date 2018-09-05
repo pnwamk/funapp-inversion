@@ -11,30 +11,30 @@ import Types.Syntax
 
 equivMaybeTy :: Maybe BDD.Ty -> Maybe BDD.Ty -> Bool
 equivMaybeTy Nothing Nothing = True
-equivMaybeTy (Just t1) (Just t2) = equiv baseEnv t1 t2
+equivMaybeTy (Just t1) (Just t2) = equiv t1 t2
 equivMaybeTy _ _ = False
 
 compUnMaybeOp ::
-  (BDD.Env -> BDD.Ty -> Maybe BDD.Ty) ->
-  (BDD.Env -> BDD.Ty -> Maybe BDD.Ty) ->
+  (BDD.Ty -> Maybe BDD.Ty) ->
+  (BDD.Ty -> Maybe BDD.Ty) ->
   Ty ->
   Bool
 compUnMaybeOp op1 op2 rawt = equivMaybeTy res1 res2
   where t = BDD.parseTy baseEnv rawt
-        res1 = op1 baseEnv t
-        res2 = op2 baseEnv t
+        res1 = op1 t
+        res2 = op2 t
 
 compBinMaybeOp ::
-  (BDD.Env -> BDD.Ty -> BDD.Ty -> Maybe BDD.Ty) ->
-  (BDD.Env -> BDD.Ty -> BDD.Ty -> Maybe BDD.Ty) ->
+  (BDD.Ty -> BDD.Ty -> Maybe BDD.Ty) ->
+  (BDD.Ty -> BDD.Ty -> Maybe BDD.Ty) ->
   Ty ->
   Ty ->
   Bool
 compBinMaybeOp op1 op2 rawt1 rawt2 = equivMaybeTy res1 res2
   where t1 = BDD.parseTy baseEnv rawt1
         t2 = BDD.parseTy baseEnv rawt2
-        res1 = op1 baseEnv t1 t2
-        res2 = op2 baseEnv t1 t2
+        res1 = op1 t1 t2
+        res2 = op2 t1 t2
 
 
 compFstProj :: Ty -> Bool
@@ -54,8 +54,8 @@ compInTy rawfunty rawargty rawoutty = equivMaybeTy res1 res2
   where funty = BDD.parseTy baseEnv rawfunty
         argty = BDD.parseTy baseEnv rawargty
         outty = BDD.parseTy baseEnv rawoutty
-        res1 = N.inTy baseEnv funty argty outty
-        res2 = M.inTy baseEnv funty argty outty
+        res1 = N.inTy funty argty outty
+        res2 = M.inTy funty argty outty
 
 
 spec :: Spec

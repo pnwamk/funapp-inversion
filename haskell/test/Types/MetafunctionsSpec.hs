@@ -13,11 +13,11 @@ import Types.NumericTower
 spec :: Spec
 spec = (genMetafunctionSpec
          (BDD.parseTy baseEnv)
-         (S.subtype baseEnv)
-         (S.overlap baseEnv)
-         (S.equiv baseEnv)
-         (M.fstProj baseEnv)
-         (M.sndProj baseEnv)
-         (M.domTy baseEnv)
-         (M.rngTy baseEnv)
-         (M.inTy baseEnv))
+         S.subtype
+         S.overlap
+         S.equiv
+         M.fstProj
+         M.sndProj
+         M.domTy
+         M.rngTy
+         M.inTy)
