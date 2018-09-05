@@ -12,111 +12,103 @@ import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import Control.Monad
 
 
-mTyAnd :: Env -> Ty -> Maybe Ty -> Ty
-mTyAnd env t Nothing = t
-mTyAnd env t (Just t') = tyAnd env t t'
+mTyAnd :: Ty -> Maybe Ty -> Ty
+mTyAnd t Nothing = t
+mTyAnd t (Just t') = tyAnd t t'
 
 -- return type using only the first applicable arrow
-firstSynUnOpRng :: Env -> [(Ty, Ty)] -> Ty -> Maybe Ty
-firstSynUnOpRng env syn arg =
-  case (find (\(d,r) -> subtype env arg d) syn) of
+firstSynUnOpRng :: [(Ty, Ty)] -> Ty -> Maybe Ty
+firstSynUnOpRng syn arg =
+  case (find (\(d,r) -> subtype arg d) syn) of
     Nothing -> Nothing
     Just (d,r) -> Just r
     
 
 -- return type using _all_ applicable arrows
-allSynUnOpRng :: Env -> [(Ty, Ty)] -> Ty -> Maybe Ty
-allSynUnOpRng env [] argTy = Nothing
-allSynUnOpRng env ((s1,s2):rst) arg
-  | (subtype env arg s1) = Just $ mTyAnd env s2 (allSynUnOpRng env rst arg)
-  | otherwise = allSynUnOpRng env rst arg
+allSynUnOpRng :: [(Ty, Ty)] -> Ty -> Maybe Ty
+allSynUnOpRng [] argTy = Nothing
+allSynUnOpRng ((s1,s2):rst) arg
+  | (subtype arg s1) = Just $ mTyAnd s2 (allSynUnOpRng rst arg)
+  | otherwise = allSynUnOpRng rst arg
 
 -- return type using _all_ applicable arrows
-semUnOpRng :: Env -> [(Ty, Ty)] -> Ty -> Maybe Ty
-semUnOpRng env ts arg = rngTy env fun arg
-  where fun = parseUnOpToSemantic env ts
+semUnOpRng :: [(Ty, Ty)] -> Ty -> Maybe Ty
+semUnOpRng ts arg = rngTy fun arg
+  where fun = parseUnOpToSemantic ts
           
 -- verifies both function types work on the
 -- same input types, and that the result for
 -- fTy1 is a subtype of the result for fTy2
 compareUnOpRes ::
-  Env ->
   (Ty -> Maybe Ty)
   -> (Ty -> Maybe Ty)
   -> Ty
   -> Ty
   -> Bool
-compareUnOpRes env applyFun1 applyFun2 dom arg =
+compareUnOpRes applyFun1 applyFun2 dom arg =
   case (res1, res2) of
-    (Just t1, Just t2) ->
-      (subtype env t1 t2) &&
-      (((isEmpty env t1) && (isEmpty env t2))
-       || (overlap env t1 t2))
-    (_,_) -> not $ subtype env arg dom
+    (Just t1, Just t2) -> (subtype t1 t2) &&
+                          (((isEmpty t1) && (isEmpty t2)) || (overlap t1 t2))
+    (_,_) -> not $ subtype arg dom
   where res1 = applyFun1 arg
         res2 = applyFun2 arg
 
 -- identify duplicate cases in case-> if we were
 -- to simply apply all possible arrows (returning
 -- a list of the indices of the unnecessary arrows)
-simplifySynUnOp :: Env -> [(Ty, Ty)] -> [Integer]
-simplifySynUnOp env orig = [x | Just x <- rawDups]
+simplifySynUnOp :: [(Ty, Ty)] -> [Integer]
+simplifySynUnOp orig = [x | Just x <- rawDups]
   where rawDups = (map (\(a,i) -> if dup a
                                  then Just i
                                  else Nothing)
                    $ zip orig [0..])
         dup (t1,t2) =
-          case (allSynUnOpRng env (delete (t1,t2) orig) t1) of
-            Just t -> subtype env t t2
+          case (allSynUnOpRng (delete (t1,t2) orig) t1) of
+            Just t -> subtype t t2
             Nothing -> False
 
 -- like simplifyUnOp
-simplifySynBinOp :: Env -> [(Ty, Ty, Ty)] -> [Integer]
-simplifySynBinOp env orig = [x | Just x <- rawDups]
+simplifySynBinOp :: [(Ty, Ty, Ty)] -> [Integer]
+simplifySynBinOp orig = [x | Just x <- rawDups]
   where rawDups = (map (\(a,i) -> if dup a
-                                  then Just i
-                                  else Nothing)
+                                 then Just i
+                                 else Nothing)
                    $ zip orig [0..])
         dup (t1,t2,r) =
-          case (allSynBinOpRng env (delete (t1,t2,r) orig) t1 t2) of
-            Just t -> subtype env t r
+          case (allSynBinOpRng (delete (t1,t2,r) orig) t1 t2) of
+            Just t -> subtype t r
             Nothing -> False
 
 
 firstSynBinOpRng ::
-  Env ->
   [(Ty, Ty, Ty)] ->
   Ty ->
   Ty ->
   Maybe Ty
-firstSynBinOpRng env syn arg1 arg2 =
-  case (find (\(d1,d2,r) ->
-                (subtype env arg1 d1)
-                && (subtype env arg2 d2)) syn) of
+firstSynBinOpRng syn arg1 arg2 =
+  case (find (\(d1,d2,r) -> (subtype arg1 d1) && (subtype arg2 d2)) syn) of
     Nothing -> Nothing
     Just (d1,d2,r) -> Just r
 
 
 allSynBinOpRng ::
-  Env ->
   [(Ty, Ty, Ty)] ->
   Ty ->
   Ty ->
   Maybe Ty
-allSynBinOpRng env [] argTy1 argTy2 = Nothing
-allSynBinOpRng env ((d1,d2,r):rst) arg1 arg2
-  | (subtype env arg1 d1)
-    && (subtype env arg2 d2) = Just $ mTyAnd env r (allSynBinOpRng env rst arg1 arg2)
-  | otherwise = allSynBinOpRng env rst arg1 arg2
+allSynBinOpRng [] argTy1 argTy2 = Nothing
+allSynBinOpRng ((d1,d2,r):rst) arg1 arg2
+  | (subtype arg1 d1)
+    && (subtype arg2 d2) = Just $ mTyAnd r (allSynBinOpRng rst arg1 arg2)
+  | otherwise = allSynBinOpRng rst arg1 arg2
 
 
 -- return type using _all_ applicable arrows
-semBinOpRng :: Env -> [(Ty, Ty, Ty)] -> Ty -> Ty -> Maybe Ty
-semBinOpRng env ts arg1 arg2 = (rngTy env fun (prodTy arg1 arg2))
-  where fun = parseBinOpToSemantic env ts
+semBinOpRng :: [(Ty, Ty, Ty)] -> Ty -> Ty -> Maybe Ty
+semBinOpRng ts arg1 arg2 = (rngTy fun (prodTy arg1 arg2))
+  where fun = parseBinOpToSemantic ts
 
 compareBinOpRes ::
-  Env ->
   (Ty -> Ty -> Maybe Ty)
   -> (Ty -> Ty -> Maybe Ty)
   -> Ty
@@ -124,70 +116,64 @@ compareBinOpRes ::
   -> Ty
   -> Ty
   -> Bool
-compareBinOpRes env applyFun1 applyFun2 dom1 dom2 arg1 arg2 =
+compareBinOpRes applyFun1 applyFun2 dom1 dom2 arg1 arg2 =
     case (res1, res2) of
-      (Just t1, Just t2) ->
-        (subtype env t1 t2) &&
-        (((isEmpty env t1) && (isEmpty env t2)) || (overlap env t1 t2))
-      (_,_) -> ((not (subtype env arg1 dom1))
-                || (not (subtype env arg2 dom2)))
+      (Just t1, Just t2) -> (subtype t1 t2) &&
+                            (((isEmpty t1) && (isEmpty t2)) || (overlap t1 t2))
+      (_,_) -> ((not (subtype arg1 dom1))
+                || (not (subtype arg2 dom2)))
   where res1 = applyFun1 arg1 arg2
         res2 = applyFun2 arg1 arg2
 
 
 
-argType :: Env -> Ty -> Obj -> Prop -> Ty
-argType env d  _ FF = emptyTy
-argType env d _ TT =  d
-argType env d o1 (IsA o2 t)
-  | (o1 == o2) = tyAnd env d t
+argType :: Ty -> Obj -> Prop -> Ty
+argType d  _ FF = emptyTy
+argType d _ TT =  d
+argType d o1 (IsA o2 t)
+  | (o1 == o2) = tyAnd d t
   | otherwise = d
-argType env d o1 (Conj p1 p2) = tyAnd env t1 t2
-  where t1 = argType env d o1 p1
-        t2 = argType env d o1 p2
+argType d o1 (Conj p1 p2) = tyAnd t1 t2
+  where t1 = argType d o1 p1
+        t2 = argType d o1 p2
 
 firstSynCompOpTypes ::
-  Env ->
   [(Ty, Ty, Prop, Prop)] ->
   Ty ->
   Ty ->
   Maybe (Ty, Ty, Ty, Ty)
-firstSynCompOpTypes env syn arg1 arg2 =
-  case (find (\(d1,d2,pos,neg) ->
-                (subtype env arg1 d1)
-                && (subtype env arg2 d2)) syn) of
+firstSynCompOpTypes syn arg1 arg2 =
+  case (find (\(d1,d2,pos,neg) -> (subtype arg1 d1) && (subtype arg2 d2)) syn) of
     Nothing -> Nothing
-    Just (d1,d2, pos, neg) -> Just ((argType env arg1 ArgZero pos),
-                                    (argType env arg2 ArgOne pos),
-                                    (argType env arg1 ArgZero neg),
-                                    (argType env arg2 ArgOne neg))
+    Just (d1,d2, pos, neg) -> Just ((argType arg1 ArgZero pos),
+                                    (argType arg2 ArgOne pos),
+                                    (argType arg1 ArgZero neg),
+                                    (argType arg2 ArgOne neg))
 
 
 allSynCompOpTypes ::
-  Env ->
   [(Ty, Ty, Prop, Prop)] ->
   Ty ->
   Ty ->
   Maybe (Ty, Ty, Ty, Ty)
-allSynCompOpTypes env [] argTy1 argTy2 = Nothing
-allSynCompOpTypes env ((d1,d2,pos,neg):rst) arg1 arg2
-  | (subtype env arg1 d1)
-    && (subtype env arg2 d2) =
-    case (allSynCompOpTypes env rst arg1 arg2) of
+allSynCompOpTypes [] argTy1 argTy2 = Nothing
+allSynCompOpTypes ((d1,d2,pos,neg):rst) arg1 arg2
+  | (subtype arg1 d1)
+    && (subtype arg2 d2) =
+    case (allSynCompOpTypes rst arg1 arg2) of
       Just (pos1, pos2, neg1, neg2) ->
-        Just (tyAnd env pos1 (argType env arg1 ArgZero pos),
-              tyAnd env pos2 (argType env arg2 ArgOne pos),
-              tyAnd env neg1 (argType env arg1 ArgZero neg),
-              tyAnd env neg2 (argType env arg2 ArgOne neg)) 
-      Nothing -> Just ((argType env arg1 ArgZero pos),
-                       (argType env arg2 ArgOne pos),
-                       (argType env arg1 ArgZero neg),
-                       (argType env arg2 ArgOne neg))
-  | otherwise = allSynCompOpTypes env rst arg1 arg2
+        Just (tyAnd pos1 (argType arg1 ArgZero pos),
+              tyAnd pos2 (argType arg2 ArgOne pos),
+              tyAnd neg1 (argType arg1 ArgZero neg),
+              tyAnd neg2 (argType arg2 ArgOne neg)) 
+      Nothing -> Just ((argType arg1 ArgZero pos),
+                       (argType arg2 ArgOne pos),
+                       (argType arg1 ArgZero neg),
+                       (argType arg2 ArgOne neg))
+  | otherwise = allSynCompOpTypes rst arg1 arg2
 
   
 compareCompOpRes ::
-  Env ->
   (Ty -> Ty -> Maybe (Ty, Ty, Ty, Ty)) ->
   (Ty -> Ty -> Maybe (Ty, Ty, Ty, Ty)) ->
   Ty ->
@@ -195,107 +181,105 @@ compareCompOpRes ::
   Ty ->
   Ty ->
   Bool
-compareCompOpRes env applyFun1 applyFun2 dom1 dom2 arg1 arg2 =
+compareCompOpRes applyFun1 applyFun2 dom1 dom2 arg1 arg2 =
   case (res1, res2) of
-    (Just (pos1,  pos2,  neg1,  neg2),
-     Just (pos1', pos2', neg1', neg2')) ->
-      if not (subtype env pos1 pos1')
+    (Just (pos1, pos2, neg1, neg2), Just (pos1', pos2', neg1', neg2')) ->
+      if not (subtype pos1 pos1')
       then error $ "prediction not a subtype for "
            ++ (readBackTy arg1) ++ " " ++ (readBackTy arg2)
            ++ "(pos1): "
            ++ (readBackTy pos1) ++ " </: "
            ++ (readBackTy pos1')
-      else if not (subtype env pos2 pos2')
+      else if not (subtype pos2 pos2')
       then error $ "prediction not a subtype for "
            ++ (readBackTy arg1) ++ " " ++ (readBackTy arg2)
            ++ "(pos2): "
            ++ (readBackTy pos2) ++ " </: "
            ++ (readBackTy pos2')
-      else if not (subtype env neg1 neg1')
+      else if not (subtype neg1 neg1')
       then error $ "prediction not a subtype for "
            ++ (readBackTy arg1) ++ " " ++ (readBackTy arg2)
            ++ "(neg1): "
            ++ (readBackTy neg1) ++ " </: "
            ++ (readBackTy neg1')
-      else if not (subtype env neg2 neg2')
+      else if not (subtype neg2 neg2')
       then error $ "prediction not a subtype for "
            ++ (readBackTy arg1) ++ " " ++ (readBackTy arg2)
            ++ "(neg2): "
            ++ (readBackTy neg2) ++ " </: "
            ++ (readBackTy neg2')
       else True
-    (_,_) -> ((not (subtype env arg1 dom1))
-              || (not (subtype env arg2 dom2)))
+    (_,_) -> ((not (subtype arg1 dom1))
+              || (not (subtype arg2 dom2)))
   where res1 = applyFun1 arg1 arg2
         res2 = applyFun2 arg1 arg2
 
 
 
-simplifySynCompOp :: Env -> [(Ty, Ty, Prop, Prop)] -> [Integer]
-simplifySynCompOp env orig = [x | Just x <- rawDups]
+simplifySynCompOp :: [(Ty, Ty, Prop, Prop)] -> [Integer]
+simplifySynCompOp orig = [x | Just x <- rawDups]
   where rawDups = (map (\(a,i) -> if dup a
-                                  then Just i
-                                  else Nothing)
+                                 then Just i
+                                 else Nothing)
                    $ zip orig [0..])
         dup (t1,t2,pos,neg) =
-          case (allSynCompOpTypes env (delete (t1,t2,pos,neg) orig) t1 t2) of
+          case (allSynCompOpTypes (delete (t1,t2,pos,neg) orig) t1 t2) of
             Just (pos1, pos2, neg1, neg2) ->
-              (subtype env pos1 (argType env t1 ArgZero pos))
-              && (subtype env pos2 (argType env t2 ArgOne pos))
-              && (subtype env neg1 (argType env t1 ArgZero neg))
-              && (subtype env neg2 (argType env t2 ArgOne neg))
+              (subtype pos1 (argType t1 ArgZero pos))
+              && (subtype pos2 (argType t2 ArgOne pos))
+              && (subtype neg1 (argType t1 ArgZero neg))
+              && (subtype neg2 (argType t2 ArgOne neg))
             Nothing -> False
 
 
-parseUnOpToSemantic :: Env -> [(Ty, Ty)] -> Ty
-parseUnOpToSemantic env [] = anyTy
-parseUnOpToSemantic env ((d,r):ts) = tyAnd env (arrowTy d r) $ parseUnOpToSemantic env ts
+parseUnOpToSemantic :: [(Ty, Ty)] -> Ty
+parseUnOpToSemantic [] = anyTy
+parseUnOpToSemantic ((d,r):ts) = tyAnd (arrowTy d r) $ parseUnOpToSemantic ts
 
 
 -- identify duplicate cases in case-> if we were
 -- to use semantic subtyping-esq function application
-simplifySemUnOp :: Env -> [(Ty, Ty)] -> [Integer]
-simplifySemUnOp env orig = [x | Just x <- rawDups]
+simplifySemUnOp :: [(Ty, Ty)] -> [Integer]
+simplifySemUnOp orig = [x | Just x <- rawDups]
   where rawDups = (map (\(a,i) -> if dup a
-                                  then Just i
-                                  else Nothing)
+                                 then Just i
+                                 else Nothing)
                    $ zip orig [0..])
         dup (t1,t2) =
-          case (rngTy env
-                (parseUnOpToSemantic env (delete (t1,t2) orig))
+          case (rngTy
+                (parseUnOpToSemantic (delete (t1,t2) orig))
                 t1) of
-            Just t -> (subtype env t t2)
+            Just t -> (subtype t t2)
             Nothing -> False
 
 
-parseBinOpToSemantic :: Env -> [(Ty, Ty, Ty)] -> Ty
-parseBinOpToSemantic env [] = anyTy
-parseBinOpToSemantic env ((d1,d2,r):ts) =
-  tyAnd env (arrowTy (prodTy d1 d2) r) $ parseBinOpToSemantic env ts
+parseBinOpToSemantic :: [(Ty, Ty, Ty)] -> Ty
+parseBinOpToSemantic [] = anyTy
+parseBinOpToSemantic ((d1,d2,r):ts) =
+  tyAnd (arrowTy (prodTy d1 d2) r) $ parseBinOpToSemantic ts
 
 
-simplifySemBinOp :: Env -> [(Ty, Ty, Ty)] -> [Integer]
-simplifySemBinOp env orig = [x | Just x <- rawDups]
+simplifySemBinOp :: [(Ty, Ty, Ty)] -> [Integer]
+simplifySemBinOp orig = [x | Just x <- rawDups]
   where rawDups = (map (\(a,i) -> if dup a
                                  then Just i
                                  else Nothing)
                    $ zip orig [0..])
         dup (t1,t2,r) =
-          case (rngTy env
-                (parseBinOpToSemantic env (delete (t1,t2,r) orig))
+          case (rngTy
+                (parseBinOpToSemantic (delete (t1,t2,r) orig))
                 (prodTy t1 t2)) of
-            Just t -> subtype env t r
+            Just t -> subtype t r
             Nothing -> False
 
 
 semCompOpTypes ::
-  Env ->
-  (Env -> Ty -> Ty -> Ty -> Maybe Ty) ->
+  (Ty -> Ty -> Ty -> Maybe Ty) ->
   [(Ty, Ty, Ty)] ->
   Ty ->
   Ty ->
   Maybe (Ty, Ty, Ty, Ty)
-semCompOpTypes env inputTy ts arg1 arg2 =
+semCompOpTypes inputTy ts arg1 arg2 =
   case (pos1,pos2,neg1,neg2) of
     (Just posTy1,
      Just posTy2,
@@ -303,17 +287,19 @@ semCompOpTypes env inputTy ts arg1 arg2 =
      Just negTy2) -> Just (posTy1, posTy2, negTy1, negTy2)
     (_,_,_,_) -> Nothing
     where argTy = prodTy arg1 arg2
-          semTy = parseBinOpToSemantic env ts
-          pos = inputTy env semTy argTy $ tyNot env falseTy
+          semTy = parseBinOpToSemantic ts
+          pos = inputTy semTy argTy $ tyNot falseTy
           (pos1,pos2) =
             case pos of
               Nothing -> (Nothing, Nothing)
-              Just t -> (fstProj env t, sndProj env t)
-          neg = inputTy env semTy argTy falseTy
+              Just t -> (fstProj t, sndProj t)
+          neg = inputTy semTy argTy falseTy
           (neg1,neg2) =
             case neg of
               Nothing -> (Nothing, Nothing)
-              Just t -> (fstProj env t, sndProj env t)
+              Just t -> (fstProj t, sndProj t)
+
+
 
 
 -- [(name, domain)]
@@ -342,25 +328,23 @@ getUnOpType name table =
     Nothing -> error ("missing UnOp spec for " ++ name)
   
 compareUnOps ::
-  Env ->
   [(String, OpSpec)] ->
-  (Env -> [(Ty, Ty)] -> Ty -> Maybe Ty) ->
+  ([(Ty, Ty)] -> Ty -> Maybe Ty) ->
   [(String, OpSpec)] ->
-  (Env -> [(Ty, Ty)] -> Ty -> Maybe Ty) ->
+  ([(Ty, Ty)] -> Ty -> Maybe Ty) ->
   String ->
   IO ()
-compareUnOps env ts1 rngTy1 ts2 rngTy2 description = do
+compareUnOps ts1 rngTy1 ts2 rngTy2 description = do
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   putStrLn ("Comparing UnOps (" ++ description ++ ")")
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   forM_ unOps $ \(opName, opDom) -> do
-    let applyFun1 = (rngTy1 env (getUnOpType opName ts1))
-        applyFun2 = (rngTy2 env (getUnOpType opName ts2))
+    let applyFun1 = (rngTy1 (getUnOpType opName ts1))
+        applyFun2 = (rngTy2 (getUnOpType opName ts2))
     startTime <- getCurrentTime
     putStr opName
     forM_ numericTypes $ \(argName, argTy) -> do
       putStr (if (compareUnOpRes
-                  env
                   applyFun1
                   applyFun2 
                   opDom
@@ -381,14 +365,13 @@ getBinOpType name table =
     Nothing -> error ("missing BinOp spec for " ++ name)
   
 compareBinOps ::
-  Env ->
   [(String, OpSpec)] ->
   ([(Ty, Ty, Ty)] -> Ty -> Ty -> Maybe Ty) ->
   [(String, OpSpec)] ->
   ([(Ty, Ty, Ty)] -> Ty -> Ty -> Maybe Ty) ->
   String ->
   IO ()
-compareBinOps env ts1 rngTy1 ts2 rngTy2 description = do
+compareBinOps ts1 rngTy1 ts2 rngTy2 description = do
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   putStrLn ("Comparing BinOps (" ++ description ++ ")")
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
@@ -401,7 +384,6 @@ compareBinOps env ts1 rngTy1 ts2 rngTy2 description = do
       putStr "."
       forM_ numericTypes $ \(argName2, argTy2) -> do
         putStr (if (compareBinOpRes
-                    env
                     applyFun1
                     applyFun2
                     opDom1
@@ -425,14 +407,13 @@ getSynCompOpType name table =
     Nothing -> error ("missing CompOp spec for " ++ name)
 
 compareCompOps ::
-  Env ->
   (String -> a) ->
   (a -> Ty -> Ty -> Maybe (Ty, Ty, Ty, Ty)) ->
   (String -> b) ->
   (b -> Ty -> Ty -> Maybe (Ty, Ty, Ty, Ty)) ->
   String ->
   IO ()
-compareCompOps env getType1 rngTy1 getType2 rngTy2 description = do
+compareCompOps getType1 rngTy1 getType2 rngTy2 description = do
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   putStrLn ("Comparing CompOps (" ++ description ++ ")")
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
@@ -445,7 +426,6 @@ compareCompOps env getType1 rngTy1 getType2 rngTy2 description = do
       putStr "."
       forM_ numericTypes $ \(argName2, argTy2) -> do
         putStr (if (compareCompOpRes
-                    env
                     applyFun1
                     applyFun2
                     opDom1
@@ -464,7 +444,6 @@ compareCompOps env getType1 rngTy1 getType2 rngTy2 description = do
 compareSyntacticUnOps :: String -> IO ()
 compareSyntacticUnOps descr =
   (compareUnOps
-   baseEnv
    SynP.opTypes
    allSynUnOpRng
    Syn.opTypes
@@ -474,56 +453,45 @@ compareSyntacticUnOps descr =
 compareSyntacticBinOps :: String -> IO ()
 compareSyntacticBinOps descr =
   (compareBinOps
-   env
    SynP.opTypes
-   (allSynBinOpRng env)
+   allSynBinOpRng
    Syn.opTypes
-   (firstSynBinOpRng env)
+   firstSynBinOpRng
    "Syntactic/Syntactic+")
-  where env = baseEnv
-
 
 compareSyntacticCompOps :: String -> IO ()
 compareSyntacticCompOps descr = 
   (compareCompOps
-    env
     (\name -> (getSynCompOpType name SynP.opTypes))
-    (allSynCompOpTypes env)
+    allSynCompOpTypes
     (\name -> (getSynCompOpType name Syn.opTypes))
-    (firstSynCompOpTypes env)
+    firstSynCompOpTypes
     descr)
-  where env = baseEnv
 
 compareSemanticUnOps :: String -> IO ()
 compareSemanticUnOps descr =
   (compareUnOps
-   env
    Sem.opTypes
    semUnOpRng
    SynP.opTypes
    allSynUnOpRng
    descr)
-  where env = baseEnv
 
 compareSemanticBinOps :: String -> IO ()
 compareSemanticBinOps descr =
   (compareBinOps
-   env
    Sem.opTypes
-   (semBinOpRng env)
+   semBinOpRng
    SynP.opTypes
-   (allSynBinOpRng env)
+   allSynBinOpRng
    descr)
-  where env = baseEnv
 
-compareSemanticCompOps :: (Env -> Ty -> Ty -> Ty -> Maybe Ty) -> String -> IO ()
+compareSemanticCompOps :: (Ty -> Ty -> Ty -> Maybe Ty) -> String -> IO ()
 compareSemanticCompOps inputTy descr = 
   (compareCompOps
-    env
     (\name -> (getBinOpType name Sem.opTypes))
-    (semCompOpTypes env inputTy)
+    (semCompOpTypes inputTy)
     (\name -> (getSynCompOpType name Syn.opTypes))
-    (firstSynCompOpTypes env)
+    firstSynCompOpTypes
     descr)
-  where env = baseEnv
   

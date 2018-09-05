@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, StandaloneDeriving #-}
+{-# LANGUAGE GADTs, StandaloneDeriving, RankNTypes #-}
 module Types.LazyBDD
   ( Ty(..)
   , Env(..)
@@ -28,6 +28,8 @@ module Types.LazyBDD
   , anyArrowTy
   , anyProdTy
   , readBackTy
+  , emptyBase
+  , anyBase
   ) where
 
 -- This file implements set-theoretic types using the
@@ -38,12 +40,55 @@ module Types.LazyBDD
 -- Many thanks to Giuseppe for taking the time to write
 -- and make public that manuscript! -A.M. Kent 2018
 
-import Types.Base
+import           Data.Word
+import           Data.Bits
 import qualified Data.List as List
 import qualified Types.Syntax as Stx
 import qualified Data.Bits as Bits
-import Data.Map (Map)
+import           Data.Map (Map)
 import qualified Data.Map as Map
+
+------------------------------------------------------------
+-- Base type DNF representation
+------------------------------------------------------------
+-- base types are disjoint, and thus their DNF can be
+-- represented with finite sets and a flag, indicating
+-- either (U b_1 ... b_n) or ¬(U b_1 b_2). We are
+-- interested in a particular, fixed set of base types,
+-- so we further optimize this representation by using a
+-- bitfield to represent the union portion
+
+(.\\.) :: Bits a => a -> a -> a
+b1 .\\. b2 = b1 .&. (complement b2)
+
+data Base = Base Bool Word64
+  deriving (Eq, Show, Ord)
+
+emptyBase = Base True 0
+anyBase   = Base False 0
+
+
+baseOr :: Base -> Base -> Base
+baseOr (Base True pos1)  (Base True pos2)  = Base True  $ pos1 .|. pos2
+baseOr (Base True pos)   (Base False neg)  = Base False $ neg .\\. pos
+baseOr (Base False neg)  (Base True pos)   = Base False $ neg .\\. pos
+baseOr (Base False neg1) (Base False neg2) = Base False $ neg1 .&. neg2
+
+baseAnd :: Base -> Base -> Base
+baseAnd (Base True pos1)  (Base True pos2)  = Base True $ pos1 .&. pos2
+baseAnd (Base True pos)   (Base False neg)  = Base True $ pos .\\. neg
+baseAnd (Base False neg)  (Base True pos)   = Base True $ pos .\\. neg
+baseAnd (Base False neg1) (Base False neg2) = Base False $ neg1 .|. neg2
+
+
+baseDiff :: Base -> Base -> Base
+baseDiff (Base True pos1)  (Base True pos2)  = Base True $ pos1 .\\. pos2
+baseDiff (Base True pos)   (Base False neg)  = Base True $ pos .&. neg
+baseDiff (Base False neg)  (Base True pos)   = Base False $ pos .|. neg
+baseDiff (Base False neg1) (Base False neg2) = Base True $ neg2 .\\. neg1
+
+baseNot :: Base -> Base
+baseNot (Base sign bs) = Base (not sign) bs
 
 
 data BDD x where
@@ -64,7 +109,7 @@ node :: (Eq x, Show x, Ord x) =>
   x -> BDD x -> BDD x -> BDD x -> BDD x
 node x l Top r = Top
 node x l m r
-  | l == r = (bddOr l m)
+  | l == r    = bddOr l m
   | otherwise = Node x l m r
 
 
@@ -77,12 +122,12 @@ bddOr b1@(Node a1 l1 m1 r1) b2@(Node a2 l2 m2 r2) =
   case compare a1 a2 of
     LT -> node a1 l1 (bddOr m1 b2) r1
     GT -> node a2 l2 (bddOr b1 m2) r2
-    EQ -> if (l1 == l2) && (m1 == m2) && (r1 == r2)
-          then b1
-          else (node a1
-                (bddOr l1 l2)
-                (bddOr m1 m2)
-                (bddOr r1 r2))
+    EQ | ((l1 == l2) && (m1 == m2) && (r1 == r2)) -> b1
+       | otherwise -> let l = bddOr l1 l2
+                          m = bddOr m1 m2
+                          r = bddOr r1 r2
+                      in node a1 l m r
+            
 
 bddAnd :: BDD x -> BDD x -> BDD x
 bddAnd Top b = b
@@ -91,14 +136,18 @@ bddAnd Bot _ = Bot
 bddAnd _ Bot = Bot
 bddAnd b1@(Node a1 l1 m1 r1) b2@(Node a2 l2 m2 r2) =
   case compare a1 a2 of
-    LT -> node a1 (bddAnd l1 b2) (bddAnd m1 b2) (bddAnd r1 b2)
-    GT -> node a2 (bddAnd b1 l2) (bddAnd b1 m2) (bddAnd b1 r2)
-    EQ -> if (l1 == l2) && (m1 == m2) && (r1 == r2)
-          then b1
-          else (node a1
-                (bddAnd (bddOr l1 m1) (bddOr l2 m2))
-                Bot
-                (bddAnd (bddOr r1 m1) (bddOr r2 m2)))
+    LT -> let l = bddAnd l1 b2
+              m = bddAnd m1 b2
+              r = bddAnd r1 b2
+          in node a1 l m r
+    GT -> let l = bddAnd b1 l2
+              m = bddAnd b1 m2
+              r = bddAnd b1 r2
+          in node a2 l m r
+    EQ | (l1 == l2) && (m1 == m2) && (r1 == r2) -> b1
+       | otherwise -> let l = bddAnd (bddOr l1 m1) (bddOr l2 m2)
+                          r = bddAnd (bddOr r1 m1) (bddOr r2 m2)
+                     in node a1 l Bot r
 
 
 bddDiff :: BDD x -> BDD x -> BDD x
@@ -108,41 +157,39 @@ bddDiff b Bot = b
 bddDiff Top b = bddNot b
 bddDiff b1@(Node a1 l1 m1 r1) b2@(Node a2 l2 m2 r2) =
   case compare a1 a2 of
-    LT -> (node a1
-           (bddDiff (bddOr l1 m1) b2)
-           Bot
-           (bddDiff (bddOr r1 m1) b2))
-    GT -> (node a2
-           (bddDiff b1 (bddOr l2 m2))
-           Bot
-           (bddDiff b1 (bddOr r2 m2)))
-    EQ -> if (l1 == l2) && (m1 == m2) && (r1 == r2)
-          then Bot
-          else (node a1
-                (bddDiff l1 b2)
-                (bddDiff m1 b2)
-                (bddDiff r1 b2))
+    LT -> let l = bddDiff (bddOr l1 m1) b2
+              r = bddDiff (bddOr r1 m1) b2
+          in node a1 l Bot r
+    GT -> let l = bddDiff b1 (bddOr l2 m2)
+              r = bddDiff b1 (bddOr r2 m2)
+          in node a2 l Bot r
+    EQ | (l1 == l2) && (m1 == m2) && (r1 == r2) -> Bot
+       | otherwise -> let l = bddDiff l1 b2
+                          m = bddDiff m1 b2
+                          r = bddDiff r1 b2
+                      in node a1 l m r
 
 bddNot :: BDD x -> BDD x
 bddNot Top = Bot
 bddNot Bot = Top
-bddNot (Node a l m Bot) = (node a Bot (bddAnd notM notL) notM)
+bddNot (Node a l m Bot) = node a Bot (bddAnd notM notL) notM
   where notM = bddNot m
         notL = bddNot l
-bddNot (Node a Bot m r) = (node a notM (bddAnd notM notR) Bot)
+bddNot (Node a Bot m r) = node a notM (bddAnd notM notR) Bot
   where notM = bddNot m
         notR = bddNot r
-bddNot (Node a l Bot r) = (node a notL (bddAnd notL notR) notR)
+bddNot (Node a l Bot r) = node a notL (bddAnd notL notR) notR
   where notL = bddNot l
         notR = bddNot r
-bddNot (Node a l m r) = (node a (bddAnd notL notM) Bot (bddAnd notR notM))
+bddNot (Node a l m r) = node a (bddAnd notL notM) Bot (bddAnd notR notM)
   where notL = bddNot l
         notM = bddNot m
         notR = bddNot r
 
+
+-- arrow and product type atoms for their respective BDDs
 data Arrow = Arrow Ty Ty
   deriving (Eq, Show, Ord)
-
 data Prod = Prod Ty Ty
   deriving (Eq, Show, Ord)
 
@@ -152,23 +199,18 @@ data Prod = Prod Ty Ty
 -- checks for this when new type names are defined), so just
 -- using String works fine.
 newtype Name = Name String
-
-instance Eq Name where
-  (Name name1 _ _ _) == (Name name2 _ _ _) = name1 == name2
-instance Ord Name where
-  compare (Name name1 _ _ _) (Name name2 _ _ _) = compare name1 name2
-instance Show Name where
-  show (Name name _ _ _) = name
+  deriving (Eq, Ord, Show)
 
 
--- This BDD is just used to represent the unfolded back-edges into
--- cyclic types. We can then these these for equality and ordering
--- instead of the lazy, infinite graphs for cyclic types.
-type FiniteTy = (BDD (Either Name (Base,(BDD Prod),(BDD Arrow))))
+-- This BDD is used to represent the unfolded back-edges
+-- into cyclic types. We can then these these for equality
+-- and ordering instead of the lazy, infinite graphs for
+-- cyclic types.
+type FiniteTy = BDD (Either Name (Base, BDD Prod, BDD Arrow))
 
-data Ty where
-  TyLeaf :: Base (BDD Prod) (BDD Arrow)
-  TyNode :: FiniteTy Base (BDD Prod) (BDD Arrow)
+data Ty =
+    Ty Base (BDD Prod) (BDD Arrow)
+  | TyNode FiniteTy Base (BDD Prod) (BDD Arrow)
 -- In order to keep even our infinite types "finite",
 -- we only reason about their finite components (in
 -- other words, the DNF on the rhs of TyNode is not
@@ -177,13 +219,13 @@ data Ty where
 -- the tuple on the LHS)
 
 instance Eq Ty where
-  (TyLeaf b1 p1 a1) == (TyLeaf b2 p2 a2) = b1 == b2 && p1 == p2 && a1 == a2
-  (TyLeaf _ _ _)    == (TyNode _ _ _ _)  = False
-  (TyNode _ _ _ _)  == (TyLeaf _ _ _)    = False
+  (Ty b1 p1 a1) == (Ty b2 p2 a2) = b1 == b2 && p1 == p2 && a1 == a2
+  (Ty _ _ _)    == (TyNode _ _ _ _)  = False
+  (TyNode _ _ _ _)  == (Ty _ _ _)    = False
   (TyNode ft1 _ _ _) == (TyNode ft2 _ _ _) = ft1 == ft2
   
-instance Ord Name where
-  compare (TyLeaf b1 p1 a1) (TyLeaf b2 p2 a2) =
+instance Ord Ty where
+  compare (Ty b1 p1 a1) (Ty b2 p2 a2) =
     case compare b1 b2 of
       LT -> LT
       GT -> GT
@@ -191,12 +233,12 @@ instance Ord Name where
               LT -> LT
               GT -> GT
               EQ -> compare a1 a2
-  compare (TyLeaf _) (TyNode _ _)     = LT
-  compare (TyNode _ _) (TyLeaf _)     = GT
+  compare (Ty _ _ _) (TyNode _ _ _ _) = LT
+  compare (TyNode _ _ _ _) (Ty _ _ _) = GT
   compare (TyNode ft1 _ _ _) (TyNode ft2 _ _ _) = compare ft1 ft2
   
-instance Show Name where
-  show (TyLeaf b p a)   = "TyLeaf " ++ show b ++ " " ++ show p ++ " " ++ show a
+instance Show Ty where
+  show (Ty b p a)   = "Ty " ++ show b ++ " " ++ show p ++ " " ++ show a
   show (TyNode ft _ _ _) = "TyNode " ++ show ft
   
 
@@ -220,9 +262,9 @@ extend :: String -> Ty -> Env -> Env
 extend name t env = Map.insert name t env
 
 -- universal type
-anyTy = TyLeaf $ DNF anyBase Top Top
+anyTy = Ty anyBase Top Top
 -- empty type
-emptyTy = TyLeaf $ DNF emptyBase Bot Bot
+emptyTy = Ty emptyBase Bot Bot
 
 -- some base types
 trueTy  = parseTy mtEnv $ Stx.Base Stx.T
@@ -231,85 +273,77 @@ stringTy = parseTy mtEnv $ Stx.Base Stx.Str
 nullTy = parseTy mtEnv $ Stx.Base Stx.Null
 boolTy = tyOr trueTy falseTy
 
-nameNode :: String -> (BDD FiniteTy)
-nameNode name = node (Left name) Top Bot Bot
+nameFiniteTy :: Name -> FiniteTy
+nameFiniteTy name = node (Left name) Top Bot Bot
 
-bddNode :: Base -> (BDD Prod) -> (BDD Arrow) -> (BDD FiniteTy)
-bddNode (Base False 0) Top Top = Top
-bddNode (Base True 0) Bot Bot = Bot
-bddNode b p a = node (Right (b,p,a)) Top Bot Bot
+bddFiniteTy :: Base -> (BDD Prod) -> (BDD Arrow) -> FiniteTy
+bddFiniteTy (Base False 0) Top Top = Top
+bddFiniteTy (Base True 0) Bot Bot = Bot
+bddFiniteTy b p a = node (Right (b,p,a)) Top Bot Bot
 
 -- constructs a named type, whose full description is the given dnf
-nameTy :: String -> Ty -> Ty
-nameTy name (TyLeaf b p a) = TyNode (Left (nameNode name)) b p a
+nameTy :: Name -> Ty -> Ty
+nameTy name (Ty b p a) = TyNode fty b p a
+  where fty = nameFiniteTy name
 
 
 -- Constructs the type `t1 × t2`.
 prodTy :: Ty -> Ty -> Ty
-prodTy t1 t2 = TyLeaf $ DNF emptyBase (node (Prod t1 t2) Top Bot Bot) Bot
+prodTy t1 t2 = Ty emptyBase (node (Prod t1 t2) Top Bot Bot) Bot
 
 -- universal product
 anyProdTy = prodTy anyTy anyTy
 
 -- Constructs the type `t1 → t2`.
 arrowTy :: Ty -> Ty -> Ty
-arrowTy t1 t2 = TyLeaf $  DNF emptyBase Bot (node (Arrow t1 t2) Top Bot Bot)
+arrowTy t1 t2 = Ty emptyBase Bot (node (Arrow t1 t2) Top Bot Bot)
 
 -- universal arrow
 anyArrowTy = arrowTy emptyTy anyTy
 
+tyBinop :: (Base -> Base -> Base) -> (forall x. BDD x -> BDD x -> BDD x) -> Ty -> Ty -> Ty 
+tyBinop baseBinop bddBinop = binop
+  where binop (Ty b1 p1 a1) (Ty b2 p2 a2) = Ty b p a
+          where b = baseBinop b1 b2
+                p = bddBinop p1 p2
+                a = bddBinop a1 a2
+        binop (TyNode fty1 b1 p1 a1) (Ty b2 p2 a2) = TyNode fty b p a
+          where fty = bddBinop fty1 (bddFiniteTy b2 p2 a2)
+                b   = baseBinop b1 b2
+                p   = bddBinop p1 p2
+                a   = bddBinop a1 a2
+        binop (Ty b1 p1 a1) (TyNode fty2 b2 p2 a2) = TyNode fty b p a
+          where fty = bddBinop (bddFiniteTy b1 p1 a1) fty2
+                b   = baseBinop b1 b2
+                p   = bddBinop p1 p2
+                a   = bddBinop a1 a2
+        binop (TyNode fty1 b1 p1 a1) (TyNode fty2 b2 p2 a2) = TyNode fty b p a
+          where fty = bddBinop fty1 fty2
+                b   = baseBinop b1 b2
+                p   = bddBinop p1 p2
+                a   = bddBinop a1 a2
 
 
 tyAnd :: Ty -> Ty -> Ty
-tyAnd (TyLeaf b1 p1 a1) (TyLeaf b2 p2 a2) = TyLeaf b p a
-  where b = baseAnd b1 b2
-        p = bddAnd p1 p2
-        a = bddAnd a1 a2
-tyAnd (TyNode fty1 b1 p1 a1) (TyLeaf b2 p2 a2) = TyNode fty b p a
-  where fty = bddAnd fty1 (bddNode b2 p2 a2)
-        b   = bddAnd b1 b2
-        p   = bddAnd p1 p2
-        a   = bddAnd a1 a2
-tyAnd (TyLeaf b1 p1 a1) (TyNode fty2 b2 p2 a2) = TyNode fty b p a
-  where fty = bddAnd (bddNode b1 p1 a1) fty2
-        b   = bddAnd b1 b2
-        p   = bddAnd p1 p2
-        a   = bddAnd a1 a2
-tyAnd (TyNode fty1 b1 p1 a1) (TyNode fty2 b2 p2 a2) = TyNode fty b p a
-  where fty = bddAnd fty1 fty2
-        b   = bddAnd b1 b2
-        p   = bddAnd p1 p2
-        a   = bddAnd a1 a2
+tyAnd = tyBinop baseAnd bddAnd
 
 
 tyAnd' :: [Ty] -> Ty
 tyAnd' ts = foldr tyAnd anyTy ts
 
 
--- BOOKMARK tyAnd is done (I think), do the rest!
 tyOr :: Ty -> Ty -> Ty
-tyOr (TyLeaf (DNF b1 p1 a1)) (TyLeaf (DNF b2 p2 a2)) = TyLeaf $ DNF b p a
-  where b = baseOr b1 b2
-        p = bddOr p1 p2
-        a = bddOr a1 a2
-tyOr (TyNode (name,l,m,r) bdd) _ = error "TODO"
-tyOr _ (TyNode (name,l,m,r) bdd) = error "TODO"
+tyOr = tyBinop baseOr bddOr
 
 
 tyOr' :: [Ty] -> Ty
 tyOr' ts = foldr tyOr emptyTy ts
 
 tyDiff :: Ty -> Ty -> Ty
-tyDiff (Ty (DNF b1 p1 a1)) (Ty (DNF b2 p2 a2)) = Ty b p a
-  where b = baseDiff b1 b2
-        p = bddDiff p1 p2
-        a = bddDiff a1 a2
-tyDiff (TyNode (name,l,m,r) bdd) _ = error "TODO"
-tyDiff _ (TyNode (name,l,m,r) bdd) = error "TODO"
-
+tyDiff = tyBinop baseDiff bddDiff
 
 tyNot :: Ty -> Ty
-tyNot t = tyDiff anyTy t
+tyNot = tyDiff anyTy
 
 
 
@@ -317,12 +351,12 @@ tyNot t = tyDiff anyTy t
 parseTy :: Env -> Stx.Ty -> Ty
 parseTy env (Stx.Prod t1 t2) = prodTy (parseTy env t1) (parseTy env t2)
 parseTy env (Stx.Arrow t1 t2) = arrowTy (parseTy env t1) (parseTy env t2)
-parseTy env (Stx.Or ts) = foldr (tyOr env) emptyTy $ map (parseTy env) ts
-parseTy env (Stx.And ts) = foldr (tyAnd env) anyTy $ map (parseTy env) ts
-parseTy env (Stx.Not t) = tyNot env (parseTy env t)
+parseTy env (Stx.Or ts) = foldr tyOr emptyTy $ map (parseTy env) ts
+parseTy env (Stx.And ts) = foldr tyAnd anyTy $ map (parseTy env) ts
+parseTy env (Stx.Not t) = tyNot $ parseTy env t
 parseTy env Stx.Any = anyTy
 parseTy env Stx.Empty = emptyTy
-parseTy env (Stx.Name name) = Name name
+parseTy env (Stx.Name name) = env Map.! name
 parseTy env (Stx.Base bTy) = Ty b Bot Bot
   where b = Base True $ Bits.bit $ Stx.baseIndex bTy
 
@@ -333,17 +367,21 @@ anyBaseStr = "(Not (Or (Prod Any Any) (Arrow Empty Any)))"
 -- reads a Ty (from LazyBDD) into an sexpression
 -- that Repl/Parser.hs can read in
 readBackTy :: Ty -> String
-readBackTy (TyLeaf b@(Base True n) Bot Bot)
+readBackTy (Ty b@(Base True n) Bot Bot)
   | n == 0 = "Empty"
   | otherwise = readBackBase b
-readBackTy (TyLeaf b@(Base False n) Top Top)
+readBackTy (Ty b@(Base False n) Top Top)
   | n == 0 = "Any"
   | otherwise = readBackBase b
-readBackTy (TyLeaf (DNF bs ps as)) = strOr t1 $ strOr t2 t3
+readBackTy (Ty bs ps as) = strOr t1 $ strOr t2 t3
   where t1 = strAnd anyBaseStr $ readBackBase bs
         t2 = strAnd anyProdStr $ readBackBDD readBackProd ps
         t3 = strAnd anyArrowStr$ readBackBDD readBackArrow as
-readBackTy (Name name) = name
+readBackTy (TyNode fty _ _ _) = readBackBDD readBackNameOrTy fty
+
+readBackNameOrTy :: Either Name (Base, BDD Prod, BDD Arrow) -> String
+readBackNameOrTy (Left name) = show name
+readBackNameOrTy (Right (b,p,a)) = readBackTy $ Ty b p a
 
 strOr :: String -> String -> String
 strOr "Any" _ = "Any"

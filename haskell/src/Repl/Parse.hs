@@ -110,18 +110,18 @@ parseCmd env (c:body)
 
 parseTyList :: BDD.Env -> String -> Either String ([BDD.Ty], String)
 parseTyList env inputStr = parseList inputStr mkOr mkAnd mkNot mkProd mkArrow mkName
-  where mkOr ts = BDD.tyOr' env ts
-        mkAnd ts = BDD.tyAnd' env ts
-        mkNot t = BDD.tyNot env t
+  where mkOr ts = BDD.tyOr' ts
+        mkAnd ts = BDD.tyAnd' ts
+        mkNot t = BDD.tyNot t
         mkProd t1 t2 = BDD.prodTy t1 t2
         mkArrow t1 t2 = BDD.arrowTy t1 t2
         mkName name = BDD.resolve name env
 
 parseTy :: BDD.Env -> String -> Either String (BDD.Ty, String)
 parseTy env inputStr = parseSingle inputStr mkOr mkAnd mkNot mkProd mkArrow mkName
-  where mkOr ts = BDD.tyOr' env ts
-        mkAnd ts = BDD.tyAnd' env ts
-        mkNot t = BDD.tyNot env t
+  where mkOr ts = BDD.tyOr' ts
+        mkAnd ts = BDD.tyAnd' ts
+        mkNot t = BDD.tyNot t
         mkProd t1 t2 = BDD.prodTy t1 t2
         mkArrow t1 t2 = BDD.arrowTy t1 t2
         mkName name = BDD.resolve name env

@@ -44,12 +44,12 @@ answerMaybeTy Nothing = no
 answerMaybeTy (Just t) = readBackTy t
 
 execCmd :: Env -> Cmd -> (Env, String)
-execCmd env (Inhabited t) = (env, answerBool $ not $ isEmpty env t)
-execCmd env (Subtype t1 t2) = (env, answerBool $ subtype env t1 t2)
-execCmd env (FstProj t) = (env, answerMaybeTy $ fstProj env t)
-execCmd env (SndProj t) = (env, answerMaybeTy $ sndProj env t)
-execCmd env (FunApp t1 t2) = (env, answerMaybeTy $ rngTy env t1 t2)
-execCmd env (FunInv t1 t2 t3) = (env, answerMaybeTy $ inTy env t1 t2 t3)
+execCmd env (Inhabited t) = (env, answerBool $ not $ isEmpty t)
+execCmd env (Subtype t1 t2) = (env, answerBool $ subtype t1 t2)
+execCmd env (FstProj t) = (env, answerMaybeTy $ fstProj t)
+execCmd env (SndProj t) = (env, answerMaybeTy $ sndProj t)
+execCmd env (FunApp t1 t2) = (env, answerMaybeTy $ rngTy t1 t2)
+execCmd env (FunInv t1 t2 t3) = (env, answerMaybeTy $ inTy t1 t2 t3)
 execCmd env (Let name t) = (extend name t env, "(environment extended with " ++ name ++ ")")
 execCmd env (LetRec bindings) =  (env', "(environment extended with " ++ show (Map.keys bindings) ++ ")")
   where env' = Map.foldrWithKey recExtend env bindings

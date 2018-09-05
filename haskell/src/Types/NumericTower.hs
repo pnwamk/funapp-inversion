@@ -58,43 +58,43 @@ singleFloatImaginary = parseTy mtEnv $ Stx.Base Stx.SingleFloatImaginary
 floatComplex = parseTy mtEnv $ Stx.Base Stx.FloatComplex
 singleFloatComplex = parseTy mtEnv $ Stx.Base Stx.SingleFloatComplex
 
-positiveByte = tyOr' mtEnv [one, byteLargerThanOne]
-byte = tyOr' mtEnv [zero, positiveByte]
+positiveByte = tyOr' [one, byteLargerThanOne]
+byte = tyOr' [zero, positiveByte]
 
-positiveIndex = tyOr' mtEnv [one, byteLargerThanOne, positiveIndexNotByte]
-index = tyOr' mtEnv [zero, positiveIndex]
+positiveIndex = tyOr' [one, byteLargerThanOne, positiveIndexNotByte]
+index = tyOr' [zero, positiveIndex]
 
-positiveFixnum = tyOr' mtEnv [positiveFixnumNotIndex, positiveIndex]
-nonnegativeFixnum = tyOr' mtEnv [positiveFixnum, zero]
+positiveFixnum = tyOr' [positiveFixnumNotIndex, positiveIndex]
+nonnegativeFixnum = tyOr' [positiveFixnum, zero]
 
-nonpositiveFixnum = tyOr' mtEnv [negativeFixnum, zero]
-fixnum = tyOr' mtEnv [negativeFixnum, zero, positiveFixnum]
-integerNotFixnum = tyOr' mtEnv [negativeIntegerNotFixnum, positiveIntegerNotFixnum]
-fixnumNotIndex = tyOr' mtEnv [negativeFixnum, positiveFixnumNotIndex]
+nonpositiveFixnum = tyOr' [negativeFixnum, zero]
+fixnum = tyOr' [negativeFixnum, zero, positiveFixnum]
+integerNotFixnum = tyOr' [negativeIntegerNotFixnum, positiveIntegerNotFixnum]
+fixnumNotIndex = tyOr' [negativeFixnum, positiveFixnumNotIndex]
 
-positiveInteger = tyOr' mtEnv [positiveIntegerNotFixnum, positiveFixnum]
-nonnegativeInteger = tyOr' mtEnv [zero, positiveInteger]
+positiveInteger = tyOr' [positiveIntegerNotFixnum, positiveFixnum]
+nonnegativeInteger = tyOr' [zero, positiveInteger]
 
-negativeInteger = tyOr' mtEnv [negativeFixnum, negativeIntegerNotFixnum]
-nonpositiveInteger = tyOr' mtEnv [negativeInteger, zero]
-integer = tyOr' mtEnv [negativeInteger, zero, positiveInteger]
+negativeInteger = tyOr' [negativeFixnum, negativeIntegerNotFixnum]
+nonpositiveInteger = tyOr' [negativeInteger, zero]
+integer = tyOr' [negativeInteger, zero, positiveInteger]
 
 
 
-positiveRational = tyOr' mtEnv [positiveRationalNotInteger, positiveInteger]
-nonnegativeRational = tyOr' mtEnv [zero, positiveRational]
+positiveRational = tyOr' [positiveRationalNotInteger, positiveInteger]
+nonnegativeRational = tyOr' [zero, positiveRational]
 
-negativeRational = tyOr' mtEnv [negativeRationalNotInteger, negativeInteger]
-nonpositiveRational = tyOr' mtEnv [negativeRational, zero]
-rationalNotInteger = tyOr' mtEnv [negativeRationalNotInteger, positiveRationalNotInteger]
-rational = tyOr' mtEnv [negativeRational, zero, positiveRational]
+negativeRational = tyOr' [negativeRationalNotInteger, negativeInteger]
+nonpositiveRational = tyOr' [negativeRational, zero]
+rationalNotInteger = tyOr' [negativeRationalNotInteger, positiveRationalNotInteger]
+rational = tyOr' [negativeRational, zero, positiveRational]
 
-floatZero = tyOr' mtEnv [floatPositiveZero, floatNegativeZero, floatNaN]
-positiveFloat = tyOr' mtEnv [positiveFloatNumber, positiveFloatInfinity, floatNaN]
-nonnegativeFloat = tyOr' mtEnv [positiveFloat, floatZero]
-negativeFloat = tyOr' mtEnv [negativeFloatNumber, negativeFloatInfinity, floatNaN]
-nonpositiveFloat = tyOr' mtEnv [negativeFloat, floatZero]
-float = tyOr' mtEnv [negativeFloatNumber,
+floatZero = tyOr' [floatPositiveZero, floatNegativeZero, floatNaN]
+positiveFloat = tyOr' [positiveFloatNumber, positiveFloatInfinity, floatNaN]
+nonnegativeFloat = tyOr' [positiveFloat, floatZero]
+negativeFloat = tyOr' [negativeFloatNumber, negativeFloatInfinity, floatNaN]
+nonpositiveFloat = tyOr' [negativeFloat, floatZero]
+float = tyOr' [negativeFloatNumber,
             negativeFloatInfinity,
             floatNegativeZero,
             floatPositiveZero,
@@ -102,46 +102,46 @@ float = tyOr' mtEnv [negativeFloatNumber,
             positiveFloatInfinity,
             floatNaN]
 
-singleFloatZero = tyOr' mtEnv [singleFloatPositiveZero, singleFloatNegativeZero, singleFloatNaN]
+singleFloatZero = tyOr' [singleFloatPositiveZero, singleFloatNegativeZero, singleFloatNaN]
 
-inexactRealNaN = tyOr' mtEnv [floatNaN, singleFloatNaN]
-inexactRealPositiveZero = tyOr' mtEnv [singleFloatPositiveZero, floatPositiveZero]
-inexactRealNegativeZero = tyOr' mtEnv [singleFloatNegativeZero, floatNegativeZero]
-inexactRealZero = tyOr' mtEnv [inexactRealPositiveZero,
+inexactRealNaN = tyOr' [floatNaN, singleFloatNaN]
+inexactRealPositiveZero = tyOr' [singleFloatPositiveZero, floatPositiveZero]
+inexactRealNegativeZero = tyOr' [singleFloatNegativeZero, floatNegativeZero]
+inexactRealZero = tyOr' [inexactRealPositiveZero,
                       inexactRealNegativeZero,
                       inexactRealNaN]
 
-positiveSingleFloat = tyOr' mtEnv [positiveSingleFloatNumber, positiveSingleFloatInfinity, singleFloatNaN]
-positiveInexactReal = tyOr' mtEnv [positiveSingleFloat, positiveFloat]
-nonnegativeSingleFloat = tyOr' mtEnv [positiveSingleFloat, singleFloatZero]
-nonnegativeInexactReal = tyOr' mtEnv [positiveInexactReal, inexactRealZero]
-negativeSingleFloat = tyOr' mtEnv [negativeSingleFloatNumber, negativeSingleFloatInfinity, singleFloatNaN]
-negativeInexactReal = tyOr' mtEnv [negativeSingleFloat, negativeFloat]
-nonpositiveSingleFloat = tyOr' mtEnv [negativeSingleFloat, singleFloatZero]
-nonpositiveInexactReal = tyOr' mtEnv [negativeInexactReal, inexactRealZero]
-singleFloat = tyOr' mtEnv [negativeSingleFloat,
+positiveSingleFloat = tyOr' [positiveSingleFloatNumber, positiveSingleFloatInfinity, singleFloatNaN]
+positiveInexactReal = tyOr' [positiveSingleFloat, positiveFloat]
+nonnegativeSingleFloat = tyOr' [positiveSingleFloat, singleFloatZero]
+nonnegativeInexactReal = tyOr' [positiveInexactReal, inexactRealZero]
+negativeSingleFloat = tyOr' [negativeSingleFloatNumber, negativeSingleFloatInfinity, singleFloatNaN]
+negativeInexactReal = tyOr' [negativeSingleFloat, negativeFloat]
+nonpositiveSingleFloat = tyOr' [negativeSingleFloat, singleFloatZero]
+nonpositiveInexactReal = tyOr' [negativeInexactReal, inexactRealZero]
+singleFloat = tyOr' [negativeSingleFloat,
                   singleFloatNegativeZero,
                   singleFloatPositiveZero,
                   positiveSingleFloat,
                   singleFloatNaN]
-inexactReal = tyOr' mtEnv [singleFloat, float]
-positiveInfinity = tyOr' mtEnv [positiveFloatInfinity, positiveSingleFloatInfinity]
-negativeInfinity = tyOr' mtEnv [negativeFloatInfinity, negativeSingleFloatInfinity]
+inexactReal = tyOr' [singleFloat, float]
+positiveInfinity = tyOr' [positiveFloatInfinity, positiveSingleFloatInfinity]
+negativeInfinity = tyOr' [negativeFloatInfinity, negativeSingleFloatInfinity]
 
-realZero = tyOr' mtEnv [zero, inexactRealZero]
-realZeroNoNaN = tyOr' mtEnv [zero, inexactRealPositiveZero, inexactRealNegativeZero]
+realZero = tyOr' [zero, inexactRealZero]
+realZeroNoNaN = tyOr' [zero, inexactRealPositiveZero, inexactRealNegativeZero]
 
-positiveReal = tyOr' mtEnv [positiveRational, positiveInexactReal]
-nonnegativeReal = tyOr' mtEnv [nonnegativeRational, nonnegativeInexactReal]
-negativeReal = tyOr' mtEnv [negativeRational, negativeInexactReal]
-nonpositiveReal = tyOr' mtEnv [nonpositiveRational, nonpositiveInexactReal]
-real = tyOr' mtEnv [rational, inexactReal]
+positiveReal = tyOr' [positiveRational, positiveInexactReal]
+nonnegativeReal = tyOr' [nonnegativeRational, nonnegativeInexactReal]
+negativeReal = tyOr' [negativeRational, negativeInexactReal]
+nonpositiveReal = tyOr' [nonpositiveRational, nonpositiveInexactReal]
+real = tyOr' [rational, inexactReal]
 
-exactNumber = tyOr' mtEnv [exactImaginary, exactComplex, rational]
-inexactImaginary = tyOr' mtEnv [floatImaginary, singleFloatImaginary]
-imaginary = tyOr' mtEnv [exactImaginary, inexactImaginary]
-inexactComplex = tyOr' mtEnv [floatComplex, singleFloatComplex]
-number = tyOr' mtEnv [real, imaginary, exactComplex, inexactComplex]
+exactNumber = tyOr' [exactImaginary, exactComplex, rational]
+inexactImaginary = tyOr' [floatImaginary, singleFloatImaginary]
+imaginary = tyOr' [exactImaginary, inexactImaginary]
+inexactComplex = tyOr' [floatComplex, singleFloatComplex]
+number = tyOr' [real, imaginary, exactComplex, inexactComplex]
 
 
 numericTypes :: [(String, Ty)]
@@ -242,15 +242,15 @@ baseEnv = Map.fromList $
           , ("Boolean", boolTy)]
 
 realTypes :: [(String, Ty)]
-realTypes = filter (\(_,t) -> subtype mtEnv t real) numericTypes
+realTypes = filter (\(_,t) -> subtype t real) numericTypes
 
 -- types to help specify comparison types (i.e. signed types w/o NaN)
-someNaN = tyOr' mtEnv [singleFloatNaN, floatNaN]
-positiveRealNoNaN = tyAnd' mtEnv [positiveReal, (tyNot mtEnv someNaN)]
-nonnegativeRealNoNaN = tyAnd' mtEnv [nonnegativeReal, (tyNot mtEnv someNaN)]
-negativeRealNoNaN = tyAnd' mtEnv [negativeReal, (tyNot mtEnv someNaN)]
-nonpositiveRealNoNaN = tyAnd' mtEnv [nonpositiveReal, (tyNot mtEnv someNaN)]
-realNoNaN = tyAnd' mtEnv [real, (tyNot mtEnv someNaN)]
-positiveIntegerNotByte = tyAnd' mtEnv [positiveInteger, (tyNot mtEnv byte)]
-positiveIntegerNotIndex = tyAnd' mtEnv [positiveInteger, (tyNot mtEnv index)]
+someNaN = tyOr' [singleFloatNaN, floatNaN]
+positiveRealNoNaN = tyAnd' [positiveReal, (tyNot someNaN)]
+nonnegativeRealNoNaN = tyAnd' [nonnegativeReal, (tyNot someNaN)]
+negativeRealNoNaN = tyAnd' [negativeReal, (tyNot someNaN)]
+nonpositiveRealNoNaN = tyAnd' [nonpositiveReal, (tyNot someNaN)]
+realNoNaN = tyAnd' [real, (tyNot someNaN)]
+positiveIntegerNotByte = tyAnd' [positiveInteger, (tyNot byte)]
+positiveIntegerNotIndex = tyAnd' [positiveInteger, (tyNot index)]
 
