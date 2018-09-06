@@ -129,12 +129,14 @@ instance Arbitrary Ty where
 
 arbitrarySizedTy :: Int -> Gen Ty
 arbitrarySizedTy n
-  | n < 2 = frequency [(10, pure (Base T))
-                      ,(10, pure (Base F))
-                      ,(10, pure (Base Zero))
-                      ,(10, pure (Base One))
-                      ,(2, pure Any)
-                      ,(1, pure Empty)]
+  | n < 2 = frequency [(30, pure (Base T))
+                      ,(30, pure (Base F))
+                      ,(30, pure (Base Zero))
+                      ,(30, pure (Base One))
+                      ,(5, pure Any)
+                      ,(5, pure Empty)
+                      ,(1, pure (Name "IntList"))
+                      ,(1, pure (Name "NumList"))]
   | otherwise = do
       t1 <- (arbitrarySizedTy n')
       t2 <- (arbitrarySizedTy n')

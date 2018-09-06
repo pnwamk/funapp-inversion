@@ -36,7 +36,7 @@ calcProj :: Index -> Ty -> Maybe Ty
 calcProj idx t
   | not $ isProd t = Nothing
   | otherwise = Just $ prodProj idx prods anyTy anyTy []
-    where (Ty _ prods _) = t
+    where prods = tyProds t
 
 -- Is a BDD of prods equivalent to ∅?
 prodProj :: Index -> (BDD Prod) -> Ty -> Ty -> [Prod] -> Ty
@@ -89,15 +89,14 @@ sndProj = calcProj Second
 domTy :: Ty -> Maybe Ty
 domTy t
   | not (isFun t) = Nothing
-  | otherwise = let (Ty _ _ arrows) = t in
-      Just (go anyTy emptyTy arrows)
-      where go :: Ty -> Ty -> (BDD Arrow) -> Ty
-            go acc dom Top = tyAnd acc dom
-            go acc dom Bot = acc
-            go acc dom (Node (Arrow t _) l m r) = acc3
-              where acc1 = go acc (tyOr dom t) l
-                    acc2 = go acc1 dom m
-                    acc3 = go acc2 dom r
+  | otherwise = Just $ go anyTy emptyTy $ tyArrows t
+  where go :: Ty -> Ty -> (BDD Arrow) -> Ty
+        go acc dom Top = tyAnd acc dom
+        go acc dom Bot = acc
+        go acc dom (Node (Arrow t _) l m r) = acc3
+          where acc1 = go acc (tyOr dom t) l
+                acc2 = go acc1 dom m
+                acc3 = go acc2 dom r
 
 
 -- If (1) fty is a function type and (2) argty is a subtype
@@ -105,9 +104,9 @@ domTy t
 -- an fty to an argty? If (1) and (2) are not both
 -- satisfied, return Nothing.
 rngTy :: Ty -> Ty -> Maybe Ty
-rngTy fty@(Ty _ _ arrows) argty =
-  case (domTy fty) of
-    (Just dom) | (subtype argty dom) -> Just $ loop arrows []
+rngTy funty argty =
+  case (domTy funty) of
+    (Just dom) | (subtype argty dom) -> Just $ loop (tyArrows funty) []
     _ -> Nothing
   where loop :: (BDD Arrow) -> [Arrow] -> Ty
         loop Bot p = emptyTy
@@ -134,9 +133,9 @@ rngTy fty@(Ty _ _ arrows) argty =
 
 
 inTy :: Ty -> Ty -> Ty -> Maybe Ty
-inTy fty@(Ty _ _ arrows) arg out =
-  case (domTy fty) of
-    (Just dom) | (subtype arg dom) -> Just $ input arrows []
+inTy funty arg out =
+  case (domTy funty) of
+    (Just dom) | (subtype arg dom) -> Just $ input (tyArrows funty) []
     _ -> Nothing
   where input :: (BDD Arrow) -> [Arrow] -> Ty
         input Bot p = emptyTy
@@ -162,9 +161,9 @@ inTy fty@(Ty _ _ arrows) arg out =
 
 -- conservative version, linear instead of exponential search
 cInTy :: Ty -> Ty -> Ty -> Maybe Ty
-cInTy fty@(Ty _ _ arrows) arg out =
-  case (domTy fty) of
-    (Just dom) | (subtype arg dom) -> Just $ input arrows []
+cInTy funty arg out =
+  case (domTy funty) of
+    (Just dom) | (subtype arg dom) -> Just $ input (tyArrows funty) []
     _ -> Nothing
   where input :: (BDD Arrow) -> [Arrow] -> Ty
         input Bot p = emptyTy

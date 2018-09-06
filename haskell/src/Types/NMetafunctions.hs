@@ -35,11 +35,11 @@ data Index = First | Second
 -- where the original product type is
 -- ⋃i∈I(̱ ⋂p∈Pᵢ (Sₚ , Tₚ)  &  ⋂n∈Nᵢ  ¬(Sₙ , Tₙ) )
 calcProj :: Index -> Ty -> Maybe Ty
-calcProj idx t@(Ty _ ps _)
+calcProj idx t
   | not (isProd t) = Nothing
   | otherwise = Just $ foldl tyOr emptyTy clauses
     where clauses :: [Ty]
-          clauses = map clauseProj $ flattenProds ps
+          clauses = map clauseProj $ flattenProds $ tyProds t
           clauseProj :: (Prod, [Prod]) -> Ty
           clauseProj ((Prod t1 t2), negs) = foldr projOr emptyTy negss
             where negss = subsets negs
@@ -82,7 +82,7 @@ domTy :: Ty -> Maybe Ty
 domTy t
   | not (isFun t) = Nothing
   | otherwise = Just dom
-  where (Ty _ _ arrowsBDD) = t
+  where arrowsBDD = tyArrows t
         clauses :: [([Arrow] , [Arrow])]
         clauses = flattenBDD arrowsBDD
         clauseDoms :: [Ty]
@@ -99,11 +99,11 @@ domTy t
 -- an fty to an argty? If (1) and (2) are not both
 -- satisfied, return Nothing.
 rngTy :: Ty -> Ty -> Maybe Ty
-rngTy fty@(Ty _ _ arrows) argty =
-  case (domTy fty) of
+rngTy funty argty =
+  case (domTy funty) of
     (Just dom) | (subtype argty dom) -> Just res
     _ -> Nothing
-  where ps = map fst (flattenBDD arrows)
+  where ps = map fst $ flattenBDD $ tyArrows funty
         res = foldr rngOr emptyTy ps
         rngOr p t = tyOr t (calcRng p argty)
 
@@ -125,10 +125,10 @@ calcRng p argty = foldr tyOr emptyTy ts
 
 
 inTy :: Ty -> Ty -> Ty -> Maybe Ty
-inTy fty@(Ty _ _ arrows) arg out
-  | not $ isFun fty = Nothing
+inTy funty arg out
+  | not $ isFun funty = Nothing
   | otherwise = Just res
-  where ps =  map fst (flattenBDD arrows)
+  where ps =  map fst $ flattenBDD $ tyArrows funty
         res = (foldr
                 (\p t -> (tyOr t
                           (tyDiff

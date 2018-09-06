@@ -240,26 +240,6 @@ baseEnv = Map.fromList $
           , ("Null", nullTy)
           , ("False", falseTy)
           , ("Boolean", boolTy)
-          , ("ZeroList", parseTy baseEnv $
-              Stx.Or [ Stx.Name "Null"
-                     , Stx.Prod
-                       (Stx.Name "Zero")
-                       (Stx.Name "ZeroList")])
-          , ("NatList", parseTy baseEnv $
-              Stx.Or [ Stx.Name "Null"
-                     , Stx.Prod
-                       (Stx.Name "NonnegativeInteger")
-                       (Stx.Name "NatList")])
-          , ("PosIntList", parseTy baseEnv $
-              Stx.Or [ Stx.Name "Null"
-                     , Stx.Prod
-                       (Stx.Name "PositiveInteger")
-                       (Stx.Name "PosIntList")])
-          , ("NegIntList", parseTy baseEnv $
-              Stx.Or [ Stx.Name "Null"
-                     , Stx.Prod
-                       (Stx.Name "NegativeInteger")
-                       (Stx.Name "NegIntList")])
           , ("IntList", parseTy baseEnv $
               Stx.Or [ Stx.Name "Null"
                      , Stx.Prod (Stx.Name "Integer") (Stx.Name "IntList")])

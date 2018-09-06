@@ -6,6 +6,8 @@ module Types.LazyBDD
   , BDD(..)
   , Arrow(..)
   , Prod(..)
+  , tyProds
+  , tyArrows
   , mtEnv
   , extend
   , resolve
@@ -243,7 +245,13 @@ instance Show Ty where
   show (TyNode ft _ _ _) = "TyNode " ++ show ft
   
 
+tyProds :: Ty -> (BDD Prod)
+tyProds (Ty       _ p _) = p
+tyProds (TyNode _ _ p _) = p
 
+tyArrows :: Ty -> (BDD Arrow)
+tyArrows (Ty       _ _ a) = a
+tyArrows (TyNode _ _ _ a) = a
 
 
 
@@ -383,7 +391,7 @@ readBackTy (Ty bs ps as) = strOr t1 $ strOr t2 t3
 readBackTy (TyNode fty _ _ _) = readBackBDD readBackNameOrTy fty
 
 readBackNameOrTy :: Either Name (Base, BDD Prod, BDD Arrow) -> String
-readBackNameOrTy (Left name) = show name
+readBackNameOrTy (Left (Name name)) = name
 readBackNameOrTy (Right (b,p,a)) = readBackTy $ Ty b p a
 
 strOr :: String -> String -> String
