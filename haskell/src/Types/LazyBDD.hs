@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs, StandaloneDeriving, RankNTypes #-}
 module Types.LazyBDD
   ( Ty(..)
+  , FiniteTy(..)
   , Env(..)
   , BDD(..)
   , Arrow(..)
