@@ -383,6 +383,10 @@ basicSubtypeTests =
 
       -- Recursive Type Tests
     , (Name "NumList", Name "IntList", False)
-      -- , (Name "IntList", Name "NumList", False) FIXME nonterm
+    , (Name "IntList", Name "NumList", True)
+    , (And [(Name "IntList"), (Not (Name "NumList"))], Empty, True)
+    , (And [(Name "IntList"), (Name "NumList")], (Name "NumList"), True)
+    , ((Name "NumList"), And [(Name "IntList"), (Name "NumList")], False)
+    , (And [(Name "NumList"), (Not (Name "IntList"))], (Name "NumList"), True)
     
   ]

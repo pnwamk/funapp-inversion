@@ -245,6 +245,11 @@ baseEnv = Map.fromList $
                      , Stx.Prod
                        (Stx.Name "Zero")
                        (Stx.Name "ZeroList")])
+          , ("NatList", parseTy baseEnv $
+              Stx.Or [ Stx.Name "Null"
+                     , Stx.Prod
+                       (Stx.Name "NonnegativeInteger")
+                       (Stx.Name "NatList")])
           , ("PosIntList", parseTy baseEnv $
               Stx.Or [ Stx.Name "Null"
                      , Stx.Prod

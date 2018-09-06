@@ -286,6 +286,8 @@ bddFiniteTy b p a = node (Right (b,p,a)) Top Bot Bot
 nameTy :: Name -> Ty -> Ty
 nameTy name (Ty b p a) = TyNode fty b p a
   where fty = nameFiniteTy name
+nameTy name (TyNode _ b p a) = TyNode fty b p a
+  where fty = nameFiniteTy name
 
 
 -- Constructs the type `t1 × t2`.
@@ -357,7 +359,7 @@ parseTy env (Stx.And ts) = foldr tyAnd anyTy $ map (parseTy env) ts
 parseTy env (Stx.Not t) = tyNot $ parseTy env t
 parseTy env Stx.Any = anyTy
 parseTy env Stx.Empty = emptyTy
-parseTy env (Stx.Name name) = env Map.! name
+parseTy env (Stx.Name name) = nameTy (Name name) (env Map.! name)
 parseTy env (Stx.Base bTy) = Ty b Bot Bot
   where b = Base True $ Bits.bit $ Stx.baseIndex bTy
 
