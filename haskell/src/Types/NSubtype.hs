@@ -11,17 +11,31 @@ module Types.NSubtype
 -- theoretic types... and a potentially useful oracle for more
 -- efficient implementation experimentation!
 
-import Types.LazyBDD
-import Data.List
-import Common.SetOps
+import           Types.LazyBDD
+import           Data.List
+import           Common.SetOps
+import           Control.Applicative
+import           Data.Set (Set)
+import qualified Data.Set as Set
+import           Data.Maybe
+import           Control.Applicative
+import           Data.Foldable
 
 -- Is this type equivalent to ∅?
 isEmpty :: Ty -> Bool
-isEmpty (Ty b ps as) =
-  (b == emptyBase)
-  && (isEmptyProd ps)
-  && (isEmptyArrow as)
+isEmpty t = isJust $ mtTy t Set.empty
 
+type Seen = Set FiniteTy
+
+-- internal isEmpty which tracks seen types
+mtTy :: Ty -> Seen -> Maybe Seen
+mtTy (Ty b ps as) seen
+  | not $ b == emptyBase = Nothing
+  | otherwise = mtProd ps seen >>=  mtArrow as
+mtTy t@(TyNode fty b ps as) seen
+  | Set.member fty seen  = Just seen
+  | not $ b == emptyBase = Nothing
+  | otherwise = mtProd ps (Set.insert fty seen) >>= mtArrow as
 
 
 -- given a BDD of Prods, return the flattened
@@ -47,20 +61,19 @@ flattenProds prods = flattenAux anyTy anyTy [] prods
 -- i.e. that all possible combinations of the negative info
 -- would produce an empty type in either the first or second
 -- field of the product type.
-isEmptyProd :: (BDD Prod) -> Bool
-isEmptyProd ps = all emptyClause (flattenProds ps)
-  where emptyClause :: (Prod , [Prod]) -> Bool
-        emptyClause ((Prod s1 s2) , negs) =
-          all (emptyProd s1 s2 negs) (subsets negs)
-        emptyProd :: Ty -> Ty -> [Prod] -> [Prod] -> Bool
-        emptyProd s1 s2 negs negs'
-          | subtype s1 (orFsts negs') = True
-          | subtype s2 (orSnds (negs \\ negs')) = True
-          | otherwise = False
+mtProd :: (BDD Prod) -> Seen -> Maybe Seen
+mtProd ps initialSeen = foldrM emptyClause initialSeen (flattenProds ps)
+  where emptyClause :: (Prod , [Prod]) -> Seen -> Maybe Seen
+        emptyClause ((Prod s1 s2) , negs) seen =
+          foldrM (emptyProd s1 s2 negs) seen (subsets negs)
+        emptyProd :: Ty -> Ty -> [Prod] -> [Prod] -> Seen -> Maybe Seen
+        emptyProd s1 s2 negs negs' seen =
+          mtTy (tyDiff s1 (orFsts negs')) seen
+          <|> mtTy (tyDiff s2 (orSnds (negs \\ negs'))) seen
         orFsts :: [Prod] -> Ty
-        orFsts ps = foldl (\t (Prod t1 _) -> tyOr t t1) emptyTy ps
+        orFsts ps = foldr (\(Prod t1 _) t -> tyOr t t1) emptyTy ps
         orSnds :: [Prod] -> Ty
-        orSnds ps = foldl (\t (Prod _ t2) -> tyOr t t2) emptyTy ps
+        orSnds ps = foldr (\(Prod _ t2) t -> tyOr t t2) emptyTy ps
 
 
 
@@ -88,35 +101,37 @@ flattenBDD as = flattenAux [] [] as
 -- negative info N be (¬(T₁ → T₂),...), check that for some
 -- (T₁ → T₂) ∈ N, T₁ <: ⋃(S₁ ...) and for all non-empty P' ⊆ P
 -- (T₁ <: ⋃(S₁→S₂ ∈ P\P') S₁) or (⋂(S₁→S₂ ∈ P') S₂ <: T₂)
-isEmptyArrow :: (BDD Arrow) -> Bool
-isEmptyArrow as = all emptyClause (flattenBDD as)
-  where emptyClause :: ([Arrow] , [Arrow]) -> Bool
-        emptyClause (pos,neg) = any (emptyArrow dom pos) neg
-          where dom = foldl (\t (Arrow s1 _) -> tyOr t s1) emptyTy pos
-        emptyArrow :: Ty -> [Arrow] -> Arrow -> Bool
-        emptyArrow dom pos (Arrow t1 t2) =
-          (subtype t1 dom) && (all
-                                   (emptyHelper t1 t2 pos)
-                                   (nonEmptySubsets pos))
-        emptyHelper :: Ty -> Ty -> [Arrow] -> [Arrow] -> Bool
-        emptyHelper t1 t2 pos pos' =
-          (subtype t1 dom) || (subtype rng t2)
-          where dom = (foldl (\t (Arrow s1 _) -> tyOr t s1)
+mtArrow :: (BDD Arrow) -> Seen -> Maybe Seen
+mtArrow as initialSeen = foldrM emptyClause initialSeen (flattenBDD as)
+  where emptyClause :: ([Arrow] , [Arrow]) -> Seen -> Maybe Seen
+        emptyClause (pos,neg) seen =
+          case mapMaybe (emptyArrow dom pos seen) neg of
+            [] -> Nothing
+            (seen':_) -> Just seen'
+          where dom = foldr (\(Arrow s1 _) t -> tyOr t s1) emptyTy pos
+        emptyArrow :: Ty -> [Arrow] -> Seen -> Arrow -> Maybe Seen
+        emptyArrow dom pos seen (Arrow t1 t2) = do
+          seen' <- mtTy (tyDiff t1 dom) seen
+          foldrM (emptyHelper t1 t2 pos) seen' (nonEmptySubsets pos)
+        emptyHelper :: Ty -> Ty -> [Arrow] -> [Arrow] -> Seen -> Maybe Seen
+        emptyHelper t1 t2 pos pos' seen =
+          mtTy (tyDiff t1 dom) seen <|> mtTy (tyDiff rng t2) seen
+          where dom = (foldr (\(Arrow s1 _) t -> tyOr t s1)
                        emptyTy
                        (pos \\ pos'))
-                rng = (foldl (\t (Arrow _ s2) -> tyAnd t s2)
+                rng = (foldr (\(Arrow _ s2) t -> tyAnd t s2)
                         anyTy
                         pos')
 
 -- is [[t1]] ∩ [[t2]] ≠ ∅
 overlap :: Ty -> Ty -> Bool
-overlap t1 t2 = not (isEmpty (tyAnd t1 t2))
+overlap t1 t2 = not $ isEmpty $ tyAnd t1 t2
 
 
 -- Is t1 a subtype of t2
 -- i.e. [[t1]] ⊆ [[t2]]
 subtype :: Ty -> Ty -> Bool
-subtype t1 t2 = isEmpty (tyDiff t1 t2)
+subtype t1 t2 = isEmpty $ tyDiff t1 t2
 
 
 -- Is t1 equivalent to t2

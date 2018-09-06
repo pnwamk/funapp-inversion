@@ -379,5 +379,10 @@ basicSubtypeTests =
        (And [(Or [(Prod (Base T) (Base T)), (Prod (Base T) (Base F)), (Prod (Base F) (Base T)), (Prod (Base F) (Base F))]),
              (Prod (Not (Base T)) (Or [(Base Zero), (Base T),(Base F)]))]) ,
        True)
+
+
+      -- Recursive Type Tests
+    , (Name "NumList", Name "IntList", False)
+      -- , (Name "IntList", Name "NumList", False) FIXME nonterm
     
   ]

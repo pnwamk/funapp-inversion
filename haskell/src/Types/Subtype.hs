@@ -8,13 +8,13 @@ module Types.Subtype
 import           Types.LazyBDD
 import           Data.Set (Set)
 import qualified Data.Set as Set
+import           Data.Maybe
 import           Control.Applicative
+import           Data.Foldable
 
 -- Is this type equivalent to ∅?
 isEmpty :: Ty -> Bool
-isEmpty t = case mtTy t Set.empty of
-              Just _  -> True
-              Nothing -> False
+isEmpty t = isJust $ mtTy t Set.empty
 
 type Seen = Set FiniteTy
 
@@ -27,9 +27,8 @@ mtTy (Ty b ps as) seen
 mtTy t@(TyNode fty b ps as) seen
   | Set.member fty seen  = Just seen
   | not $ b == emptyBase = Nothing
-  | otherwise = 
-      mtProd ps anyTy anyTy [] seen
-      >>= mtArrow as emptyTy [] []
+  | otherwise = mtProd ps anyTy anyTy [] (Set.insert fty seen)
+                >>= mtArrow as emptyTy [] []
   
 
 -- Is a BDD of prods equivalent to ∅?
@@ -38,7 +37,7 @@ mtProd (Node p@(Prod t1 t2) l m r) s1 s2 neg seen =
   mtProd l (tyAnd s1 t1) (tyAnd s2 t2) neg seen
   >>= mtProd m s1 s2 neg
   >>= mtProd r s1 s2 (p:neg)
-mtProd Bot _ _ _ _ = Nothing
+mtProd Bot _ _ _ seen = Just seen
 mtProd Top s1 s2 neg seen = mtTy s1 seen
                             <|> mtTy s2 seen
                             <|> go s1 s2 neg seen
@@ -57,13 +56,12 @@ mtArrow (Node a@(Arrow s1 s2) l m r) dom pos neg seen =
   >>= mtArrow m dom pos neg
   >>= mtArrow r dom pos (a:neg)
 mtArrow Bot _ _ _ seen = Just seen
-mtArrow Top dom pos [] seen = Nothing
-mtArrow Top dom pos ((Arrow t1 t2):neg) seen = checkArrows neg
-  where checkArrows :: [Arrow] -> Maybe Seen
-        checkArrows [] = Nothing
-        checkArrows ((Arrow t1 t2):rest) =
-          (mtTy (tyDiff t1 dom) seen >>= arrowPhi t1 (tyNot t2) pos)
-          <|> checkArrows rest
+mtArrow Top dom pos neg seen = case mapMaybe checkArrow neg of
+                                 [] -> Nothing
+                                 (seen':_) -> Just seen'
+  where checkArrow :: Arrow -> Maybe Seen
+        checkArrow (Arrow t1 t2) = mtTy (tyDiff t1 dom) seen
+                                   >>= arrowPhi t1 (tyNot t2) pos
 
 
 arrowPhi :: Ty -> Ty -> [Arrow] -> Seen -> Maybe Seen
