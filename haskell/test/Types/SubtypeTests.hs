@@ -384,6 +384,10 @@ basicSubtypeTests =
       -- Recursive Type Tests
     , (Name "NumList", Name "IntList", False)
     , (Name "IntList", Name "NumList", True)
+    , (Name "ZeroOneList", Name "NumList", True)
+    , (Name "OneZeroList", Name "NumList", True)
+    , (Name "NumList", Name "ZeroOneList", False)
+    , (Name "OneZeroList", Name "ZeroOneList", False)
     , (And [(Name "IntList"), (Not (Name "NumList"))], Empty, True)
     , (And [(Name "IntList"), (Name "NumList")], (Name "NumList"), True)
     , ((Name "NumList"), And [(Name "IntList"), (Name "NumList")], False)

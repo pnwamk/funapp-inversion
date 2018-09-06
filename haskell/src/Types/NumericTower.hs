@@ -243,6 +243,12 @@ baseEnv = Map.fromList $
           , ("IntList", parseTy baseEnv $
               Stx.Or [ Stx.Name "Null"
                      , Stx.Prod (Stx.Name "Integer") (Stx.Name "IntList")])
+          , ("ZeroOneList", parseTy baseEnv $
+            Stx.Or [ Stx.Name "Null"
+                   , Stx.Prod (Stx.Name "Zero") (Stx.Name "OneZeroList")])
+          , ("OneZeroList", parseTy baseEnv $
+            Stx.Or [ Stx.Name "Null"
+                   , Stx.Prod (Stx.Name "One") (Stx.Name "ZeroOneList")])
           , ("NumList", parseTy baseEnv $
               Stx.Or [ Stx.Name "Null"
                      , Stx.Prod (Stx.Name "Number") (Stx.Name "NumList")])]
