@@ -49,7 +49,13 @@ opTypes =
              , (inexactReal, nonnegativeInexactReal)
              , ((tyOr' [positiveReal, negativeReal]), positiveReal)
              , (real, nonnegativeReal)]))
-    
+
+  , ("sqr", (UnOp [])) -- TODO 
+  , ("sqrt", (UnOp [])) -- TODO
+  , ("expt", (BinOp [])) -- TODO
+  , ("modulo", (BinOp [])) -- TODO
+  , ("quotient", (BinOp [])) -- TODO
+
   , ("+", (BinOp
             [ (byte, byte, index)
             , (index, index, nonnegativeFixnum)

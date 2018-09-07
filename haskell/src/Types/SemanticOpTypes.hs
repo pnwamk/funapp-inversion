@@ -41,6 +41,12 @@ opTypes =
              , (float, nonnegativeFloat)
              , (singleFloat, nonnegativeSingleFloat)
              , ((tyOr' [positiveReal, negativeReal]), positiveReal)]))
+
+  , ("sqr", (UnOp [])) -- TODO 
+  , ("sqrt", (UnOp [])) -- TODO
+  , ("expt", (BinOp [])) -- TODO
+  , ("modulo", (BinOp [])) -- TODO
+  , ("quotient", (BinOp [])) -- TODO
     
   , ("+", (BinOp
             [ (byte, byte, index)

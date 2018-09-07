@@ -101,6 +101,7 @@ runRepl env userPrompt = do
       putStrLn ""
       putStrLn "   Name ::= Boolean"
       putStrLn "          | IntList"
+      putStrLn "          | ByteList"
       putStrLn "          | NumList"
       putStrLn "   (NOTE: new type names may be introduced by the"
       putStrLn "          `Let` or `LetRec` REPL commands)"

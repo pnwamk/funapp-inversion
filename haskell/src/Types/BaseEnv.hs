@@ -240,6 +240,9 @@ baseEnv = Map.fromList $
           , ("Null", nullTy)
           , ("False", falseTy)
           , ("Boolean", boolTy)
+          , ("ByteList", parseTy baseEnv $
+              Stx.Or [ Stx.Name "Null"
+                     , Stx.Prod (Stx.Name "Byte") (Stx.Name "ByteList")])
           , ("IntList", parseTy baseEnv $
               Stx.Or [ Stx.Name "Null"
                      , Stx.Prod (Stx.Name "Integer") (Stx.Name "IntList")])
