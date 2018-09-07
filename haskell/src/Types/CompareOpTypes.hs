@@ -306,7 +306,9 @@ semCompOpTypes inputTy ts arg1 arg2 =
 unOps :: [(String, Ty)]
 unOps = [ ("add1", number)
         , ("sub1", number)
-        , ("abs", real)]
+        , ("abs", real)
+        , ("sqr", number)
+        , ("sqrt", number)]
 
 binOps :: [(String, Ty, Ty)]
 binOps = [("+", number, number)
