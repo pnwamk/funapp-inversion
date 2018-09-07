@@ -6,7 +6,7 @@ import qualified Types.Subtype as S
 import qualified Types.NSubtype as N
 import qualified Types.LazyBDD as BDD
 import Types.Syntax
-import Types.NumericTower
+import Types.BaseEnv
 
 
 compIsEmpty :: Ty -> Bool

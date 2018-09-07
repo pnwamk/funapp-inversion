@@ -6,7 +6,7 @@ module Repl.Parse ( parseCmd , parseTy ) where
 
 import qualified Types.Syntax as Stx
 import qualified Types.LazyBDD as BDD
-import Types.NumericTower
+import Types.BaseEnv
 import Repl.Commands
 import Data.Map (Map)
 import qualified Data.Map as Map

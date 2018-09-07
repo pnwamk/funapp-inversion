@@ -1,7 +1,7 @@
 module Types.SemanticOpTypes where
 
 import Types.LazyBDD
-import Types.NumericTower
+import Types.BaseEnv
 
 opTypes :: [(String, OpSpec)]
 opTypes =

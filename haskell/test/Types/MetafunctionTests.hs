@@ -5,7 +5,7 @@ import Test.Hspec
 import Test.QuickCheck
 import Types.Syntax
 import qualified Types.LazyBDD as BDD
-import Types.NumericTower
+import Types.BaseEnv
 
 
 genMetafunctionSpec ::

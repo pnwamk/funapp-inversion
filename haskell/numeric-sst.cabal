@@ -15,17 +15,17 @@ extra-source-files:  README.md
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Types.LazyBDD
-                     , Types.NSubtype
-                     , Types.Subtype
-                     , Types.Syntax
-                     , Types.NMetafunctions
-                     , Types.Metafunctions
-                     , Common.Primitives
-                     , Common.SetOps
-                     , Repl.Parse
-                     , Repl.Commands
-                     , Types.NumericTower
+  exposed-modules: Common.Primitives
+                 , Common.SetOps
+                 , Types.LazyBDD
+                 , Types.NSubtype
+                 , Types.Subtype
+                 , Types.Syntax
+                 , Types.NMetafunctions
+                 , Types.Metafunctions
+                 , Types.BaseEnv
+                 , Repl.Parse
+                 , Repl.Commands
   build-depends:       base >= 4.7 && < 5
                      , containers
                      , time
@@ -52,14 +52,14 @@ executable numeric-sst
                , Types.Subtype
                , Types.Syntax
                , Types.NMetafunctions
-               , Repl.Commands
-               , Repl.Parse
+               , Types.BaseEnv
                , Types.CompareOpTypes
                , Types.Metafunctions
-               , Types.NumericTower
                , Types.SemanticOpTypes
                , Types.SyntacticOpTypes
                , Types.SyntacticOpTypesPlus
+               , Repl.Commands
+               , Repl.Parse
 
 test-suite numeric-sst-test
   type:                exitcode-stdio-1.0

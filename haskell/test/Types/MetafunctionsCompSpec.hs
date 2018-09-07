@@ -4,7 +4,7 @@ import Test.Hspec
 import Test.QuickCheck (property)
 import Types.Subtype
 import qualified Types.LazyBDD as BDD
-import Types.NumericTower
+import Types.BaseEnv
 import qualified Types.NMetafunctions as N
 import qualified Types.Metafunctions as M
 import Types.Syntax

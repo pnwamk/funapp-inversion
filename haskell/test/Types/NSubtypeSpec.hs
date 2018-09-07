@@ -7,7 +7,7 @@ import qualified Types.NSubtype as N
 import qualified Types.LazyBDD as BDD
 import Types.Syntax
 import Types.SubtypeTests
-import Types.NumericTower
+import Types.BaseEnv
 
 spec :: Spec
 spec = (genSubtypeSpec

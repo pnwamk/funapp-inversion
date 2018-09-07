@@ -1,7 +1,7 @@
 module Types.SyntacticOpTypes where
 
 import Types.LazyBDD
-import Types.NumericTower
+import Types.BaseEnv
 
 
 opTypes :: [(String, OpSpec)]

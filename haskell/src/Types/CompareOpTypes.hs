@@ -2,9 +2,9 @@ module Types.CompareOpTypes where
 
 import Data.List
 import Types.LazyBDD
-import Types.NumericTower
 import Types.Subtype
 import Types.Metafunctions
+import Types.BaseEnv
 import qualified Types.SyntacticOpTypes as Syn
 import qualified Types.SyntacticOpTypesPlus as SynP
 import qualified Types.SemanticOpTypes as Sem

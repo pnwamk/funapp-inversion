@@ -4,7 +4,7 @@ import Test.Hspec
 import Test.QuickCheck
 --import qualified Types.Syntax as Stx
 import Types.LazyBDD
-import Types.NumericTower
+import Types.BaseEnv
 import Types.Subtype
 import qualified Repl.Parse as Parse
 

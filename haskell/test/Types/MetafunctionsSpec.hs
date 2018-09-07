@@ -7,7 +7,7 @@ import qualified Types.LazyBDD as BDD
 import qualified Types.Subtype as S
 import qualified Types.Metafunctions as M
 import Types.MetafunctionTests
-import Types.NumericTower
+import Types.BaseEnv
 
   
 spec :: Spec

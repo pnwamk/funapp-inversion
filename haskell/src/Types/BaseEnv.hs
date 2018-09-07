@@ -1,4 +1,4 @@
-module Types.NumericTower where
+module Types.BaseEnv where
 
 import qualified Types.Syntax as Stx
 import Types.LazyBDD

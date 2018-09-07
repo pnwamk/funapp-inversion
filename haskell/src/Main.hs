@@ -10,7 +10,7 @@ import qualified Types.SyntacticOpTypes as Syn
 import qualified Types.SyntacticOpTypesPlus as SynP
 import qualified Types.SemanticOpTypes as Sem
 import Types.CompareOpTypes
-import Types.NumericTower
+import Types.BaseEnv
 import Data.Foldable
 import Data.Char
 import Repl.Parse
