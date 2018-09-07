@@ -168,8 +168,7 @@ opTypes =
                       , (nonnegativeInteger, nonnegativeInteger, nonnegativeInteger)
                       , (integer, nonpositiveFixnum, nonpositiveFixnum)
                       , (integer, nonpositiveInteger, nonpositiveInteger)
-                      , (fixnum, integer, integer)
-                      , (integer, fixnum, integer)
+                      , (integer, fixnum, fixnum)
                       , (integer, integer, integer)]))
   
   , ("quotient", (BinOp [ (zero, integer, zero)

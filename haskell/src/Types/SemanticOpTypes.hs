@@ -91,8 +91,30 @@ opTypes =
                     , (inexactComplex, inexactComplex, inexactComplex)
                     , (number, number, number)]))
     
-  , ("modulo", (BinOp [])) -- TODO
-  , ("quotient", (BinOp [])) -- TODO
+  , ("modulo", (BinOp [ (one, one, zero)
+                      , (integer, byte, byte)
+                      , (byte, nonnegativeInteger, byte)
+                      , (integer, index, index)
+                      , (index, nonnegativeInteger, index)
+                      , (integer, nonnegativeFixnum, nonnegativeFixnum)
+                      , (nonnegativeFixnum, nonnegativeInteger, nonnegativeFixnum)
+                      , (integer, nonnegativeInteger, nonnegativeInteger)
+                      , (nonnegativeInteger, nonnegativeInteger, nonnegativeInteger)
+                      , (integer, nonpositiveFixnum, nonpositiveFixnum)
+                      , (integer, nonpositiveInteger, nonpositiveInteger)
+                      , (integer, fixnum, fixnum)
+                      , (integer, integer, integer)]))
+  
+  , ("quotient", (BinOp [ (positiveFixnum, one, positiveFixnum)
+                        , (negativeFixnum, one, negativeFixnum)
+                        , (byte, nonnegativeInteger, byte)
+                        , (index, nonnegativeInteger, index)
+                        , (nonpositiveFixnum, nonnegativeFixnum, nonpositiveFixnum)
+                        , (nonnegativeFixnum, integer, fixnum)
+                        , (nonnegativeInteger, nonnegativeInteger, nonnegativeInteger)
+                        , (nonnegativeInteger, nonpositiveInteger, nonpositiveInteger)
+                        , (nonpositiveInteger, nonnegativeInteger, nonpositiveInteger)
+                        , (nonpositiveInteger, nonpositiveInteger, nonnegativeInteger)]))
     
   , ("+", (BinOp
             [ (byte, byte, index)

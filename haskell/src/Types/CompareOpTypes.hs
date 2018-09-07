@@ -317,7 +317,9 @@ binOps = [("+", number, number)
          , ("/", number, number)
          , ("max", real, real)
          , ("min", real, real)
-         , ("expt", number, number)]
+         , ("expt", number, number)
+         , ("modulo", integer, integer)
+         , ("quotient", integer, integer)]
 
 compOps :: [(String, Ty, Ty)]
 compOps = [ ("<", real, real)
