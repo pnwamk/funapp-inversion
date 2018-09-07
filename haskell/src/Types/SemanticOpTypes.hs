@@ -67,7 +67,30 @@ opTypes =
                    , (singleFloatComplex, singleFloatComplex)
                    , (number, number)]))
     
-  , ("expt", (BinOp [])) -- TODO
+  , ("expt", (BinOp [ (one, rational, one)
+                    , (number, zero, one) -- will error if negative
+                    , (integer, nonnegativeInteger, integer)
+                    , (positiveRational, integer, positiveRational)
+                    , (nonnegativeRational, integer, nonnegativeRational)
+                    , (rational, integer, rational)
+                    , (nonnegativeFloat, real, (tyOr nonnegativeFloat one))
+                    , (positiveReal, nonnegativeFloat, (tyOr nonnegativeFloat one))
+                    , (float, (tyOr negativeFixnum positiveFixnum), float)
+                    , (float, float, (tyOr float floatComplex))
+                    , (singleFloat, (tyOr negativeFixnum positiveFixnum), singleFloat)
+                    , (singleFloat, singleFloat, (tyOr singleFloat singleFloatComplex))
+                    , (positiveReal, real, nonnegativeReal)
+                    , (nonnegativeReal, real, real)
+                    , (inexactReal, inexactReal, (tyOr inexactReal inexactComplex))
+                    , (real, nonnegativeInteger, real)
+                    , (floatComplex, float, (tyOr floatComplex float))
+                    , (floatComplex, inexactReal, (tyOr floatComplex inexactReal))
+                    , (floatComplex, inexactComplex, floatComplex)
+                    , (singleFloatComplex, singleFloatComplex, singleFloatComplex)
+                    , (singleFloatComplex, singleFloat, (tyOr singleFloatComplex singleFloat))
+                    , (inexactComplex, inexactComplex, inexactComplex)
+                    , (number, number, number)]))
+    
   , ("modulo", (BinOp [])) -- TODO
   , ("quotient", (BinOp [])) -- TODO
     
