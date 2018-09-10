@@ -60,6 +60,9 @@ singleFloatComplex = parseTy mtEnv $ Stx.Base Stx.SingleFloatComplex
 
 positiveByte = tyOr' [one, byteLargerThanOne]
 byte = tyOr' [zero, positiveByte]
+stxByte = Stx.Or [Stx.Base Stx.Zero,
+                  Stx.Base Stx.One,
+                  Stx.Base Stx.ByteLargerThanOne]
 
 positiveIndex = tyOr' [one, byteLargerThanOne, positiveIndexNotByte]
 index = tyOr' [zero, positiveIndex]
@@ -78,6 +81,14 @@ nonnegativeInteger = tyOr' [zero, positiveInteger]
 negativeInteger = tyOr' [negativeFixnum, negativeIntegerNotFixnum]
 nonpositiveInteger = tyOr' [negativeInteger, zero]
 integer = tyOr' [negativeInteger, zero, positiveInteger]
+stxInt = Stx.Or [ Stx.Base Stx.NegativeIntegerNotFixnum
+                , Stx.Base Stx.NegativeFixnum
+                , Stx.Base Stx.Zero
+                , Stx.Base Stx.One
+                , Stx.Base Stx.ByteLargerThanOne
+                , Stx.Base Stx.PositiveIndexNotByte
+                , Stx.Base Stx.PositiveFixnumNotIndex
+                , Stx.Base Stx.PositiveIntegerNotFixnum]
 
 
 
@@ -142,7 +153,36 @@ inexactImaginary = tyOr' [floatImaginary, singleFloatImaginary]
 imaginary = tyOr' [exactImaginary, inexactImaginary]
 inexactComplex = tyOr' [floatComplex, singleFloatComplex]
 number = tyOr' [real, imaginary, exactComplex, inexactComplex]
-
+stxNum = Stx.Or [ Stx.Base Stx.Zero
+                , Stx.Base Stx.One
+                , Stx.Base Stx.ByteLargerThanOne
+                , Stx.Base Stx.PositiveIndexNotByte
+                , Stx.Base Stx.PositiveFixnumNotIndex
+                , Stx.Base Stx.NegativeFixnum
+                , Stx.Base Stx.PositiveIntegerNotFixnum
+                , Stx.Base Stx.NegativeIntegerNotFixnum
+                , Stx.Base Stx.PositiveRationalNotInteger
+                , Stx.Base Stx.NegativeRationalNotInteger
+                , Stx.Base Stx.FloatNaN
+                , Stx.Base Stx.FloatPositiveZero
+                , Stx.Base Stx.FloatNegativeZero
+                , Stx.Base Stx.PositiveFloatNumber
+                , Stx.Base Stx.PositiveFloatInfinity
+                , Stx.Base Stx.NegativeFloatNumber
+                , Stx.Base Stx.NegativeFloatInfinity
+                , Stx.Base Stx.SingleFloatNaN
+                , Stx.Base Stx.SingleFloatPositiveZero
+                , Stx.Base Stx.SingleFloatNegativeZero
+                , Stx.Base Stx.PositiveSingleFloatNumber
+                , Stx.Base Stx.PositiveSingleFloatInfinity
+                , Stx.Base Stx.NegativeSingleFloatNumber
+                , Stx.Base Stx.NegativeSingleFloatInfinity
+                , Stx.Base Stx.ExactImaginary
+                , Stx.Base Stx.ExactComplex
+                , Stx.Base Stx.FloatImaginary
+                , Stx.Base Stx.SingleFloatImaginary
+                , Stx.Base Stx.FloatComplex
+                , Stx.Base Stx.SingleFloatComplex]
 
 numericTypes :: [(String, Ty)]
 numericTypes =
@@ -241,20 +281,20 @@ baseEnv = Map.fromList $
           , ("False", falseTy)
           , ("Boolean", boolTy)
           , ("ByteList", parseTy baseEnv $
-              Stx.Or [ Stx.Name "Null"
-                     , Stx.Prod (Stx.Name "Byte") (Stx.Name "ByteList")])
+              Stx.Or [ Stx.Base Stx.Null
+                     , Stx.Prod stxByte (Stx.Name "ByteList")])
           , ("IntList", parseTy baseEnv $
-              Stx.Or [ Stx.Name "Null"
-                     , Stx.Prod (Stx.Name "Integer") (Stx.Name "IntList")])
+              Stx.Or [ Stx.Base Stx.Null
+                     , Stx.Prod stxInt (Stx.Name "IntList")])
           , ("ZeroOneList", parseTy baseEnv $
-            Stx.Or [ Stx.Name "Null"
-                   , Stx.Prod (Stx.Name "Zero") (Stx.Name "OneZeroList")])
+            Stx.Or [ Stx.Base Stx.Null
+                   , Stx.Prod (Stx.Base Stx.Zero) (Stx.Name "OneZeroList")])
           , ("OneZeroList", parseTy baseEnv $
-            Stx.Or [ Stx.Name "Null"
-                   , Stx.Prod (Stx.Name "One") (Stx.Name "ZeroOneList")])
+            Stx.Or [ Stx.Base Stx.Null
+                   , Stx.Prod (Stx.Base Stx.One) (Stx.Name "ZeroOneList")])
           , ("NumList", parseTy baseEnv $
-              Stx.Or [ Stx.Name "Null"
-                     , Stx.Prod (Stx.Name "Number") (Stx.Name "NumList")])]
+              Stx.Or [ Stx.Base Stx.Null
+                     , Stx.Prod stxNum (Stx.Name "NumList")])]
 
 realTypes :: [(String, Ty)]
 realTypes = filter (\(_,t) -> subtype t real) numericTypes
