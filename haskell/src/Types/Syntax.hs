@@ -25,27 +25,27 @@ data BaseTy =
   | Zero
   | One
   | ByteLargerThanOne
-  | PositiveIndexNotByte
-  | PositiveFixnumNotIndex
-  | NegativeFixnum
-  | PositiveIntegerNotFixnum
-  | NegativeIntegerNotFixnum
-  | PositiveRationalNotInteger
-  | NegativeRationalNotInteger
+  | PosIndexNotByte
+  | PosFixnumNotIndex
+  | NegFixnum
+  | PosIntegerNotFixnum
+  | NegIntegerNotFixnum
+  | PosRationalNotInteger
+  | NegRationalNotInteger
   | FloatNaN
-  | FloatPositiveZero
-  | FloatNegativeZero
-  | PositiveFloatNumber
-  | PositiveFloatInfinity
-  | NegativeFloatNumber
-  | NegativeFloatInfinity
+  | FloatPosZero
+  | FloatNegZero
+  | PosFloatNumber
+  | PosFloatInfinity
+  | NegFloatNumber
+  | NegFloatInfinity
   | SingleFloatNaN
-  | SingleFloatPositiveZero
-  | SingleFloatNegativeZero
-  | PositiveSingleFloatNumber
-  | PositiveSingleFloatInfinity
-  | NegativeSingleFloatNumber
-  | NegativeSingleFloatInfinity
+  | SingleFloatPosZero
+  | SingleFloatNegZero
+  | PosSingleFloatNumber
+  | PosSingleFloatInfinity
+  | NegSingleFloatNumber
+  | NegSingleFloatInfinity
   | ExactImaginary
   | ExactComplex
   | FloatImaginary
@@ -77,27 +77,27 @@ baseTypes =
   , Zero
   , One
   , ByteLargerThanOne
-  , PositiveIndexNotByte
-  , PositiveFixnumNotIndex
-  , NegativeFixnum
-  , PositiveIntegerNotFixnum
-  , NegativeIntegerNotFixnum
-  , PositiveRationalNotInteger
-  , NegativeRationalNotInteger
+  , PosIndexNotByte
+  , PosFixnumNotIndex
+  , NegFixnum
+  , PosIntegerNotFixnum
+  , NegIntegerNotFixnum
+  , PosRationalNotInteger
+  , NegRationalNotInteger
   , FloatNaN
-  , FloatPositiveZero
-  , FloatNegativeZero
-  , PositiveFloatNumber
-  , PositiveFloatInfinity
-  , NegativeFloatNumber
-  , NegativeFloatInfinity
+  , FloatPosZero
+  , FloatNegZero
+  , PosFloatNumber
+  , PosFloatInfinity
+  , NegFloatNumber
+  , NegFloatInfinity
   , SingleFloatNaN
-  , SingleFloatPositiveZero
-  , SingleFloatNegativeZero
-  , PositiveSingleFloatNumber
-  , PositiveSingleFloatInfinity
-  , NegativeSingleFloatNumber
-  , NegativeSingleFloatInfinity
+  , SingleFloatPosZero
+  , SingleFloatNegZero
+  , PosSingleFloatNumber
+  , PosSingleFloatInfinity
+  , NegSingleFloatNumber
+  , NegSingleFloatInfinity
   , ExactImaginary
   , ExactComplex
   , FloatImaginary

@@ -30,27 +30,27 @@ data OpSpec =
 zero = parseTy mtEnv $ Stx.Base Stx.Zero
 one = parseTy mtEnv $ Stx.Base Stx.One
 byteLargerThanOne = parseTy mtEnv $ Stx.Base Stx.ByteLargerThanOne
-positiveIndexNotByte = parseTy mtEnv $ Stx.Base Stx.PositiveIndexNotByte
-positiveFixnumNotIndex = parseTy mtEnv $ Stx.Base Stx.PositiveFixnumNotIndex
-negativeFixnum = parseTy mtEnv $ Stx.Base Stx.NegativeFixnum
-positiveIntegerNotFixnum = parseTy mtEnv $ Stx.Base Stx.PositiveIntegerNotFixnum
-negativeIntegerNotFixnum = parseTy mtEnv $ Stx.Base Stx.NegativeIntegerNotFixnum
-positiveRationalNotInteger = parseTy mtEnv $ Stx.Base Stx.PositiveRationalNotInteger
-negativeRationalNotInteger = parseTy mtEnv $ Stx.Base Stx.NegativeRationalNotInteger
+posIndexNotByte = parseTy mtEnv $ Stx.Base Stx.PosIndexNotByte
+posFixnumNotIndex = parseTy mtEnv $ Stx.Base Stx.PosFixnumNotIndex
+negFixnum = parseTy mtEnv $ Stx.Base Stx.NegFixnum
+posIntegerNotFixnum = parseTy mtEnv $ Stx.Base Stx.PosIntegerNotFixnum
+negIntegerNotFixnum = parseTy mtEnv $ Stx.Base Stx.NegIntegerNotFixnum
+posRationalNotInteger = parseTy mtEnv $ Stx.Base Stx.PosRationalNotInteger
+negRationalNotInteger = parseTy mtEnv $ Stx.Base Stx.NegRationalNotInteger
 floatNaN = parseTy mtEnv $ Stx.Base Stx.FloatNaN
-floatPositiveZero = parseTy mtEnv $ Stx.Base Stx.FloatPositiveZero
-floatNegativeZero = parseTy mtEnv $ Stx.Base Stx.FloatNegativeZero
-positiveFloatNumber = parseTy mtEnv $ Stx.Base Stx.PositiveFloatNumber
-positiveFloatInfinity = parseTy mtEnv $ Stx.Base Stx.PositiveFloatInfinity
-negativeFloatNumber = parseTy mtEnv $ Stx.Base Stx.NegativeFloatNumber
-negativeFloatInfinity = parseTy mtEnv $ Stx.Base Stx.NegativeFloatInfinity
+floatPosZero = parseTy mtEnv $ Stx.Base Stx.FloatPosZero
+floatNegZero = parseTy mtEnv $ Stx.Base Stx.FloatNegZero
+posFloatNumber = parseTy mtEnv $ Stx.Base Stx.PosFloatNumber
+posFloatInfinity = parseTy mtEnv $ Stx.Base Stx.PosFloatInfinity
+negFloatNumber = parseTy mtEnv $ Stx.Base Stx.NegFloatNumber
+negFloatInfinity = parseTy mtEnv $ Stx.Base Stx.NegFloatInfinity
 singleFloatNaN = parseTy mtEnv $ Stx.Base Stx.SingleFloatNaN
-singleFloatPositiveZero = parseTy mtEnv $ Stx.Base Stx.SingleFloatPositiveZero
-singleFloatNegativeZero = parseTy mtEnv $ Stx.Base Stx.SingleFloatNegativeZero
-positiveSingleFloatNumber = parseTy mtEnv $ Stx.Base Stx.PositiveSingleFloatNumber
-positiveSingleFloatInfinity = parseTy mtEnv $ Stx.Base Stx.PositiveSingleFloatInfinity
-negativeSingleFloatNumber = parseTy mtEnv $ Stx.Base Stx.NegativeSingleFloatNumber
-negativeSingleFloatInfinity = parseTy mtEnv $ Stx.Base Stx.NegativeSingleFloatInfinity
+singleFloatPosZero = parseTy mtEnv $ Stx.Base Stx.SingleFloatPosZero
+singleFloatNegZero = parseTy mtEnv $ Stx.Base Stx.SingleFloatNegZero
+posSingleFloatNumber = parseTy mtEnv $ Stx.Base Stx.PosSingleFloatNumber
+posSingleFloatInfinity = parseTy mtEnv $ Stx.Base Stx.PosSingleFloatInfinity
+negSingleFloatNumber = parseTy mtEnv $ Stx.Base Stx.NegSingleFloatNumber
+negSingleFloatInfinity = parseTy mtEnv $ Stx.Base Stx.NegSingleFloatInfinity
 exactImaginary = parseTy mtEnv $ Stx.Base Stx.ExactImaginary
 exactComplex = parseTy mtEnv $ Stx.Base Stx.ExactComplex
 floatImaginary = parseTy mtEnv $ Stx.Base Stx.FloatImaginary
@@ -58,94 +58,94 @@ singleFloatImaginary = parseTy mtEnv $ Stx.Base Stx.SingleFloatImaginary
 floatComplex = parseTy mtEnv $ Stx.Base Stx.FloatComplex
 singleFloatComplex = parseTy mtEnv $ Stx.Base Stx.SingleFloatComplex
 
-positiveByte = tyOr' [one, byteLargerThanOne]
-byte = tyOr' [zero, positiveByte]
+posByte = tyOr' [one, byteLargerThanOne]
+byte = tyOr' [zero, posByte]
 stxByte = Stx.Or [Stx.Base Stx.Zero,
                   Stx.Base Stx.One,
                   Stx.Base Stx.ByteLargerThanOne]
 
-positiveIndex = tyOr' [one, byteLargerThanOne, positiveIndexNotByte]
-index = tyOr' [zero, positiveIndex]
+posIndex = tyOr' [one, byteLargerThanOne, posIndexNotByte]
+index = tyOr' [zero, posIndex]
 
-positiveFixnum = tyOr' [positiveFixnumNotIndex, positiveIndex]
-nonnegativeFixnum = tyOr' [positiveFixnum, zero]
+posFixnum = tyOr' [posFixnumNotIndex, posIndex]
+nonnegFixnum = tyOr' [posFixnum, zero]
 
-nonpositiveFixnum = tyOr' [negativeFixnum, zero]
-fixnum = tyOr' [negativeFixnum, zero, positiveFixnum]
-integerNotFixnum = tyOr' [negativeIntegerNotFixnum, positiveIntegerNotFixnum]
-fixnumNotIndex = tyOr' [negativeFixnum, positiveFixnumNotIndex]
+nonposFixnum = tyOr' [negFixnum, zero]
+fixnum = tyOr' [negFixnum, zero, posFixnum]
+integerNotFixnum = tyOr' [negIntegerNotFixnum, posIntegerNotFixnum]
+fixnumNotIndex = tyOr' [negFixnum, posFixnumNotIndex]
 
-positiveInteger = tyOr' [positiveIntegerNotFixnum, positiveFixnum]
-nonnegativeInteger = tyOr' [zero, positiveInteger]
+posInteger = tyOr' [posIntegerNotFixnum, posFixnum]
+nonnegInteger = tyOr' [zero, posInteger]
 
-negativeInteger = tyOr' [negativeFixnum, negativeIntegerNotFixnum]
-nonpositiveInteger = tyOr' [negativeInteger, zero]
-integer = tyOr' [negativeInteger, zero, positiveInteger]
-stxInt = Stx.Or [ Stx.Base Stx.NegativeIntegerNotFixnum
-                , Stx.Base Stx.NegativeFixnum
+negInteger = tyOr' [negFixnum, negIntegerNotFixnum]
+nonposInteger = tyOr' [negInteger, zero]
+integer = tyOr' [negInteger, zero, posInteger]
+stxInt = Stx.Or [ Stx.Base Stx.NegIntegerNotFixnum
+                , Stx.Base Stx.NegFixnum
                 , Stx.Base Stx.Zero
                 , Stx.Base Stx.One
                 , Stx.Base Stx.ByteLargerThanOne
-                , Stx.Base Stx.PositiveIndexNotByte
-                , Stx.Base Stx.PositiveFixnumNotIndex
-                , Stx.Base Stx.PositiveIntegerNotFixnum]
+                , Stx.Base Stx.PosIndexNotByte
+                , Stx.Base Stx.PosFixnumNotIndex
+                , Stx.Base Stx.PosIntegerNotFixnum]
 
 
 
-positiveRational = tyOr' [positiveRationalNotInteger, positiveInteger]
-nonnegativeRational = tyOr' [zero, positiveRational]
+posRational = tyOr' [posRationalNotInteger, posInteger]
+nonnegRational = tyOr' [zero, posRational]
 
-negativeRational = tyOr' [negativeRationalNotInteger, negativeInteger]
-nonpositiveRational = tyOr' [negativeRational, zero]
-rationalNotInteger = tyOr' [negativeRationalNotInteger, positiveRationalNotInteger]
-rational = tyOr' [negativeRational, zero, positiveRational]
+negRational = tyOr' [negRationalNotInteger, negInteger]
+nonposRational = tyOr' [negRational, zero]
+rationalNotInteger = tyOr' [negRationalNotInteger, posRationalNotInteger]
+rational = tyOr' [negRational, zero, posRational]
 
-floatZero = tyOr' [floatPositiveZero, floatNegativeZero, floatNaN]
-positiveFloat = tyOr' [positiveFloatNumber, positiveFloatInfinity, floatNaN]
-nonnegativeFloat = tyOr' [positiveFloat, floatZero]
-negativeFloat = tyOr' [negativeFloatNumber, negativeFloatInfinity, floatNaN]
-nonpositiveFloat = tyOr' [negativeFloat, floatZero]
-float = tyOr' [negativeFloatNumber,
-            negativeFloatInfinity,
-            floatNegativeZero,
-            floatPositiveZero,
-            positiveFloatNumber,
-            positiveFloatInfinity,
+floatZero = tyOr' [floatPosZero, floatNegZero, floatNaN]
+posFloat = tyOr' [posFloatNumber, posFloatInfinity, floatNaN]
+nonnegFloat = tyOr' [posFloat, floatZero]
+negFloat = tyOr' [negFloatNumber, negFloatInfinity, floatNaN]
+nonposFloat = tyOr' [negFloat, floatZero]
+float = tyOr' [negFloatNumber,
+            negFloatInfinity,
+            floatNegZero,
+            floatPosZero,
+            posFloatNumber,
+            posFloatInfinity,
             floatNaN]
 
-singleFloatZero = tyOr' [singleFloatPositiveZero, singleFloatNegativeZero, singleFloatNaN]
+singleFloatZero = tyOr' [singleFloatPosZero, singleFloatNegZero, singleFloatNaN]
 
 inexactRealNaN = tyOr' [floatNaN, singleFloatNaN]
-inexactRealPositiveZero = tyOr' [singleFloatPositiveZero, floatPositiveZero]
-inexactRealNegativeZero = tyOr' [singleFloatNegativeZero, floatNegativeZero]
-inexactRealZero = tyOr' [inexactRealPositiveZero,
-                      inexactRealNegativeZero,
+inexactRealPosZero = tyOr' [singleFloatPosZero, floatPosZero]
+inexactRealNegZero = tyOr' [singleFloatNegZero, floatNegZero]
+inexactRealZero = tyOr' [inexactRealPosZero,
+                      inexactRealNegZero,
                       inexactRealNaN]
 
-positiveSingleFloat = tyOr' [positiveSingleFloatNumber, positiveSingleFloatInfinity, singleFloatNaN]
-positiveInexactReal = tyOr' [positiveSingleFloat, positiveFloat]
-nonnegativeSingleFloat = tyOr' [positiveSingleFloat, singleFloatZero]
-nonnegativeInexactReal = tyOr' [positiveInexactReal, inexactRealZero]
-negativeSingleFloat = tyOr' [negativeSingleFloatNumber, negativeSingleFloatInfinity, singleFloatNaN]
-negativeInexactReal = tyOr' [negativeSingleFloat, negativeFloat]
-nonpositiveSingleFloat = tyOr' [negativeSingleFloat, singleFloatZero]
-nonpositiveInexactReal = tyOr' [negativeInexactReal, inexactRealZero]
-singleFloat = tyOr' [negativeSingleFloat,
-                  singleFloatNegativeZero,
-                  singleFloatPositiveZero,
-                  positiveSingleFloat,
+posSingleFloat = tyOr' [posSingleFloatNumber, posSingleFloatInfinity, singleFloatNaN]
+posInexactReal = tyOr' [posSingleFloat, posFloat]
+nonnegSingleFloat = tyOr' [posSingleFloat, singleFloatZero]
+nonnegInexactReal = tyOr' [posInexactReal, inexactRealZero]
+negSingleFloat = tyOr' [negSingleFloatNumber, negSingleFloatInfinity, singleFloatNaN]
+negInexactReal = tyOr' [negSingleFloat, negFloat]
+nonposSingleFloat = tyOr' [negSingleFloat, singleFloatZero]
+nonposInexactReal = tyOr' [negInexactReal, inexactRealZero]
+singleFloat = tyOr' [negSingleFloat,
+                  singleFloatNegZero,
+                  singleFloatPosZero,
+                  posSingleFloat,
                   singleFloatNaN]
 inexactReal = tyOr' [singleFloat, float]
-positiveInfinity = tyOr' [positiveFloatInfinity, positiveSingleFloatInfinity]
-negativeInfinity = tyOr' [negativeFloatInfinity, negativeSingleFloatInfinity]
+posInfinity = tyOr' [posFloatInfinity, posSingleFloatInfinity]
+negInfinity = tyOr' [negFloatInfinity, negSingleFloatInfinity]
 
 realZero = tyOr' [zero, inexactRealZero]
-realZeroNoNaN = tyOr' [zero, inexactRealPositiveZero, inexactRealNegativeZero]
+realZeroNoNaN = tyOr' [zero, inexactRealPosZero, inexactRealNegZero]
 
-positiveReal = tyOr' [positiveRational, positiveInexactReal]
-nonnegativeReal = tyOr' [nonnegativeRational, nonnegativeInexactReal]
-negativeReal = tyOr' [negativeRational, negativeInexactReal]
-nonpositiveReal = tyOr' [nonpositiveRational, nonpositiveInexactReal]
+posReal = tyOr' [posRational, posInexactReal]
+nonnegReal = tyOr' [nonnegRational, nonnegInexactReal]
+negReal = tyOr' [negRational, negInexactReal]
+nonposReal = tyOr' [nonposRational, nonposInexactReal]
 real = tyOr' [rational, inexactReal]
 
 exactNumber = tyOr' [exactImaginary, exactComplex, rational]
@@ -156,27 +156,27 @@ number = tyOr' [real, imaginary, exactComplex, inexactComplex]
 stxNum = Stx.Or [ Stx.Base Stx.Zero
                 , Stx.Base Stx.One
                 , Stx.Base Stx.ByteLargerThanOne
-                , Stx.Base Stx.PositiveIndexNotByte
-                , Stx.Base Stx.PositiveFixnumNotIndex
-                , Stx.Base Stx.NegativeFixnum
-                , Stx.Base Stx.PositiveIntegerNotFixnum
-                , Stx.Base Stx.NegativeIntegerNotFixnum
-                , Stx.Base Stx.PositiveRationalNotInteger
-                , Stx.Base Stx.NegativeRationalNotInteger
+                , Stx.Base Stx.PosIndexNotByte
+                , Stx.Base Stx.PosFixnumNotIndex
+                , Stx.Base Stx.NegFixnum
+                , Stx.Base Stx.PosIntegerNotFixnum
+                , Stx.Base Stx.NegIntegerNotFixnum
+                , Stx.Base Stx.PosRationalNotInteger
+                , Stx.Base Stx.NegRationalNotInteger
                 , Stx.Base Stx.FloatNaN
-                , Stx.Base Stx.FloatPositiveZero
-                , Stx.Base Stx.FloatNegativeZero
-                , Stx.Base Stx.PositiveFloatNumber
-                , Stx.Base Stx.PositiveFloatInfinity
-                , Stx.Base Stx.NegativeFloatNumber
-                , Stx.Base Stx.NegativeFloatInfinity
+                , Stx.Base Stx.FloatPosZero
+                , Stx.Base Stx.FloatNegZero
+                , Stx.Base Stx.PosFloatNumber
+                , Stx.Base Stx.PosFloatInfinity
+                , Stx.Base Stx.NegFloatNumber
+                , Stx.Base Stx.NegFloatInfinity
                 , Stx.Base Stx.SingleFloatNaN
-                , Stx.Base Stx.SingleFloatPositiveZero
-                , Stx.Base Stx.SingleFloatNegativeZero
-                , Stx.Base Stx.PositiveSingleFloatNumber
-                , Stx.Base Stx.PositiveSingleFloatInfinity
-                , Stx.Base Stx.NegativeSingleFloatNumber
-                , Stx.Base Stx.NegativeSingleFloatInfinity
+                , Stx.Base Stx.SingleFloatPosZero
+                , Stx.Base Stx.SingleFloatNegZero
+                , Stx.Base Stx.PosSingleFloatNumber
+                , Stx.Base Stx.PosSingleFloatInfinity
+                , Stx.Base Stx.NegSingleFloatNumber
+                , Stx.Base Stx.NegSingleFloatInfinity
                 , Stx.Base Stx.ExactImaginary
                 , Stx.Base Stx.ExactComplex
                 , Stx.Base Stx.FloatImaginary
@@ -189,80 +189,80 @@ numericTypes =
   [ ("Zero", zero)
   , ("One", one)
   , ("ByteLargerThanOne", byteLargerThanOne)
-  , ("PositiveIndexNotByte", positiveIndexNotByte)
-  , ("PositiveFixnumNotIndex", positiveFixnumNotIndex)
-  , ("NegativeFixnum", negativeFixnum)
-  , ("PositiveIntegerNotFixnum", positiveIntegerNotFixnum)
-  , ("NegativeIntegerNotFixnum", negativeIntegerNotFixnum)
-  , ("PositiveRationalNotInteger", positiveRationalNotInteger)
-  , ("NegativeRationalNotInteger", negativeRationalNotInteger)
+  , ("PosIndexNotByte", posIndexNotByte)
+  , ("PosFixnumNotIndex", posFixnumNotIndex)
+  , ("NegFixnum", negFixnum)
+  , ("PosIntegerNotFixnum", posIntegerNotFixnum)
+  , ("NegIntegerNotFixnum", negIntegerNotFixnum)
+  , ("PosRationalNotInteger", posRationalNotInteger)
+  , ("NegRationalNotInteger", negRationalNotInteger)
   , ("FloatNaN", floatNaN)
-  , ("FloatPositiveZero", floatPositiveZero)
-  , ("FloatNegativeZero", floatNegativeZero)
-  , ("PositiveFloatNumber", positiveFloatNumber)
-  , ("PositiveFloatInfinity", positiveFloatInfinity)
-  , ("NegativeFloatNumber", negativeFloatNumber)
-  , ("NegativeFloatInfinity", negativeFloatInfinity)
+  , ("FloatPosZero", floatPosZero)
+  , ("FloatNegZero", floatNegZero)
+  , ("PosFloatNumber", posFloatNumber)
+  , ("PosFloatInfinity", posFloatInfinity)
+  , ("NegFloatNumber", negFloatNumber)
+  , ("NegFloatInfinity", negFloatInfinity)
   , ("SingleFloatNaN", singleFloatNaN)
-  , ("SingleFloatPositiveZero", singleFloatPositiveZero)
-  , ("SingleFloatNegativeZero", singleFloatNegativeZero)
-  , ("PositiveSingleFloatNumber", positiveSingleFloatNumber)
-  , ("PositiveSingleFloatInfinity", positiveSingleFloatInfinity)
-  , ("NegativeSingleFloatNumber", negativeSingleFloatNumber)
-  , ("NegativeSingleFloatInfinity", negativeSingleFloatInfinity)
+  , ("SingleFloatPosZero", singleFloatPosZero)
+  , ("SingleFloatNegZero", singleFloatNegZero)
+  , ("PosSingleFloatNumber", posSingleFloatNumber)
+  , ("PosSingleFloatInfinity", posSingleFloatInfinity)
+  , ("NegSingleFloatNumber", negSingleFloatNumber)
+  , ("NegSingleFloatInfinity", negSingleFloatInfinity)
   , ("ExactImaginary", exactImaginary)
   , ("ExactComplex", exactComplex)
   , ("FloatImaginary", floatImaginary)
   , ("SingleFloatImaginary", singleFloatImaginary)
   , ("FloatComplex", floatComplex)
   , ("SingleFloatComplex", singleFloatComplex)
-  , ("PositiveByte", positiveByte)
+  , ("PosByte", posByte)
   , ("Byte", byte)
-  , ("PositiveIndex", positiveIndex)
+  , ("PosIndex", posIndex)
   , ("Index", index)
-  , ("PositiveFixnum", positiveFixnum)
-  , ("NonnegativeFixnum", nonnegativeFixnum)
-  , ("NonpositiveFixnum", nonpositiveFixnum)
+  , ("PosFixnum", posFixnum)
+  , ("NonnegFixnum", nonnegFixnum)
+  , ("NonposFixnum", nonposFixnum)
   , ("Fixnum", fixnum)
-  , ("PositiveInteger", positiveInteger)
-  , ("NonnegativeInteger", nonnegativeInteger)
-  , ("NegativeInteger", negativeInteger)
-  , ("NonpositiveInteger", nonpositiveInteger)
+  , ("PosInteger", posInteger)
+  , ("NonnegInteger", nonnegInteger)
+  , ("NegInteger", negInteger)
+  , ("NonposInteger", nonposInteger)
   , ("Integer", integer)
-  , ("PositiveRational", positiveRational)
-  , ("NonnegativeRational", nonnegativeRational)
-  , ("NegativeRational", negativeRational)
-  , ("NonpositiveRational", nonpositiveRational)
+  , ("PosRational", posRational)
+  , ("NonnegRational", nonnegRational)
+  , ("NegRational", negRational)
+  , ("NonposRational", nonposRational)
   , ("Rational", rational)
   , ("FloatZero", floatZero)
-  , ("PositiveFloat", positiveFloat)
-  , ("NonnegativeFloat", nonnegativeFloat)
-  , ("NegativeFloat", negativeFloat)
-  , ("NonpositiveFloat", nonpositiveFloat)
+  , ("PosFloat", posFloat)
+  , ("NonnegFloat", nonnegFloat)
+  , ("NegFloat", negFloat)
+  , ("NonposFloat", nonposFloat)
   , ("Float", float)
   , ("SingleFloatZero", singleFloatZero)
   , ("InexactRealNaN", inexactRealNaN)
-  , ("InexactRealPositiveZero", inexactRealPositiveZero)
-  , ("InexactRealNegativeZero", inexactRealNegativeZero)
+  , ("InexactRealPosZero", inexactRealPosZero)
+  , ("InexactRealNegZero", inexactRealNegZero)
   , ("InexactRealZero", inexactRealZero)
-  , ("PositiveSingleFloat", positiveSingleFloat)
-  , ("PositiveInexactReal", positiveInexactReal)
-  , ("NonnegativeSingleFloat", nonnegativeSingleFloat)
-  , ("NonnegativeInexactReal", nonnegativeInexactReal)
-  , ("NegativeSingleFloat", negativeSingleFloat)
-  , ("NegativeInexactReal", negativeInexactReal)
-  , ("NonpositiveSingleFloat", nonpositiveSingleFloat)
-  , ("NonpositiveInexactReal", nonpositiveInexactReal)
+  , ("PosSingleFloat", posSingleFloat)
+  , ("PosInexactReal", posInexactReal)
+  , ("NonnegSingleFloat", nonnegSingleFloat)
+  , ("NonnegInexactReal", nonnegInexactReal)
+  , ("NegSingleFloat", negSingleFloat)
+  , ("NegInexactReal", negInexactReal)
+  , ("NonposSingleFloat", nonposSingleFloat)
+  , ("NonposInexactReal", nonposInexactReal)
   , ("SingleFloat", singleFloat)
   , ("InexactReal", inexactReal)
-  , ("PositiveInfinity", positiveInfinity)
-  , ("NegativeInfinity", negativeInfinity)
+  , ("PosInfinity", posInfinity)
+  , ("NegInfinity", negInfinity)
   , ("RealZero", realZero)
   , ("RealZeroNoNaN", realZeroNoNaN)
-  , ("PositiveReal", positiveReal)
-  , ("NonnegativeReal", nonnegativeReal)
-  , ("NegativeReal", negativeReal)
-  , ("NonpositiveReal", nonpositiveReal)
+  , ("PosReal", posReal)
+  , ("NonnegReal", nonnegReal)
+  , ("NegReal", negReal)
+  , ("NonposReal", nonposReal)
   , ("Real", real)
   , ("ExactNumber", exactNumber)
   , ("InexactImaginary", inexactImaginary)
@@ -301,11 +301,11 @@ realTypes = filter (\(_,t) -> subtype t real) numericTypes
 
 -- types to help specify comparison types (i.e. signed types w/o NaN)
 someNaN = tyOr' [singleFloatNaN, floatNaN]
-positiveRealNoNaN = tyAnd' [positiveReal, (tyNot someNaN)]
-nonnegativeRealNoNaN = tyAnd' [nonnegativeReal, (tyNot someNaN)]
-negativeRealNoNaN = tyAnd' [negativeReal, (tyNot someNaN)]
-nonpositiveRealNoNaN = tyAnd' [nonpositiveReal, (tyNot someNaN)]
+posRealNoNaN = tyAnd' [posReal, (tyNot someNaN)]
+nonnegRealNoNaN = tyAnd' [nonnegReal, (tyNot someNaN)]
+negRealNoNaN = tyAnd' [negReal, (tyNot someNaN)]
+nonposRealNoNaN = tyAnd' [nonposReal, (tyNot someNaN)]
 realNoNaN = tyAnd' [real, (tyNot someNaN)]
-positiveIntegerNotByte = tyAnd' [positiveInteger, (tyNot byte)]
-positiveIntegerNotIndex = tyAnd' [positiveInteger, (tyNot index)]
+posIntegerNotByte = tyAnd' [posInteger, (tyNot byte)]
+posIntegerNotIndex = tyAnd' [posInteger, (tyNot index)]
 
