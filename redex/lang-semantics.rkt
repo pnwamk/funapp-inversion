@@ -12,10 +12,9 @@
 (provide (all-defined-out)
          (all-from-out "prim-op-types.rkt"))
 
-(define nspace (let ((C (make-base-namespace)))
-                 (parameterize ((current-namespace C))
-                   (namespace-require 'racket/math)
-                   (current-namespace))))
+(define nspace (parameterize ((current-namespace (make-base-namespace)))
+                 (namespace-require 'racket/math)
+                 (current-namespace)))
 
 (define (evaluate expr)
   (racket/base:eval expr nspace))
