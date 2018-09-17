@@ -302,10 +302,9 @@
    ;; but it's not algorithmic and so we have the model
    ;; not use it for our tests with the
    ;; above (where/hidden #t #f).
-   (<: τ_1 τ_2)
+   (<: τ_1 τ_2) (subobj ⊢ obj_1 <: obj_2)
    (side-condition (proves (EnvSnoc (EnvSnoc Γ p_1) (is obj_1 (And τ_1 (Not False)))) ⊢ p_2))
    (side-condition (proves (EnvSnoc (EnvSnoc Γ q_1) (is obj_1 (And τ_1 False))) ⊢ q_2))
-   (subobj ⊢ obj_1 <: obj_2)
    --------------------- "SR-Sub"
    (subres Γ ⊢ (Res τ_1 p_1 q_1 obj_1) <: (Res τ_2 p_2 q_2 obj_2))]
 
