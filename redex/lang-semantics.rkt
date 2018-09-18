@@ -248,10 +248,10 @@
    ------------ "M-Or2"
    (sat ρ (∨ p q))]
 
-  [(where v (rho-lookup ρ(x)))
-   (where v (rho-lookup ρ(path)))
+  [(where v (rho-lookup ρ(path_2)))
+   (where v (rho-lookup ρ(path_1)))
    ------------ "M-Alias"
-   (sat ρ (↝ x path))])
+   (sat ρ (≡ path_1 path_2))])
 
 (define (index? x) (and (fixnum? x) (>= x 0) (fixnum? (* x 4))))
 (define (exact-rational? x) (and (rational? x) (exact? x)))
@@ -391,7 +391,7 @@
   [---------------------- "T-Const"
    (synth Γ ⊢ const : (const-type-result const))]
 
-  [(lookup-alias Γ ⊢ x ↝ path) (lookup-type Γ ⊢ path ∈ τ)
+  [(lookup-alias Γ ⊢ x ≡ path) (lookup-type Γ ⊢ path ∈ τ)
    ---------------------- "T-Var"
    (synth Γ ⊢ x : (Res τ (is path (Not False)) (is path False) path))]
 
@@ -691,15 +691,15 @@
 
 (define-judgment-form sot
   #:mode (lookup-alias I I I I O)
-  #:contract (lookup-alias Γ ⊢ x ↝ path)
+  #:contract (lookup-alias Γ ⊢ x ≡ path)
 
   [(where #f (lookup-alias-helper Γ x))
    ----------------------
-   (lookup-alias Γ ⊢ x ↝ x)]
+   (lookup-alias Γ ⊢ x ≡ x)]
   
   [(where path (lookup-alias-helper Γ x))
    ----------------------
-   (lookup-alias Γ ⊢ x ↝ path)])
+   (lookup-alias Γ ⊢ x ≡ path)])
 
 (define-metafunction sot
   lookup-alias-helper : prop-or-Env x -> path or #f
@@ -711,7 +711,7 @@
   [(lookup-alias-helper (EnvSnoc Γ p) x)
    path
    (where path (lookup-alias-helper Γ x))]
-  [(lookup-alias-helper (↝ x path) x)
+  [(lookup-alias-helper (≡ x path) x)
    path]
   [(lookup-alias-helper (∧ p q) x)
    path
@@ -778,7 +778,7 @@
   ;; never asking for the type of a variable that is just
   ;; an alias for something (i.e. see lookup-type, which
   ;; resolves aliases _then_ calls this function)
-  [(get-type any_hash1 (EnvSnoc Γ (↝ _ _)) x)
+  [(get-type any_hash1 (EnvSnoc Γ (≡ _ _)) x)
    (get-type any_hash1 Γ x)]
   [(get-type any_hash1 (EnvSnoc Γ (∈ y τ)) x)
    (get-type any_hash2 Γ x)
@@ -810,7 +810,7 @@
   ;; never asking for the type of a variable that is just
   ;; an alias for something (i.e. see lookup-type, which
   ;; resolves aliases _then_ calls this function)
-  [(absurd-environment any_hash1 (EnvSnoc Γ (↝ _ _)))
+  [(absurd-environment any_hash1 (EnvSnoc Γ (≡ _ _)))
    (absurd-environment any_hash1 Γ)]
   [(absurd-environment any_hash1 (EnvSnoc Γ (∈ y τ)))
    (absurd-environment any_hash2 Γ)
@@ -838,7 +838,7 @@
 (define-metafunction sot
   alias-prop : x R -> p
   [(alias-prop x (Res _ _ _ botO)) ff]
-  [(alias-prop x (Res _ _ _ path)) (↝ x path)]
+  [(alias-prop x (Res _ _ _ path)) (≡ x path)]
   [(alias-prop x (Res τ p q topO))
    (∧ (∈ x τ) (∨ p_x q_x))
    (where p_x (∧ (∈ x (Not False)) p))

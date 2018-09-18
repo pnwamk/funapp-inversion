@@ -323,13 +323,13 @@
     x Integer]
    [#:env ((∈ x Integer) (∈ y String))
     y String]
-   [#:env ((↝ x y) (∈ y String))
+   [#:env ((≡ x y) (∈ y String))
     x String]
-   [#:env ((↝ x (projP 1 y)) (∈ y (Prod Integer String)))
+   [#:env ((≡ x (projP 1 y)) (∈ y (Prod Integer String)))
     x Integer]
-   [#:env ((↝ x (projP 2 y)) (∈ y (Prod Integer String)))
+   [#:env ((≡ x (projP 2 y)) (∈ y (Prod Integer String)))
     x String]
-   [#:env ((↝ x (projP 2 (projP 1 y))) (∈ y (Prod (Prod Integer String) String)))
+   [#:env ((≡ x (projP 2 (projP 1 y))) (∈ y (Prod (Prod Integer String) String)))
     x String]
    [#:env ((∈ x (Not Integer)) (∈ x (Or Integer String)))
     x String]
@@ -842,13 +842,13 @@
    [([x 42] [y "42"]) ((∈ x (Or String Integer)) (∈ y Integer)) #:fail]
    [([x 42] [y "42"]) ((∨ (∈ y Integer) (∈ x (Or String Integer))))]
    [([x 42] [y "42"]) ((∨ (∈ x (Or String Integer)) (∈ y Integer)))]
-   [([x 42] [y 42]) ((↝ x y))]
-   [([x 42] [y "42"]) ((↝ x y)) #:fail]
-   [([x 42] [y (pair 42 43)]) ((↝ x (projP 1 y)))]
-   [([x 42] [y (pair 43 42)]) ((↝ x (projP 2 y)))]
-   [([x 42] [y (pair 42 43)]) ((↝ x (projP 2 y))) #:fail]
-   [([x 43] [y (pair 43 42)]) ((↝ x (projP 2 y))) #:fail]
-   [([x 42] [y (pair 43 42)]) ((↝ x (projP 2 y))
+   [([x 42] [y 42]) ((≡ x y))]
+   [([x 42] [y "42"]) ((≡ x y)) #:fail]
+   [([x 42] [y (pair 42 43)]) ((≡ x (projP 1 y)))]
+   [([x 42] [y (pair 43 42)]) ((≡ x (projP 2 y)))]
+   [([x 42] [y (pair 42 43)]) ((≡ x (projP 2 y))) #:fail]
+   [([x 43] [y (pair 43 42)]) ((≡ x (projP 2 y))) #:fail]
+   [([x 42] [y (pair 43 42)]) ((≡ x (projP 2 y))
                                (∈ y (Prod Integer Integer))
                                (∈ x Integer))]))
 

@@ -69,7 +69,7 @@
   [path ::= x (projP i path)]
   [obj  ::= topO botO path]
   ;; props
-  [p q ::= (∈ x τ) (∧ p p) (∨ p p) (↝ x path) tt ff]
+  [p q ::= (∈ path τ) (∧ p p) (∨ p p) (≡ path path) tt ff]
   [Γ ::= EnvNull (EnvSnoc Γ p)]
   ;; type results
   [R ::= (Res τ p q obj)]
