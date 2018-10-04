@@ -89,11 +89,11 @@ Inductive ty : Set :=
 | tNot   : ty -> ty.
 Hint Constructors ty.
 
-Definition tTrue  := (tBase btTrue).
-Definition tFalse := (tBase btFalse).
-Definition tBool  := (tOr tTrue tFalse).
-Definition tNat   := (tBase btNat).
-Definition tStr   := (tBase btStr).
+Notation tTrue  := (tBase btTrue).
+Notation tFalse := (tBase btFalse).
+Notation tBool  := (tOr tTrue tFalse).
+Notation tNat   := (tBase btNat).
+Notation tStr   := (tBase btStr).
 
 Inductive var : Set :=
   Var : nat -> var.
@@ -690,7 +690,7 @@ Inductive Proves : gamma -> prop -> Prop :=
     Proves Γ q.
 Hint Constructors Proves.
 
-Fixpoint isa (o:obj) (t:ty) : prop :=
+Definition isa (o:obj) (t:ty) : prop :=
   if empty_dec t
   then Absurd
   else match o with
@@ -1010,7 +1010,8 @@ Proof.
   }
 Qed.  
 
-Lemma lemma1 : forall Γ p r,
+(* i.e. lemma 1 from ICFP 2010 *)
+Lemma Proves_implies_Sat : forall Γ p r,
     Proves Γ p ->
     Forall (Sat r) Γ ->
     Sat r p.
@@ -1141,72 +1142,380 @@ Inductive SatProps : rho -> val -> prop -> prop -> Prop :=
     SatProps r v p q.
 Hint Constructors SatProps.
 
-Lemma lemma2 : forall Γ e t p q o r n res,
-      TypeOf Γ e (Res t p q o) ->
+Inductive SoundTypeRes : rho -> val -> tres -> Prop :=
+| STR : forall r v t p q o,
+    ObjSatVal r o v ->
+    SatProps r v p q ->
+    In val (tInterp t) v ->
+    SoundTypeRes r v (Res t p q o).
+Hint Constructors SoundTypeRes.
+
+Lemma Subobj_sound : forall r o1 o2 v,
+    ObjSatVal r o1 v ->
+    Subobj o1 o2 ->
+    ObjSatVal r o2 v.
+Proof.
+  intros r o1 o2 v H1 Hsub.
+  inversion H1; inversion Hsub; crush.
+Qed.
+
+Lemma Sat_false_val : forall r v t1 p1 q1 o1,
+    SoundTypeRes r v (Res t1 p1 q1 o1) ->
+    v = (vBool false) ->
+    Sat r (isa o1 (tAnd t1 tFalse)).
+Proof.
+  intros r v t1 p1 q1 o1 Hstr Heq.
+  inversion Hstr; subst.
+  cbv.
+  ifcase.
+  { (* is empty (tAnd t1 (tBase btFalse)) *)
+    assert (In val (tInterp t1) (vBool false)) as Ht1 by auto.
+    assert (In val (tInterp tFalse) (vBool false)) as Hfalse
+        by (rewrite interp_tFalse; crush).
+    assert (In val (tInterp (tAnd t1 (tBase btFalse))) (vBool false))
+      as Hand by (rewrite interp_tAnd; constructor; auto).
+    assert (IsEmpty (tAnd t1 (tBase btFalse))) as Hmtand by auto.
+    assert (tInterp (tAnd t1 (tBase btFalse)) = Empty_set val)
+      as Heqmt by (inversion Hmtand; crush).
+    rewrite Heqmt in *.
+    inversion Hand.
+  }
+  { (* is not empty (tAnd t1 (tBase btFalse)) *)
+    destruct o1.
+    { (* o1 = oTop *)
+      apply M_Trivial.
+    }
+    { (* o1 = oBot *)
+      assert (ObjSatVal r oBot (vBoolfalse)) as Hobj by assumption.
+      inversion Hobj.
+    }
+    { (* o1 = (oPath _) *)
+      assert (ObjSatVal r (oPath p) (vBoolfalse)) as Hobj
+          by assumption.
+      inversion Hobj; subst.
+      eapply (M_Is p r).
+      eassumption.
+      rewrite interp_tAnd.
+      constructor; auto.
+      rewrite interp_tFalse. constructor.
+    }
+  }
+Qed.
+
+
+Lemma Sat_nonfalse_val : forall r v t1 p1 q1 o1,
+    SoundTypeRes r v (Res t1 p1 q1 o1) ->
+    v <> (vBool false) ->
+    Sat r (isa o1 (tAnd t1 (tNot tFalse))).
+Proof.
+  intros r v t1 p1 q1 o1 Hstr Hneq.
+  inversion Hstr; subst.
+  cbv.
+  ifcase.
+  { (* is empty (tAnd t1 (tNot (tBase btFalse))) *)
+    assert (In val (tInterp t1) v) as Ht1 by auto.
+    assert (In val (tInterp (tNot tFalse)) v) as Hnotfalse.
+    {
+      rewrite interp_tNot.
+      constructor.
+      constructor.
+      intros contra.
+      apply Hneq.
+      rewrite interp_tFalse in contra.
+      inversion contra.
+      reflexivity.
+    }
+    assert (In val (tInterp (tAnd t1 (tNot tFalse))) v) as Hand
+        by (rewrite interp_tAnd; crush).
+    assert (IsEmpty (tAnd t1 (tNot tFalse))) as Hmtand by auto.
+    assert (tInterp (tAnd t1 (tNot tFalse)) = Empty_set val)
+      as Heqmt by (inversion Hmtand; crush).
+    rewrite Heqmt in *.
+    inversion Hand.
+  }
+  { (* is not empty (tAnd t1 (tNot (tBase btFalse))) *)
+    destruct o1.
+    { (* o1 = oTop *)
+      apply M_Trivial.
+    }
+    { (* o1 = oBot *)
+      assert (ObjSatVal r oBot v) as Hobj by assumption.
+      inversion Hobj.
+    }
+    { (* o1 = (oPath _) *)
+      assert (ObjSatVal r (oPath p) v) as Hobj
+          by assumption.
+      inversion Hobj; subst.
+      eapply (M_Is p r).
+      eassumption.
+      rewrite interp_tAnd.
+      constructor; auto.
+      rewrite interp_tNot. constructor. constructor.
+      intros contra. apply Hneq.
+      rewrite interp_tFalse in contra.
+      inversion contra; crush.
+    }
+  }
+Qed.
+ 
+
+Lemma Subres_sound : forall Γ r v R1 R2,
+    Forall (Sat r) Γ ->
+    SoundTypeRes r v R1 ->
+    Subres Γ R1 R2 ->
+    SoundTypeRes r v R2.
+Proof.
+  intros Γ r v R R' Hsat Hstr Hsr.
+  induction Hsr.
+  {
+    inversion Hstr; subst.
+    constructor.
+    eapply Subobj_sound; eassumption.    
+    destruct (val_dec v (vBool false)) as [Heq | Hneq].
+    { (* v = false *)
+      subst.
+      apply SP_False.
+      assert (Sat r (isa o1 (tAnd t1 tFalse))) as Hv
+          by (eapply Sat_false_val; eauto).
+      assert (Forall (Sat r) (isa o1 (tAnd t1 tFalse) :: Γ))
+        as Hsat' by crush.
+      eapply Proves_implies_Sat.
+      eassumption.
+      assumption.
+    }
+    { (* v <> false *)
+      apply SP_NonFalse; auto.
+      assert (Sat r (isa o1 (tAnd t1 (tNot tFalse)))) as Hv.
+      {
+        eapply Sat_nonfalse_val; eauto.
+      }
+      assert (Forall (Sat r) ((isa o1 (tAnd t1 (tNot tFalse))) :: Γ))
+        as Hsat' by crush.
+      eapply Proves_implies_Sat.
+      eassumption.
+      assumption.
+    }
+    match goal with
+      [H : Subtype _ _ |- _] => inversion H
+    end; crush.
+  }
+  {
+    destruct (val_dec v (vBool false)) as [Heq | Hneq].
+    { (* v = false *)
+      assert (Sat r Absurd) as impossible.
+      {
+        assert (Sat r (isa o1 (tAnd t1 tFalse)))
+          as Hisa by (eapply Sat_false_val; eauto).
+        assert (Forall (Sat r) (isa o1 (tAnd t1 tFalse) :: Γ))
+          as Hsat' by auto.
+        assert (Proves (isa o1 (tAnd t1 tFalse) :: Γ) Absurd)
+          as Hproof by assumption.
+        apply (Proves_implies_Sat Hproof Hsat').
+      }
+      inversion impossible.
+    }
+    { (* v <> false *)
+      assert (Sat r Absurd) as impossible.
+      {
+        assert (Sat r (isa o1 (tAnd t1 (tNot tFalse))))
+          as Hisa by (eapply Sat_nonfalse_val; eauto).
+        assert (Forall (Sat r) (isa o1 (tAnd t1 (tNot tFalse)) :: Γ))
+          as Hsat' by auto.
+        assert (Proves (isa o1 (tAnd t1 (tNot tFalse)) :: Γ) Absurd)
+          as Hproof by assumption.
+        apply (Proves_implies_Sat Hproof Hsat').
+      }
+      inversion impossible.
+    }
+  }
+  {
+    inversion Hstr; subst.
+    constructor.
+    {
+      eapply Subobj_sound. eassumption.
+      apply SO_Refl.
+    }
+    {
+      destruct (val_dec v (vBool false)) as [Heq | Hneq].
+      { (* v = false *)
+        match goal with
+        | [H : SatProps _ _ _ _ |- _] => inversion H
+        end; crush.
+      }
+      { (* v <> false *)
+        match goal with
+        | [H : SatProps _ _ _ _ |- _] => inversion H
+        end; crush.
+        assert (Sat r Absurd) as impossible.
+        {
+          assert (Sat r (isa o1 (tAnd t1 (tNot tFalse))))
+            as Hisa by (eapply Sat_nonfalse_val; eauto).
+          assert (Forall (Sat r) (isa o1 (tAnd t1 (tNot tFalse)) :: p1 :: Γ))
+            as Hsat' by auto.
+          assert (Proves (isa o1 (tAnd t1 (tNot tFalse)) :: p1 :: Γ) Absurd)
+            as Hproof by assumption.
+          apply (Proves_implies_Sat Hproof Hsat').
+        }
+        inversion impossible.
+      }
+    }
+    {
+      inversion Hstr; subst.
+      rewrite interp_tAnd.
+      constructor; crush.
+      destruct (val_dec v (vBool false)) as [Heq | Hneq].
+      { (* v = false *)
+        match goal with
+        | [H : SatProps _ _ _ _ |- _] => inversion H
+        end; crush.
+      }
+      { (* v <> false *)
+        match goal with
+        | [H : SatProps _ _ _ _ |- _] => inversion H
+        end; crush.
+        assert (Sat r Absurd) as impossible.
+        {
+          assert (Sat r (isa o1 (tAnd t1 (tNot tFalse))))
+            as Hisa by (eapply Sat_nonfalse_val; eauto).
+          assert (Forall (Sat r) (isa o1 (tAnd t1 (tNot tFalse)) :: p1 :: Γ))
+            as Hsat' by auto.
+          assert (Proves (isa o1 (tAnd t1 (tNot tFalse)) :: p1 :: Γ) Absurd)
+            as Hproof by assumption.
+          apply (Proves_implies_Sat Hproof Hsat').
+        }
+        inversion impossible.
+      }
+    }    
+  }
+  {
+    inversion Hstr; subst.
+    constructor.
+    {
+      eapply Subobj_sound. eassumption.
+      apply SO_Refl.
+    }
+    {
+      destruct (val_dec v (vBool false)) as [Heq | Hneq].
+      { (* v = false *)
+        match goal with
+        | [H : SatProps _ _ _ _ |- _] => inversion H
+        end; crush.
+        assert (Sat r Absurd) as impossible.
+        {
+          assert (Sat r (isa o1 (tAnd t1 tFalse)))
+            as Hisa by (eapply Sat_false_val; eauto).
+          assert (Forall (Sat r) (isa o1 (tAnd t1 tFalse) :: q1 :: Γ))
+            as Hsat' by auto.
+          assert (Proves (isa o1 (tAnd t1 tFalse) :: q1 :: Γ) Absurd)
+            as Hproof by assumption.
+          apply (Proves_implies_Sat Hproof Hsat').
+        }
+        inversion impossible.
+      }
+      { (* v <> false *)
+        match goal with
+        | [H : SatProps _ _ _ _ |- _] => inversion H
+        end; crush.        
+      }
+    }
+    {
+      inversion Hstr; subst.
+      rewrite interp_tAnd.
+      constructor; crush.
+      destruct (val_dec v (vBool false)) as [Heq | Hneq].
+      { (* v = false *)
+        match goal with
+        | [H : SatProps _ _ _ _ |- _] => inversion H
+        end; crush.
+        assert (Sat r Absurd) as impossible.
+        {
+          assert (Sat r (isa o1 (tAnd t1 tFalse)))
+            as Hisa by (eapply Sat_false_val; eauto).
+          assert (Forall (Sat r) (isa o1 (tAnd t1 tFalse) :: q1 :: Γ))
+            as Hsat' by auto.
+          assert (Proves (isa o1 (tAnd t1 tFalse) :: q1 :: Γ) Absurd)
+            as Hproof by assumption.
+          apply (Proves_implies_Sat Hproof Hsat').
+        }
+        inversion impossible.
+      }
+      { (* v <> false *)
+        constructor.
+        constructor.
+        intros Hcontra.
+        apply Hneq.
+        crush.
+      }
+    }    
+  }
+Qed.
+     
+
+Lemma lemma3 : forall Γ e R r n res,
+      TypeOf Γ e R ->
       Forall (Sat r) Γ ->
       ValOf n r e res ->
-      (exists v,
-          res = rVal v
-          /\ ObjSatVal r o v
-          /\ SatProps r v p q
-          /\ In val (tInterp t) v)
+      (exists v, res = rVal v /\ SoundTypeRes r v R)
       \/ res = rError
       \/ res = rTimeout.
 Proof.
-  intros Γ e t p q o r n res Htype Hsat Hvalof.
+  intros Γ e R r n res Htype Hsat Hvalof.
   induction Hvalof.
   { (* V_Timeout *)
     right. right. reflexivity.
   }
   { (* V_Var *)
-    left.
     inversion Htype; subst.
+    remember (var_lookup r x) as Hlook.
+    destruct Hlook.
     {
-      (* BOOKMARK
-
-MAYBE WE NEED A LEMMA FOR SUBRES? *)
-      assert (Sat r (Eq (pVar x) π)) as Heq
-          by (eapply lemma1; eauto).
-      inversion Heq; subst.
-      assert (Sat r (Is π t)) as HIs
-          by (eapply lemma1; eauto).
-      inversion HIs; subst.
-      assert (v0 = v) as Hveq by crush. subst.
-      exists v. crush.
-      destruct (val_dec v (vBool false)) as [Hvfalse | Hvnonfalse].
+      left. eexists. split. reflexivity.
+      assert (Sat r (Is π t)) as Hsatis
+          by (eapply Proves_implies_Sat; eassumption).
+      inversion Hsatis; subst.
+      assert (Sat r (Eq (pVar x) π)) as Hsateq
+          by (eapply Proves_implies_Sat; eassumption).
+      inversion Hsateq; subst.
+      assert (SoundTypeRes r v (Res t
+                                    (Is π (tAnd t (tNot tFalse)))
+                                    (Is π (tAnd t tFalse))
+                                    (oPath π)))
+        as Hstr.
       {
-        subst.
-        apply SP_False.
-        eapply M_Is. eassumption.
-        crush.
+        constructor. constructor. crush.
+        destruct (val_dec v (vBool false)) as [Heq | Hneq]; subst.
+        { (* v = false *)
+          constructor. eapply M_Is. crush.
+          crush. constructor; crush.
       }
-      {
+        { (* v <> false *)
         apply SP_NonFalse. assumption.
         eapply M_Is. eassumption.
-        crush.
-        apply Intersection_intro; auto.
-        apply Setminus_intro.
-        constructor.
-        intros Hcontra.
-        inversion Hcontra.
+        crush. constructor; crush.
+        constructor. constructor.
+        intros contra.
+        apply Hneq. crush.
+        }
         crush.
       }
+      eapply Subres_sound; eauto.
     }
-    {
-      
-    }
+    assert (Sat r (Is π t)) as Hsatis
+        by (eapply Proves_implies_Sat; eassumption).
+    inversion Hsatis; subst.
+    assert (Sat r (Eq (pVar x) π)) as Hsateq
+        by (eapply Proves_implies_Sat; eassumption).
+    inversion Hsateq; subst.
+    crush.
   }
-  {
-    (* V_Const *)
+  { (* V_Const *)
+    (* BOOKMARK *)
   }
-  {
-    (* V_Abs *)
+  { (* V_Abs *)
   }
-  {
-    (* V_App_Fail1 *)
+  { (* V_App_Fail1 *)
   }
-  {
-    (* V_App_Fail2 *)
+  { (* V_App_Fail2 *)
   }
   {
     (* V_App_Fail3 *)
