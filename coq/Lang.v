@@ -1675,7 +1675,6 @@ Proof.
             inversion Hv1; subst. right. right.
             exists (vBool false); crush.
             constructor. simpl.
-            destruct (val_dec v1 (vBool false)); crush.
             destruct v1; crush.
             destruct c; crush.
             destruct b; crush.
@@ -1684,16 +1683,117 @@ Proof.
         eapply Subres_sound; eauto.
       }
       { (* opIsNat *)
-        (* BOOKMARK *)
+        simpl in *.
+        left. exists (vOp opIsNat).
+        split; auto.
+        assert (SoundTypeRes r (vOp opIsNat)
+                             (Res (predicate tNat) Trivial Absurd oTop))
+          as Hstr.
+        {
+          constructor; crush.
+          apply SP_NonFalse; crush.
+          unfold predicate.
+          rewrite interp_tAnd.
+          split.
+          {
+            apply interp_tArrow_full.
+            constructor.
+            intros v1 Hv1.
+            apply interp_tNat_exists in Hv1.
+            destruct Hv1 as [n' Heq]. subst. right. right.
+            exists (vBool true); crush.
+          }
+          {
+            apply interp_tArrow_full.
+            constructor.
+            intros v1 Hv1.
+            rewrite interp_tNot in Hv1.
+            inversion Hv1; subst. right. right.
+            exists (vBool false); crush.
+            constructor. simpl.
+            destruct v1; crush.
+            destruct c; crush.
+          }
+        }
+        eapply Subres_sound; eauto.
       }
       { (* opIsStr *)
-
+        simpl in *.
+        left. exists (vOp opIsStr).
+        split; auto.
+        assert (SoundTypeRes r (vOp opIsStr)
+                             (Res (predicate tStr) Trivial Absurd oTop))
+          as Hstr.
+        {
+          constructor; crush.
+          apply SP_NonFalse; crush.
+          unfold predicate.
+          rewrite interp_tAnd.
+          split.
+          {
+            apply interp_tArrow_full.
+            constructor.
+            intros v1 Hv1.
+            apply interp_tStr_exists in Hv1.
+            destruct Hv1 as [n' Heq]. subst. right. right.
+            exists (vBool true); crush.
+          }
+          {
+            apply interp_tArrow_full.
+            constructor.
+            intros v1 Hv1.
+            rewrite interp_tNot in Hv1.
+            inversion Hv1; subst. right. right.
+            exists (vBool false); crush.
+            constructor. simpl.
+            destruct v1; crush.
+            destruct c; crush.
+          }
+        }
+        eapply Subres_sound; eauto.
       }
       { (* opIsPair *)
-
+        simpl in *.
+        left. exists (vOp opIsPair).
+        split; auto.
+        assert (SoundTypeRes r (vOp opIsPair)
+                             (Res (predicate (tProd tAny tAny))
+                                  Trivial
+                                  Absurd
+                                  oTop))
+          as Hstr.
+        {
+          constructor; crush.
+          apply SP_NonFalse; crush.
+          unfold predicate.
+          rewrite interp_tAnd.
+          split.
+          {
+            apply interp_tArrow_full.
+            constructor.
+            intros v1 Hv1.
+            apply interp_tProd_exists in Hv1.
+            destruct Hv1 as [v [v' [Heq [HIn1 HIn2]]]].
+            subst. right. right.
+            exists (vBool true); crush.
+          }
+          {
+            apply interp_tArrow_full.
+            constructor.
+            intros v1 Hv1.
+            rewrite interp_tNot in Hv1.
+            inversion Hv1; subst. right. right.
+            exists (vBool false); crush.
+            constructor. simpl.
+            destruct v1; crush.
+            assert False as impossible.
+            applyH.
+            apply interp_tProd_full; crush.
+            contradiction.
+          }
       }
       { (* opIsZero *)
-
+        (* BOOKMARK *)
       }
       { (* opError *)
         
