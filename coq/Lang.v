@@ -1488,13 +1488,13 @@ Proof.
   intros Γ e R r n res Htype Hsat Hvalof.
   induction Hvalof.
   { (* V_Timeout *)
-    right. right. reflexivity.
+    crush.
   }
   { (* V_Var *)
     inversion Htype; subst.
     remember (var_lookup r x) as Hlook.
     destruct Hlook.
-    {
+    { (* rVal v = var_lookup r x *)
       left. eexists. split. reflexivity.
       assert (Sat r (Is π t)) as Hsatis
           by (eapply Proves_implies_Sat; eassumption).
@@ -1511,30 +1511,194 @@ Proof.
         constructor. constructor. crush.
         destruct (val_dec v (vBool false)) as [Heq | Hneq]; subst.
         { (* v = false *)
-          constructor. eapply M_Is. crush.
-          crush. constructor; crush.
+          constructor. eapply M_Is; crush.
+          constructor; crush.
       }
         { (* v <> false *)
-        apply SP_NonFalse. assumption.
-        eapply M_Is. eassumption.
-        crush. constructor; crush.
-        constructor. constructor.
-        intros contra.
-        apply Hneq. crush.
+          apply SP_NonFalse. assumption.
+          eapply M_Is. eassumption.
+          crush. constructor; crush.
+          constructor; crush.
+          applyH; crush.
         }
         crush.
       }
       eapply Subres_sound; eauto.
     }
-    assert (Sat r (Is π t)) as Hsatis
-        by (eapply Proves_implies_Sat; eassumption).
-    inversion Hsatis; subst.
-    assert (Sat r (Eq (pVar x) π)) as Hsateq
-        by (eapply Proves_implies_Sat; eassumption).
-    inversion Hsateq; subst.
-    crush.
+    { (* rFail f = var_lookup r x *)
+      assert (Sat r (Is π t)) as Hsatis
+          by (eapply Proves_implies_Sat; eassumption).
+      inversion Hsatis; subst.
+      assert (Sat r (Eq (pVar x) π)) as Hsateq
+          by (eapply Proves_implies_Sat; eassumption).
+      inversion Hsateq; crush.
+    }
   }
   { (* V_Const *)
+    inversion Htype; subst.
+    destruct c.
+    { (* vNat *)
+      simpl in *.
+      left. exists (vNat n0).
+      split; auto.
+      assert (SoundTypeRes r (vNat n0) (Res tNat Trivial Absurd oTop))
+        as Hstr.
+      {
+        constructor; crush.
+        apply SP_NonFalse; crush.
+      }
+      eapply Subres_sound; eauto.
+    }
+    { (* vStr *)
+      simpl in *.
+      left. exists (vStr s).
+      split; auto.
+      assert (SoundTypeRes r (vStr s) (Res tStr Trivial Absurd oTop))
+        as Hstr.
+      {
+        constructor; crush.
+        apply SP_NonFalse; crush.
+      }
+      eapply Subres_sound; eauto.
+    }
+    { (* vBool *)
+      destruct b.
+      { (* b = true *)
+        simpl in *.
+        left. exists (vBool true).
+        split; auto.
+        assert (SoundTypeRes r (vBool true) (Res tTrue Trivial Absurd oTop))
+          as Hstr.
+        {
+          constructor; crush.
+          apply SP_NonFalse; crush.
+        }
+        eapply Subres_sound; eauto.
+      }
+      { (* b = false *)
+        simpl in *.
+        left. exists (vBool false).
+        split; auto.
+        assert (SoundTypeRes r (vBool false) (Res tFalse Absurd Trivial oTop))
+          as Hstr by crush.
+        eapply Subres_sound; eauto.
+      }      
+    }
+    { (* vOp *)
+      destruct o.
+      { (* opAdd1 *)
+        simpl in *.
+        left. exists (vOp opAdd1).
+        split; auto.
+        assert (SoundTypeRes r (vOp opAdd1)
+                             (Res (tArrow tNat tNat) Trivial Absurd oTop))
+          as Hstr.
+        {
+          constructor; crush.
+          apply SP_NonFalse; crush.
+          apply interp_tArrow_full.
+          constructor.
+          intros v1 Hv1.
+          apply interp_tNat_exists in Hv1.
+          destruct Hv1 as [n' Heq].
+          subst. right. right.
+          exists (vNat (n' + 1)); crush.
+        }
+        eapply Subres_sound; eauto.
+      }
+      { (* opSub1 *)
+        simpl in *.
+        left. exists (vOp opSub1).
+        split; auto.
+        assert (SoundTypeRes r (vOp opSub1)
+                             (Res (tArrow tNat tNat) Trivial Absurd oTop))
+          as Hstr.
+        {
+          constructor; crush.
+          apply SP_NonFalse; crush.
+          apply interp_tArrow_full.
+          constructor.
+          intros v1 Hv1.
+          apply interp_tNat_exists in Hv1.
+          destruct Hv1 as [n' Heq].
+          subst. right. right.
+          exists (vNat (n' - 1)); crush.
+        }
+        eapply Subres_sound; eauto.
+      }
+      { (* opStrLen *)
+        simpl in *.
+        left. exists (vOp opStrLen).
+        split; auto.
+        assert (SoundTypeRes r (vOp opStrLen)
+                             (Res (tArrow tStr tNat) Trivial Absurd oTop))
+          as Hstr.
+        {
+          constructor; crush.
+          apply SP_NonFalse; crush.
+          apply interp_tArrow_full.
+          constructor.
+          intros v1 Hv1.
+          apply interp_tStr_exists in Hv1.
+          destruct Hv1 as [s Heq].
+          subst. right. right.
+          exists (vNat (String.length s)); crush.
+        }
+        eapply Subres_sound; eauto.
+      }
+      { (* opNot *)
+        simpl in *.
+        left. exists (vOp opNot).
+        split; auto.
+        assert (SoundTypeRes r (vOp opNot)
+                             (Res (predicate tFalse) Trivial Absurd oTop))
+          as Hstr.
+        {
+          constructor; crush.
+          apply SP_NonFalse; crush.
+          unfold predicate.
+          rewrite interp_tAnd.
+          split.
+          {
+            apply interp_tArrow_full.
+            constructor.
+            intros v1 Hv1.
+            rewrite interp_tFalse in Hv1.
+            inversion Hv1; subst. right. right.
+            exists (vBool true); crush.
+          }
+          {
+            apply interp_tArrow_full.
+            constructor.
+            intros v1 Hv1.
+            rewrite interp_tNot in Hv1.
+            inversion Hv1; subst. right. right.
+            exists (vBool false); crush.
+            constructor. simpl.
+            destruct (val_dec v1 (vBool false)); crush.
+            destruct v1; crush.
+            destruct c; crush.
+            destruct b; crush.
+          }
+        }
+        eapply Subres_sound; eauto.
+      }
+      { (* opIsNat *)
+        (* BOOKMARK *)
+      }
+      { (* opIsStr *)
+
+      }
+      { (* opIsPair *)
+
+      }
+      { (* opIsZero *)
+
+      }
+      { (* opError *)
+        
+      }
+    }
     (* BOOKMARK *)
   }
   { (* V_Abs *)
