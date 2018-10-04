@@ -977,13 +977,12 @@ Proof.
   {
     (* SProp_And *)
     intros r Hand Heq.
-    inversion Hand; subst.
-    intuition.
+    inversion Hand; crush.
   }
   {
     (* SProp_Or *)
     intros r Hor Heq.
-    inversion Hor; subst; intuition.
+    inversion Hor; crush.
   }
   {
     (* SProp_Is *)
@@ -1122,7 +1121,16 @@ Proof.
     assert (Sat r p) as Hp by auto.
     eapply Sat_transport; eauto.    
   }
-Qed.  
+Qed.
+
+Lemma Proves_implies_Sat' : forall Γ p r,
+    Forall (Sat r) Γ ->
+    Proves Γ p ->
+    Sat r p.
+Proof.
+  intros.
+  eapply Proves_implies_Sat; eauto.
+Qed.
 
 Inductive ObjSatVal : rho -> obj -> val -> Prop :=
 | OSV_Top : forall r v,
@@ -1159,6 +1167,79 @@ Proof.
   inversion H1; inversion Hsub; crush.
 Qed.
 
+Lemma In_IsEmpty : forall v t (P:Prop),
+    IsEmpty t ->
+    In val (tInterp t) v ->
+    P.
+Proof.
+  intros v t P H1 H2.
+  inversion H1; crush.
+  rewrite H in H2.
+  inversion H2.
+Qed.  
+
+Lemma In_empty : forall v P,
+    In val (Empty_set val) v ->
+    P.
+Proof.
+  intros v p H. inversion H.
+Qed.  
+
+Hint Extern 1 =>
+match goal with
+| [H : In val (Empty_set val) ?v |- ?P] =>
+  apply (In_empty P H)
+| [H : IsEmpty ?t, H' : In val (tInterp ?t) ?v |- ?P] =>
+  apply (In_IsEmpty v t P)
+end.
+
+Lemma Setminus_eq : forall X A B,
+    (Setminus X A B) = (Intersection X A (Complement X B)).
+Proof.
+  intros X A B.
+  apply Extensionality_Ensembles.
+  split.
+  constructor.
+  inversion H; crush.
+  inversion H; crush.
+  constructor; crush.
+  inversion H; crush.
+  inversion H; crush.
+Qed.  
+
+Lemma Complement_singleton : forall v v',
+    v <> v' ->
+    In val (Complement val (Singleton val v')) v.
+Proof.    
+  intros v v' Hneq.
+  intros H. inversion H; crush.
+Qed.
+  
+Hint Extern 1 (In val _ _) =>
+match goal with
+| [ |- In val (Full_set val) _]
+    => constructor
+| [ |- In val (tInterp tTrue) _]
+  => rewrite interp_tTrue
+| [ |- In val (tInterp tFalse) _]
+  => rewrite interp_tFalse
+| [ |- In val (tInterp (tAnd _ _)) _]
+  => rewrite interp_tAnd
+| [ |- In val (Setminus val ?A ?B) ?v]
+  => rewrite Setminus_eq
+| [ |- In val (Intersection val ?A ?B) ?v]
+  => constructor
+| [ |- In val (Complement val (Singleton val _)) _]
+  => apply Complement_singleton
+end. 
+
+Lemma neq_false_Not_False : forall v,
+    v <> (vBool false) ->
+    In val (tInterp (tNot tFalse)) v.
+Proof.
+  crush.
+Qed.
+
 Lemma Sat_false_val : forall r v t1 p1 q1 o1,
     SoundTypeRes r v (Res t1 p1 q1 o1) ->
     v = (vBool false) ->
@@ -1169,16 +1250,10 @@ Proof.
   cbv.
   ifcase.
   { (* is empty (tAnd t1 (tBase btFalse)) *)
-    assert (In val (tInterp t1) (vBool false)) as Ht1 by auto.
-    assert (In val (tInterp tFalse) (vBool false)) as Hfalse
-        by (rewrite interp_tFalse; crush).
     assert (In val (tInterp (tAnd t1 (tBase btFalse))) (vBool false))
-      as Hand by (rewrite interp_tAnd; constructor; auto).
+      as Hand by (rewrite interp_tAnd; crush).
     assert (IsEmpty (tAnd t1 (tBase btFalse))) as Hmtand by auto.
-    assert (tInterp (tAnd t1 (tBase btFalse)) = Empty_set val)
-      as Heqmt by (inversion Hmtand; crush).
-    rewrite Heqmt in *.
-    inversion Hand.
+    eapply In_IsEmpty; eauto.
   }
   { (* is not empty (tAnd t1 (tBase btFalse)) *)
     destruct o1.
@@ -1193,16 +1268,11 @@ Proof.
       assert (ObjSatVal r (oPath p) (vBoolfalse)) as Hobj
           by assumption.
       inversion Hobj; subst.
-      eapply (M_Is p r).
-      eassumption.
-      rewrite interp_tAnd.
-      constructor; auto.
-      rewrite interp_tFalse. constructor.
+      eapply (M_Is p r); crush.
     }
   }
 Qed.
-
-
+  
 Lemma Sat_nonfalse_val : forall r v t1 p1 q1 o1,
     SoundTypeRes r v (Res t1 p1 q1 o1) ->
     v <> (vBool false) ->
@@ -1214,24 +1284,14 @@ Proof.
   ifcase.
   { (* is empty (tAnd t1 (tNot (tBase btFalse))) *)
     assert (In val (tInterp t1) v) as Ht1 by auto.
-    assert (In val (tInterp (tNot tFalse)) v) as Hnotfalse.
-    {
-      rewrite interp_tNot.
-      constructor.
-      constructor.
-      intros contra.
-      apply Hneq.
-      rewrite interp_tFalse in contra.
-      inversion contra.
-      reflexivity.
-    }
+    assert (In val (tInterp (tNot tFalse)) v) as Hnotfalse
+    by (apply neq_false_Not_False; crush).
     assert (In val (tInterp (tAnd t1 (tNot tFalse))) v) as Hand
         by (rewrite interp_tAnd; crush).
     assert (IsEmpty (tAnd t1 (tNot tFalse))) as Hmtand by auto.
     assert (tInterp (tAnd t1 (tNot tFalse)) = Empty_set val)
       as Heqmt by (inversion Hmtand; crush).
-    rewrite Heqmt in *.
-    inversion Hand.
+    rewrite Heqmt in *. crush.
   }
   { (* is not empty (tAnd t1 (tNot (tBase btFalse))) *)
     destruct o1.
@@ -1248,16 +1308,18 @@ Proof.
       inversion Hobj; subst.
       eapply (M_Is p r).
       eassumption.
-      rewrite interp_tAnd.
-      constructor; auto.
-      rewrite interp_tNot. constructor. constructor.
-      intros contra. apply Hneq.
-      rewrite interp_tFalse in contra.
-      inversion contra; crush.
+      crush.
     }
   }
 Qed.
  
+Hint Extern 1 (Sat _ _) => 
+match goal with
+| [H : Proves ?Γ ?p |- Sat ?r ?p]
+  => apply (Proves_implies_Sat H)
+| [H : (Forall (Sat ?r) ?Γ) |- Sat ?r ?p]
+  => apply (Proves_implies_Sat' H)
+end. 
 
 Lemma Subres_sound : forall Γ r v R1 R2,
     Forall (Sat r) Γ ->
@@ -1277,23 +1339,13 @@ Proof.
       apply SP_False.
       assert (Sat r (isa o1 (tAnd t1 tFalse))) as Hv
           by (eapply Sat_false_val; eauto).
-      assert (Forall (Sat r) (isa o1 (tAnd t1 tFalse) :: Γ))
-        as Hsat' by crush.
-      eapply Proves_implies_Sat.
-      eassumption.
-      assumption.
+      crush.
     }
     { (* v <> false *)
       apply SP_NonFalse; auto.
-      assert (Sat r (isa o1 (tAnd t1 (tNot tFalse)))) as Hv.
-      {
-        eapply Sat_nonfalse_val; eauto.
-      }
-      assert (Forall (Sat r) ((isa o1 (tAnd t1 (tNot tFalse))) :: Γ))
-        as Hsat' by crush.
-      eapply Proves_implies_Sat.
-      eassumption.
-      assumption.
+      assert (Sat r (isa o1 (tAnd t1 (tNot tFalse)))) as Hv
+          by (eapply Sat_nonfalse_val; eauto).
+      crush.
     }
     match goal with
       [H : Subtype _ _ |- _] => inversion H
@@ -1306,11 +1358,7 @@ Proof.
       {
         assert (Sat r (isa o1 (tAnd t1 tFalse)))
           as Hisa by (eapply Sat_false_val; eauto).
-        assert (Forall (Sat r) (isa o1 (tAnd t1 tFalse) :: Γ))
-          as Hsat' by auto.
-        assert (Proves (isa o1 (tAnd t1 tFalse) :: Γ) Absurd)
-          as Hproof by assumption.
-        apply (Proves_implies_Sat Hproof Hsat').
+        crush.
       }
       inversion impossible.
     }
@@ -1321,9 +1369,7 @@ Proof.
           as Hisa by (eapply Sat_nonfalse_val; eauto).
         assert (Forall (Sat r) (isa o1 (tAnd t1 (tNot tFalse)) :: Γ))
           as Hsat' by auto.
-        assert (Proves (isa o1 (tAnd t1 (tNot tFalse)) :: Γ) Absurd)
-          as Hproof by assumption.
-        apply (Proves_implies_Sat Hproof Hsat').
+        crush.
       }
       inversion impossible.
     }
@@ -1350,11 +1396,7 @@ Proof.
         {
           assert (Sat r (isa o1 (tAnd t1 (tNot tFalse))))
             as Hisa by (eapply Sat_nonfalse_val; eauto).
-          assert (Forall (Sat r) (isa o1 (tAnd t1 (tNot tFalse)) :: p1 :: Γ))
-            as Hsat' by auto.
-          assert (Proves (isa o1 (tAnd t1 (tNot tFalse)) :: p1 :: Γ) Absurd)
-            as Hproof by assumption.
-          apply (Proves_implies_Sat Hproof Hsat').
+          crush.
         }
         inversion impossible.
       }
@@ -1377,11 +1419,7 @@ Proof.
         {
           assert (Sat r (isa o1 (tAnd t1 (tNot tFalse))))
             as Hisa by (eapply Sat_nonfalse_val; eauto).
-          assert (Forall (Sat r) (isa o1 (tAnd t1 (tNot tFalse)) :: p1 :: Γ))
-            as Hsat' by auto.
-          assert (Proves (isa o1 (tAnd t1 (tNot tFalse)) :: p1 :: Γ) Absurd)
-            as Hproof by assumption.
-          apply (Proves_implies_Sat Hproof Hsat').
+          crush.
         }
         inversion impossible.
       }
@@ -1404,11 +1442,7 @@ Proof.
         {
           assert (Sat r (isa o1 (tAnd t1 tFalse)))
             as Hisa by (eapply Sat_false_val; eauto).
-          assert (Forall (Sat r) (isa o1 (tAnd t1 tFalse) :: q1 :: Γ))
-            as Hsat' by auto.
-          assert (Proves (isa o1 (tAnd t1 tFalse) :: q1 :: Γ) Absurd)
-            as Hproof by assumption.
-          apply (Proves_implies_Sat Hproof Hsat').
+          crush.
         }
         inversion impossible.
       }
@@ -1431,19 +1465,11 @@ Proof.
         {
           assert (Sat r (isa o1 (tAnd t1 tFalse)))
             as Hisa by (eapply Sat_false_val; eauto).
-          assert (Forall (Sat r) (isa o1 (tAnd t1 tFalse) :: q1 :: Γ))
-            as Hsat' by auto.
-          assert (Proves (isa o1 (tAnd t1 tFalse) :: q1 :: Γ) Absurd)
-            as Hproof by assumption.
-          apply (Proves_implies_Sat Hproof Hsat').
+          crush.
         }
         inversion impossible.
       }
       { (* v <> false *)
-        constructor.
-        constructor.
-        intros Hcontra.
-        apply Hneq.
         crush.
       }
     }    
