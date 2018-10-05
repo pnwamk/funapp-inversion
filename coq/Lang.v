@@ -99,15 +99,12 @@ Inductive var : Set :=
   Var : nat -> var.
 Hint Constructors var.
 
-Inductive int : Set :=
-  iBase : ty -> ty -> int
-| iCons : ty -> ty -> int -> int.
-Hint Constructors int.
+Definition interface := list (ty * ty).
 
 Inductive exp : Set :=
   eVar   : var -> exp
 | eConst : const -> exp
-| eAbs   : var -> int -> var -> exp -> exp (* μf.{τ→τ ...}λx.e *)
+| eAbs   : var -> interface -> var -> exp -> exp
 | eApp   : exp -> exp -> exp
 | ePair  : exp -> exp -> exp
 | eFst   : exp -> exp
@@ -125,7 +122,7 @@ Notation "(eOp o )"   := (eConst (cOp o)).
 Inductive val : Set :=
   vConst : const -> val
 | vPair  : val -> val -> val
-| vClos  : rho -> var -> int -> var -> exp -> val
+| vClos  : rho -> var -> interface -> var -> exp -> val
 with
 rho : Set :=
   rhoNull  : rho
@@ -212,9 +209,12 @@ Definition var_dec : forall (x y : var),
 Proof. decide equality. Defined.
 Hint Resolve var_dec.
 
-Definition int_dec : forall (x y : int),
+Definition int_dec : forall (x y : interface),
     {x = y} + {x <> y}.
-Proof. decide equality. Defined.
+Proof.
+  Hint Resolve list_eq_dec.
+  repeat decide equality.
+Defined.
 Hint Resolve int_dec.
 
 Definition exp_dec : forall (x y : exp),
@@ -516,81 +516,12 @@ Axiom interp_tProd_full : forall (v1 v2:val) (t1 t2:ty),
     In val (tInterp (tProd t1 t2)) (vPair v1 v2).
 Hint Resolve interp_tProd_full.
 
-Inductive ValOfTy : rho -> exp -> ty -> Prop :=
-| VOT_Timeout :   forall r e t,
-    (forall n, ValOf n r e rTimeout) ->
-    ValOfTy r e t
-| VOT_Error :   forall r e t,
-    (exists n, ValOf n r e rError) ->
-    ValOfTy r e t
-| VOT_Val :   forall r e t,
-    (exists n v, ValOf n r e (rVal v)
-                 /\ In val (tInterp t) v) ->
-    ValOfTy r e t.
-Hint Constructors ValOfTy.
+Definition Subtype (t1 t2 : ty) :=
+  Included val (tInterp t1) (tInterp t2).
+Hint Unfold Subtype.
 
-Inductive ApplyVal : val -> val -> result -> Prop :=
-| Apply_Op : forall o v res,
-    apply_op o v = res ->
-    ApplyVal (vOp o) v res
-| Apply_Error : forall r f i x e v,
-    (exists n, ValOf n (rhoCons x v (rhoCons f (vClos r f i x e) r))
-                     e
-                     rError) ->
-    ApplyVal (vClos r f i x e) v rError
-| Apply_Stuck : forall r f i x e v,
-    (exists n, ValOf n (rhoCons x v (rhoCons f (vClos r f i x e) r))
-                     e
-                     rStuck) ->
-    ApplyVal (vClos r f i x e) v rStuck
-| Apply_Val : forall r f i x e v,
-    (exists n v, ValOf n (rhoCons x v (rhoCons f (vClos r f i x e) r))
-                       e
-                       (rVal v)) ->
-    ApplyVal (vClos r f i x e) v rStuck
-| Apply_Timeout : forall r f i x e v,
-    (forall n, ValOf n (rhoCons x v (rhoCons f (vClos r f i x e) r))
-                     e
-                     rTimeout) ->
-    ApplyVal (vClos r f i x e) v rTimeout.
-Hint Constructors ApplyVal.
-
-Inductive IsProc : val -> Prop :=
-| IP_Op : forall o, IsProc (vOp o)
-| IP_Clos : forall r f i x e, IsProc (vClos r f i x e).
-Hint Constructors IsProc.
-
-Inductive ValMaps : val -> ty -> ty -> Prop :=
-| Maps : forall v t1 t2,
-    IsProc v ->
-    (forall v1,
-        In val (tInterp t1) v1 ->
-        ApplyVal v v1 rTimeout
-        \/ ApplyVal v v1 rError
-        \/ (exists v2, ApplyVal v v1 (rVal v2)
-                       /\ In val (tInterp t2) v2)) ->
-    ValMaps v t1 t2.
-Hint Constructors ValMaps.
-
-Axiom interp_tArrow_exists : forall (t1 t2:ty) (v:val),
-    In val (tInterp (tArrow t1 t2)) v ->
-    ValMaps v t1 t2.
-Axiom interp_tArrow_full : forall (v:val) (t1 t2:ty),
-    ValMaps v t1 t2 ->
-    In val (tInterp (tArrow t1 t2)) v.
-
-
-Inductive Subtype : ty -> ty -> Prop :=
-| ST : forall t1 t2,
-    Included val (tInterp t1) (tInterp t2) ->
-    Subtype t1 t2.
-Hint Constructors Subtype.
-
-Inductive IsEmpty : ty -> Prop :=
-| IE : forall t,
-    (tInterp t) = (Empty_set val) ->
-    IsEmpty t.
-Hint Constructors IsEmpty.
+Definition IsEmpty (t: ty) := (tInterp t) = (Empty_set val).
+Hint Unfold IsEmpty.
 
 Axiom empty_dec : forall (t: ty), {IsEmpty t} + {~ IsEmpty t}.
 
@@ -780,22 +711,29 @@ Definition const_tres (c:const) : tres :=
   end.
 Hint Unfold const_tres.
 
-Inductive InInterface : ty -> ty -> int -> Prop :=
-| InI_Base : forall t1 t2,
-    InInterface t1 t2 (iBase t1 t2)
+Inductive InInterface : ty -> ty -> interface -> Prop :=
 | InI_First : forall t1 t2 i,
-    InInterface t1 t2 (iCons t1 t2 i)
+    InInterface t1 t2 ((t1,t2)::i)
 | InI_Rest : forall t1 t2 t3 t4 i,
     InInterface t1 t2 i ->
-    InInterface t1 t2 (iCons t3 t4 i).
+    InInterface t1 t2 ((t3,t4)::i).
 Hint Constructors InInterface.
 
-Fixpoint int_to_ty (i:int) : ty :=
+Fixpoint interface_ty (i:interface) : ty :=
   match i with
-  | (iBase t1 t2) => tArrow t1 t2
-  | (iCons t1 t2 i') => (tAnd (tArrow t1 t2) (int_to_ty i'))
+  | [] => tArrow tEmpty tAny
+  | (t1,t2)::i' => (tAnd (tArrow t1 t2)
+                         (interface_ty i'))
   end.
-Hint Unfold int_to_ty.
+Hint Unfold interface_ty.
+
+Fixpoint neg_interface_ty (i:interface) : ty :=
+  match i with
+  | [] => tAny
+  | (t1,t2)::i' => (tAnd (tNot (tArrow t1 t2))
+                         (neg_interface_ty i'))
+  end.
+Hint Unfold interface_ty.
 
 Fixpoint fvsPath (π:path) : list var :=
   match π with
@@ -822,17 +760,6 @@ Fixpoint fvs (Γ:gamma) : list var :=
   | p::ps => (fvsP p) ++ (fvs ps)
   end.
 Hint Unfold fvs.
-
-Axiom Pred : ty -> ty -> ty -> ty -> Prop.
-Axiom Pred_prop : forall funty argty tpos tneg,
-    Pred funty argty tpos tneg ->
-    forall v1 v2 v3,
-      In val (tInterp funty) v1 ->
-      In val (tInterp argty) v2 ->
-      ApplyVal v1 v2 (rVal v3) ->
-      (v3 <> (vBool false) /\ In val (tInterp tpos) v2)
-      \/
-      (v3 = (vBool false) /\ In val (tInterp tneg) v2).
 
 Definition objOr (o1 o2:obj) : obj :=
   match o1 , o2 with
@@ -862,6 +789,9 @@ Definition alias (x : var) (R:tres) : prop :=
   end.
 Hint Unfold alias.
 
+Axiom Pred : ty -> ty -> ty -> ty -> Prop.
+
+
 Inductive TypeOf : gamma -> exp -> tres -> Prop :=
 | T_Var : forall Γ x π t R,
     Proves Γ (Eq (pVar x) π) ->
@@ -876,19 +806,18 @@ Inductive TypeOf : gamma -> exp -> tres -> Prop :=
 | T_Const : forall Γ c R,
     Subres Γ (const_tres c) R ->
     TypeOf Γ (eConst c) R
-| T_Abs : forall Γ f i x e fty t t' R,
+| T_Abs : forall Γ f i i' x e t R,
     x <> f ->
     ~ List.In x (fvs Γ) ->
     ~ List.In f (fvs Γ) ->
-    fty = (int_to_ty i) ->
-    t = (tAnd fty (tNot t')) ->
-    ~ (Subtype t tEmpty) ->
+    t = (tAnd (interface_ty i) (neg_interface_ty i')) ->
+    ~ IsEmpty t ->
     (forall t1 t2,
         InInterface t1 t2 i ->
-        TypeOf ((Is (pVar x) t1)::(Is (pVar f) fty)::Γ)
+        TypeOf ((Is (pVar x) t1)::(Is (pVar f) t)::Γ)
                e
                (Res t2 Trivial Trivial oTop)) ->
-    Subres Γ (Res fty Trivial Absurd oTop) R ->
+    Subres Γ (Res t Trivial Absurd oTop) R ->
     TypeOf Γ (eAbs f i x e) R
 | T_App : forall Γ e1 e2 t1 t2 o2 t tpos tneg R,
     TypeOf Γ e1 (Res t1 Trivial Trivial oTop) ->
@@ -947,13 +876,100 @@ Inductive Sat : rho -> prop -> Prop :=
     Sat r (Or p q)
 | M_Is : forall π t r v,
     path_lookup r π = rVal v ->
-    In val (tInterp t) v ->
+    TypeOfVal v t ->
     Sat r (Is π t)
 | M_Eq : forall π1 π2 v r,
     path_lookup r π1 = rVal v ->
     path_lookup r π2 = rVal v ->
-    Sat r (Eq π1 π2).
-Hint Constructors Sat.
+    Sat r (Eq π1 π2)
+
+with
+TypeOfVal : val -> ty -> Prop :=
+| TOV_Const : forall c t,
+    Subtype (const_type c) t ->
+    TypeOfVal (vConst c) t
+| TOV_Pair : forall v1 v2 t1 t2 t,
+    TypeOfVal v1 t1 ->
+    TypeOfVal v2 t2 ->
+    Subtype (tProd t1 t2) t ->
+    TypeOfVal (vPair v1 v2) t
+| TOV_Clos : forall r f i i' x e t funt Γ,
+    f <> x ->
+    ~ List.In f (fvs Γ) ->
+    ~ List.In x (fvs Γ) ->
+    t = (tAnd (interface_ty i) (neg_interface_ty i')) ->
+    ~ IsEmpty t ->
+    Forall (Sat r) Γ ->
+    (forall t1 t2,
+        InInterface t1 t2 i ->
+        TypeOf ((Is (pVar x) t1)::(Is (pVar f) t)::Γ)
+               e
+               (Res t2 Trivial Trivial oTop)) ->
+    Subtype t funt ->
+    TypeOfVal (vClos r f i x e) funt.      
+Hint Constructors Sat TypeOfVal.
+
+
+Inductive ApplyVal : val -> val -> result -> Prop :=
+| Apply_Op : forall o v res,
+    apply_op o v = res ->
+    ApplyVal (vOp o) v res
+| Apply_Error : forall r f i x e v,
+    (exists n, ValOf n (rhoCons x v (rhoCons f (vClos r f i x e) r))
+                     e
+                     rError) ->
+    ApplyVal (vClos r f i x e) v rError
+| Apply_Stuck : forall r f i x e v,
+    (exists n, ValOf n (rhoCons x v (rhoCons f (vClos r f i x e) r))
+                     e
+                     rStuck) ->
+    ApplyVal (vClos r f i x e) v rStuck
+| Apply_Val : forall r f i x e v,
+    (exists n v, ValOf n (rhoCons x v (rhoCons f (vClos r f i x e) r))
+                       e
+                       (rVal v)) ->
+    ApplyVal (vClos r f i x e) v rStuck
+| Apply_Timeout : forall r f i x e v,
+    (forall n, ValOf n (rhoCons x v (rhoCons f (vClos r f i x e) r))
+                     e
+                     rTimeout) ->
+    ApplyVal (vClos r f i x e) v rTimeout.
+Hint Constructors ApplyVal.
+
+Inductive IsProc : val -> Prop :=
+| IP_Op : forall o, IsProc (vOp o)
+| IP_Clos : forall r f i x e, IsProc (vClos r f i x e).
+Hint Constructors IsProc.
+
+Inductive ValMaps : val -> ty -> ty -> Prop :=
+| Maps : forall v t1 t2,
+    IsProc v ->
+    (forall v1,
+        TypeOfVal v1 t1 ->
+        ApplyVal v v1 rTimeout
+        \/ ApplyVal v v1 rError
+        \/ (exists v2, ApplyVal v v1 (rVal v2)
+                       /\ TypeOfVal v2 t2)) ->
+    ValMaps v t1 t2.
+Hint Constructors ValMaps.
+
+Axiom interp_tArrow_exists : forall (t1 t2:ty) (v:val),
+    In val (tInterp (tArrow t1 t2)) v ->
+    ValMaps v t1 t2.
+Axiom interp_tArrow_full : forall (v:val) (t1 t2:ty),
+    ValMaps v t1 t2 ->
+    In val (tInterp (tArrow t1 t2)) v.
+
+Axiom Pred_def : forall funty argty tpos tneg,
+    Pred funty argty tpos tneg ->
+    forall v1 v2 v3,
+      TypeOfVal v1 funty ->
+      TypeOfVal v2 argty ->
+      ApplyVal v1 v2 (rVal v3) ->
+      (v3 <> (vBool false) /\ TypeOfVal v2 tpos)
+      \/
+      (v3 = (vBool false) /\ TypeOfVal v2 tneg).
+
 
 
 Lemma SubstPath_lookup_eq : forall r π1 π1' π π' v,
@@ -1015,6 +1031,64 @@ Proof.
   }
 Qed.  
 
+Lemma Subtype_tAnd_R : forall t t1 t2,
+    Subtype t t1 ->
+    Subtype t t2 ->
+    Subtype t (tAnd t1 t2).
+Proof.
+  intros.
+  unfold Subtype in *.
+  crush.
+Qed.
+
+Lemma Subtype_tProd_And : forall t1 t2 t1' t2' t t',
+    Subtype (tProd t1 t2) t ->
+    Subtype (tProd t1' t2') t' ->
+    Subtype (tProd (tAnd t1 t1') (tAnd t2 t2')) (tAnd t t').
+Proof.
+Admitted.
+
+Lemma non_IsEmpty_interface_combine_neg : forall i i' i'',
+    ~ IsEmpty (tAnd (interface_ty i) (neg_interface_ty i')) ->
+    ~ IsEmpty (tAnd (interface_ty i) (neg_interface_ty i'')) ->
+    ~ IsEmpty (tAnd (interface_ty i) (neg_interface_ty (i' ++ i''))).
+Proof.
+Admitted.
+
+
+Lemma TypeOfVal_And : forall v t1 t2,
+    TypeOfVal v t1 ->
+    TypeOfVal v t2 ->
+    TypeOfVal v (tAnd t1 t2).
+Proof.
+  intros v.
+  induction v.
+  {
+    intros t1 t2 H1 H2.
+    constructor.
+    inversion H1. inversion H2. subst.
+    apply Subtype_tAnd_R; auto.
+  }
+  {
+    intros t1 t2 H1 H2.
+    inversion H1. inversion H2. subst.
+    assert (TypeOfVal v1 (tAnd t0 t4)) as H1And by crush.
+    assert (TypeOfVal v2 (tAnd t3 t5)) as H2And by crush.
+    apply (TOV_Pair H1And H2And).
+    apply Subtype_tProd_And; auto.
+  }
+  {
+    intros t1 t2 H1 H2.
+    inversion H1.
+    inversion H2.
+    subst.
+    econstructor; auto.
+    simpl; auto. simpl; auto.
+    apply (non_IsEmpty_interface_combine_neg i i' i'0); assumption.
+    intros t t' HIn.
+    
+  }
+  
 (* i.e. lemma 1 from ICFP 2010 *)
 Lemma Proves_implies_Sat : forall Γ p r,
     Proves Γ p ->
@@ -1504,6 +1578,43 @@ Proof.
 Qed.
 
 
+Lemma closure_interface_lemma : forall i r f x e Γ,
+    x <> f ->
+    ~ List.In f (fvs Γ) ->
+    ~ List.In x (fvs Γ) ->
+    (forall t t' : ty,
+        InInterface t t' i ->
+        TypeOf (Is (pVar x) t :: Is (pVar f) (int_to_ty i) :: Γ) e
+               (Res t' Trivial Trivial oTop)) ->
+    Forall (Sat r) Γ ->
+    In val (tInterp (int_to_ty i)) (vClos r f i x e).
+Proof.
+  intro i.
+  induction i as [| t1 t2 i' IH].
+  {
+    intros r f x e Γ Hneq Hffresh Hxfresh HInInt Hsat.
+    simpl.
+    apply interp_tArrow_full.
+    constructor; crush.
+  }
+  {
+    intros r f x e Γ Hneq Hffresh Hxfresh HInInt Hsat.
+    simpl.
+    rewrite interp_tAnd.
+    split.
+    { (* t1 -> t2 *)
+      apply interp_tArrow_full.
+      constructor; auto.
+      intros v1 H1.
+(*      
+    }
+    { (* i' *)
+      
+    }
+  }
+*)
+Admitted.
+
 Lemma lemma3 : forall Γ e R r n res,
       TypeOf Γ e R ->
       Forall (Sat r) Γ ->
@@ -1921,7 +2032,21 @@ Proof.
     }
   }
   { (* V_Abs *)
-    (* BOOKMARK *)
+    inversion Htype; subst.
+    left. exists (vClos r f i x e); split; auto.
+    assert (SoundTypeRes r (vClos r f i x e)
+                         (Res (int_to_ty i)
+                              Trivial
+                              Absurd
+                              oTop))
+      as Hstr.
+    {
+      constructor; crush.
+      constructor; crush.
+      eapply closure_interface_lemma; eauto.
+    }
+      (* BOOKMARK *)
+      eapply Subres_sound; eauto.
   }
   { (* V_App_Fail1 *)
   }
