@@ -1031,6 +1031,13 @@ Proof.
   }
 Qed.  
 
+Lemma TypeOfVal_Subsume : forall v t t',
+    TypeOfVal v t ->
+    Subtype t t' ->
+    TypeOfVal v t'.
+Proof.
+Admitted.
+
 Lemma Subtype_tAnd_R : forall t t1 t2,
     Subtype t t1 ->
     Subtype t t2 ->
@@ -1047,6 +1054,7 @@ Lemma Subtype_tProd_And : forall t1 t2 t1' t2' t t',
     Subtype (tProd (tAnd t1 t1') (tAnd t2 t2')) (tAnd t t').
 Proof.
 Admitted.
+(* TODO this should be a fairly straightforward proof *)
 
 Lemma non_IsEmpty_interface_combine_neg : forall i i' i'',
     ~ IsEmpty (tAnd (interface_ty i) (neg_interface_ty i')) ->
@@ -1054,7 +1062,57 @@ Lemma non_IsEmpty_interface_combine_neg : forall i i' i'',
     ~ IsEmpty (tAnd (interface_ty i) (neg_interface_ty (i' ++ i''))).
 Proof.
 Admitted.
+(* Justification: if you look at the emptiness algorithm, a
+   single negative arrow must refute the combination of the
+   positive ones, thus if none of the negative arrows in i'
+   and i'' made i a contradiction before, they cannot
+   together since they are just the sum of their parts. *)
 
+Lemma TypeOf_env_weakening : forall Γ Γ' e R,
+    Forall (Proves Γ') Γ ->
+    TypeOf Γ e R ->
+    TypeOf Γ' e R.
+Proof.
+Admitted.
+(* TODO should be straightforward *)
+
+Lemma neg_interface_ty_app : forall i i',
+    neg_interface_ty (i ++ i') =
+    tAnd (neg_interface_ty i) (neg_interface_ty i').
+Proof.
+Admitted. (* Obvious *)
+
+Lemma no_fvs_app : forall v Γ Γ',
+    ~ List.In v (fvs Γ) ->
+    ~ List.In v (fvs Γ') ->
+    ~ List.In v (fvs (Γ ++ Γ')).
+Proof.
+Admitted.
+
+Lemma Sat_app : forall r Γ Γ',
+    Forall (Sat r) Γ ->
+    Forall (Sat r) Γ' ->
+    Forall (Sat r) (Γ ++ Γ').
+Proof.
+Admitted.  
+
+Lemma Proves_I_am_lazy : forall v0 t v i i' i'0 Γ Γ0,
+    Forall
+      (Proves
+         (Is (pVar v0) t
+             :: Is (pVar v)
+             (tAnd (interface_ty i) (neg_interface_ty (i' ++ i'0)))
+             :: Γ ++ Γ0))
+      (Is (pVar v0) t
+          :: Is (pVar v) (tAnd (interface_ty i) (neg_interface_ty i'0)) :: Γ0).
+Proof.
+Admitted.
+
+Lemma IsEmpty_no_vals : forall v t,
+    IsEmpty t ->
+  ~ TypeOfVal v t.
+Proof.
+Admitted.  
 
 Lemma TypeOfVal_And : forall v t1 t2,
     TypeOfVal v t1 ->
@@ -1082,22 +1140,58 @@ Proof.
     inversion H1.
     inversion H2.
     subst.
-    econstructor; auto.
-    simpl; auto. simpl; auto.
+    assert (v <> v0) as Hneq by assumption.
+    assert (~ List.In v (fvs (Γ ++ Γ0))) as Hnov
+        by (apply no_fvs_app; auto).
+    assert (~ List.In v0 (fvs (Γ ++ Γ0))) as Hnov0
+        by (apply no_fvs_app; auto).
+    eapply TOV_Clos.
+    assumption.
+    exact Hnov.
+    exact Hnov0.
+    reflexivity.
     apply (non_IsEmpty_interface_combine_neg i i' i'0); assumption.
+    apply Sat_app; assumption.
     intros t t' HIn.
-    
+    assert
+      (TypeOf
+         (Is (pVar v0) t
+             :: Is (pVar v) (tAnd (interface_ty i) (neg_interface_ty i'0))
+             :: Γ0) e (Res t' Trivial Trivial oTop)) as Hfun by auto.
+    eapply (TypeOf_env_weakening _ Hfun).
+    rewrite neg_interface_ty_app.
+    unfold Subtype in *.
+    unfold Included in *.
+    intros x Hx. repeat rewrite interp_tAnd in *.
+    split. applyH.
+    inversion Hx; subst.
+    split. auto. inversion H0; subst. auto.
+    applyH.
+    inversion Hx; subst.
+    split. auto. inversion H0; subst. auto.
+    Unshelve.
+    apply Proves_I_am_lazy.
   }
-  
+Qed.
+
+Inductive WellFormedVals : rho -> Prop :=
+| WFV_Nil : WellFormedVals rhoNull
+| WFV_Cons : forall x v r,
+    WellFormedVals r ->
+    TypeOfVal v tAny ->
+    WellFormedVals (rhoCons x v r).
+Hint Constructors WellFormedVals.
+
 (* i.e. lemma 1 from ICFP 2010 *)
 Lemma Proves_implies_Sat : forall Γ p r,
     Proves Γ p ->
+    WellFormedVals r ->
     Forall (Sat r) Γ ->
     Sat r p.
 Proof.
   intros Γ p r Hproves.
   generalize dependent r.
-  induction Hproves; intros r Hsat.
+  induction Hproves; intros r Hwfv Hsat.
   { (* P_Atom *)
     eapply Forall_forall; eassumption.
   }
@@ -1109,22 +1203,19 @@ Proof.
     assert (Sat r (Is π t2)) as H2 by auto.
     inversion H1. inversion H2. subst.
     assert (v = v0) as Heq by crush. subst.
-    eapply M_Is. eassumption. crush.
+    eapply M_Is. eassumption.
+    apply TypeOfVal_And; crush.
   }
   { (* P_Empty *)
     assert (Sat r (Is π tEmpty)) as H by auto.
-    inversion H. subst. rewrite interp_tEmpty in *.
-    match goal with
-    | [H: In val (Empty_set val) _ |- _] => inversion H
-    end.
+    inversion H. subst. remember IsEmpty_no_vals as nomt.
+    applyHinH. contradiction. unfold IsEmpty. crush.
   }
   { (* P_Sub *)
     assert (Sat r (Is π t1)) as Ht1 by auto.
     inversion Ht1; subst.
     econstructor. eassumption.
-    match goal with
-    | [H: Subtype _ _ |- _] => inversion H; crush
-    end.
+    eapply TypeOfVal_Subsume. eassumption. assumption.
   }
   { (* P_Fst *)
     assert (Sat r (Is (pFst π) t)) as H by auto.
@@ -1142,6 +1233,8 @@ Proof.
     }
     destruct H' as [v' Hv'].
     eapply (M_Is π r Hv').
+    econstructor. eassumption.
+    (* BOOKMARK *)
     apply interp_tProd_full; auto.
     rewrite interp_tAny.
     constructor.
