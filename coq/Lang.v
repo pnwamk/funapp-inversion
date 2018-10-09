@@ -3,11 +3,10 @@ Require Import CpdtTactics.
 Require Import Bool.
 Require Import Nat.
 Require Import String.
-Require Import List.
-Import ListNotations.
-Require Import Permutation.
 Require Import Ensembles.
 Require Import Classical_sets.
+Require Import List.
+Import ListNotations.
 
 Set Implicit Arguments.
 
@@ -474,6 +473,11 @@ Proof.
 (* Subtyping                                              *)
 (**********************************************************)
 
+Notation "x '∈' T" :=
+  (Ensembles.In val T x) (at level 55, right associativity).
+Notation "x '∉' T" :=
+  (~ Ensembles.In val T x) (at level 55, right associativity).
+
 (* the domain types are denoted into *)
 Axiom tInterp : ty -> (Ensemble val).
 Axiom interp_tAny : tInterp tAny = (Full_set val).
@@ -494,32 +498,33 @@ Hint Rewrite interp_tTrue.
 Axiom interp_tFalse : tInterp tFalse = (Singleton val (vConst (cBool false))).
 Hint Rewrite interp_tFalse.
 Axiom interp_tNat_exists : forall (v:val),
-    In val (tInterp tNat) v ->
+    v ∈ (tInterp tNat) ->
     exists (n:nat), v = (vConst (cNat n)).
 Axiom interp_tNat_full : forall (n:nat),
-    In val (tInterp tNat) (vConst (cNat n)).
+    (vConst (cNat n)) ∈ (tInterp tNat).
 Hint Resolve interp_tNat_full.
 Axiom interp_tStr_exists : forall (v:val),
-    In val (tInterp tStr) v ->
+    v ∈ (tInterp tStr) ->
     exists (s:string), v = (vConst (cStr s)).
 Axiom interp_tStr_full : forall (s:string),
-    In val (tInterp tStr) (vConst (cStr s)).
+    (vConst (cStr s)) ∈ (tInterp tStr).
 Hint Resolve interp_tStr_full.
 Axiom interp_tProd_exists : forall (t1 t2:ty) (v:val),
-    In val (tInterp (tProd t1 t2)) v ->
+    v ∈ (tInterp (tProd t1 t2)) ->
     exists (v1 v2:val), v = (vPair v1 v2)
-                        /\ In val (tInterp t1) v1
-                        /\ In val (tInterp t2) v2.
+                        /\ v1 ∈ (tInterp t1)
+                        /\ v2 ∈ (tInterp t2).
 Axiom interp_tProd_full : forall (v1 v2:val) (t1 t2:ty),
-    In val (tInterp t1) v1 ->
-    In val (tInterp t2) v2 ->
-    In val (tInterp (tProd t1 t2)) (vPair v1 v2).
+    v1 ∈ (tInterp t1) ->
+    v2 ∈ (tInterp t2) ->
+    (vPair v1 v2) ∈ (tInterp (tProd t1 t2)).
 Hint Resolve interp_tProd_full.
 
-Definition Subtype (t1 t2 : ty) :=
-  Included val (tInterp t1) (tInterp t2).
-Hint Unfold Subtype.
+Notation "A '⊆' B" :=
+  (Included val A B) (at level 55, right associativity).
 
+Definition Subtype (t1 t2:ty) : Prop := (tInterp t1) ⊆ (tInterp t2).
+  
 Definition IsEmpty (t: ty) := (tInterp t) = (Empty_set val).
 Hint Unfold IsEmpty.
 
@@ -572,7 +577,7 @@ Inductive SubstProp : prop -> path -> path -> prop -> Prop :=
 
 Inductive Proves : gamma -> prop -> Prop :=
 | P_Atom : forall Γ p,
-    List.In p Γ ->
+    In p Γ ->
     Proves Γ p
 | P_Trivial : forall Γ,
     Proves Γ Trivial
@@ -627,6 +632,29 @@ Inductive Proves : gamma -> prop -> Prop :=
     Proves Γ q.
 Hint Constructors Proves.
 
+Lemma P_Subset : forall Γ Γ' p,
+    Proves Γ p ->
+    incl Γ Γ' ->
+    Proves Γ' p.
+Proof with auto.
+  intros Γ Γ' p Hproves.
+  generalize dependent Γ'. 
+  induction Hproves; crush.
+  eapply P_Empty... 
+  eapply P_Sub... 
+  eapply P_AndE_L... 
+  eapply P_AndE_R... 
+  eapply P_OrE...
+  apply IHHproves2; crush.
+  apply IHHproves3; crush.
+  eapply P_Refl...
+  eapply P_Subst.
+  apply IHHproves1...
+  apply IHHproves2...
+  assumption.
+Qed.
+
+  
 Definition isa (o:obj) (t:ty) : prop :=
   if empty_dec t
   then Absurd
@@ -808,8 +836,8 @@ Inductive TypeOf : gamma -> exp -> tres -> Prop :=
     TypeOf Γ (eConst c) R
 | T_Abs : forall Γ f i i' x e t R,
     x <> f ->
-    ~ List.In x (fvs Γ) ->
-    ~ List.In f (fvs Γ) ->
+    ~ In x (fvs Γ) ->
+    ~ In f (fvs Γ) ->
     t = (tAnd (interface_ty i) (neg_interface_ty i')) ->
     ~ IsEmpty t ->
     (forall t1 t2,
@@ -848,7 +876,7 @@ Inductive TypeOf : gamma -> exp -> tres -> Prop :=
     Subres Γ (tresOr R2 R3) R ->
     TypeOf Γ (eIf e1 e2 e3) R
 | T_Let : forall Γ x e1 e2 R1 R2 R,
-    ~ List.In x (fvs Γ) ->
+    ~ In x (fvs Γ) ->
     TypeOf Γ e1 R1 ->
     TypeOf ((alias x R1)::Γ) e2 R2 ->
     Subres Γ R2 R ->
@@ -895,8 +923,8 @@ TypeOfVal : val -> ty -> Prop :=
     TypeOfVal (vPair v1 v2) t
 | TOV_Clos : forall r f i i' x e t funt Γ,
     f <> x ->
-    ~ List.In f (fvs Γ) ->
-    ~ List.In x (fvs Γ) ->
+    ~ In f (fvs Γ) ->
+    ~ In x (fvs Γ) ->
     t = (tAnd (interface_ty i) (neg_interface_ty i')) ->
     ~ IsEmpty t ->
     Forall (Sat r) Γ ->
@@ -954,11 +982,11 @@ Inductive ValMaps : val -> ty -> ty -> Prop :=
 Hint Constructors ValMaps.
 
 Axiom interp_tArrow_exists : forall (t1 t2:ty) (v:val),
-    In val (tInterp (tArrow t1 t2)) v ->
+    v ∈ (tInterp (tArrow t1 t2)) ->
     ValMaps v t1 t2.
 Axiom interp_tArrow_full : forall (v:val) (t1 t2:ty),
     ValMaps v t1 t2 ->
-    In val (tInterp (tArrow t1 t2)) v.
+    v ∈ (tInterp (tArrow t1 t2)).
 
 Axiom Pred_def : forall funty argty tpos tneg,
     Pred funty argty tpos tneg ->
@@ -1031,7 +1059,7 @@ Proof.
   }
 Qed.  
 
-Lemma TypeOfVal_Subsume : forall v t t',
+Lemma TOV_Sub : forall v t t',
     TypeOfVal v t ->
     Subtype t t' ->
     TypeOfVal v t'.
@@ -1047,6 +1075,13 @@ Proof.
   unfold Subtype in *.
   crush.
 Qed.
+
+Lemma Subtype_tAnd_L : forall t1 t2 t,
+    Subtype t1 t ->
+    Subtype t2 t ->
+    Subtype (tAnd t1 t2) t.
+Proof.
+Admitted.
 
 Lemma Subtype_tProd_And : forall t1 t2 t1' t2' t t',
     Subtype (tProd t1 t2) t ->
@@ -1083,9 +1118,9 @@ Proof.
 Admitted. (* Obvious *)
 
 Lemma no_fvs_app : forall v Γ Γ',
-    ~ List.In v (fvs Γ) ->
-    ~ List.In v (fvs Γ') ->
-    ~ List.In v (fvs (Γ ++ Γ')).
+    ~ In v (fvs Γ) ->
+    ~ In v (fvs Γ') ->
+    ~ In v (fvs (Γ ++ Γ')).
 Proof.
 Admitted.
 
@@ -1114,7 +1149,7 @@ Lemma IsEmpty_no_vals : forall v t,
 Proof.
 Admitted.  
 
-Lemma TypeOfVal_And : forall v t1 t2,
+Lemma TOV_And : forall v t1 t2,
     TypeOfVal v t1 ->
     TypeOfVal v t2 ->
     TypeOfVal v (tAnd t1 t2).
@@ -1141,9 +1176,9 @@ Proof.
     inversion H2.
     subst.
     assert (v <> v0) as Hneq by assumption.
-    assert (~ List.In v (fvs (Γ ++ Γ0))) as Hnov
+    assert (~ In v (fvs (Γ ++ Γ0))) as Hnov
         by (apply no_fvs_app; auto).
-    assert (~ List.In v0 (fvs (Γ ++ Γ0))) as Hnov0
+    assert (~ In v0 (fvs (Γ ++ Γ0))) as Hnov0
         by (apply no_fvs_app; auto).
     eapply TOV_Clos.
     assumption.
@@ -1174,21 +1209,48 @@ Proof.
   }
 Qed.
 
-Inductive WellFormedVals : rho -> Prop :=
-| WFV_Nil : WellFormedVals rhoNull
-| WFV_Cons : forall x v r,
-    WellFormedVals r ->
+Inductive WellFormedRho : rho -> Prop :=
+| WFR_Nil : WellFormedRho rhoNull
+| WFR_Cons : forall x v r,
+    WellFormedRho r ->
     TypeOfVal v tAny ->
-    WellFormedVals (rhoCons x v r).
-Hint Constructors WellFormedVals.
+    WellFormedRho (rhoCons x v r).
+Hint Constructors WellFormedRho.
+
+Lemma well_formed_path_lookup : forall r π v,
+    WellFormedRho r ->
+    path_lookup r π = rVal v ->
+    exists t, TypeOfVal v t.
+Proof.
+Admitted.
+
+Lemma Subtype_Prod : forall t1 t2 t3 t4,
+    Subtype t1 t3 ->
+    Subtype t2 t4 ->
+    Subtype (tProd t1 t2) (tProd t3 t4).
+Proof.
+Admitted.
+
+Lemma Subtype_Refl : forall t,
+    Subtype t t.
+Proof.
+Admitted.
+Hint Resolve Subtype_Refl.
+  
+Lemma Subtype_Top : forall t,
+    Subtype t tAny.
+Proof.
+Admitted.
+Hint Resolve Subtype_Top.
+
 
 (* i.e. lemma 1 from ICFP 2010 *)
 Lemma Proves_implies_Sat : forall Γ p r,
     Proves Γ p ->
-    WellFormedVals r ->
+    WellFormedRho r ->
     Forall (Sat r) Γ ->
     Sat r p.
-Proof.
+Proof with auto.
   intros Γ p r Hproves.
   generalize dependent r.
   induction Hproves; intros r Hwfv Hsat.
@@ -1204,7 +1266,7 @@ Proof.
     inversion H1. inversion H2. subst.
     assert (v = v0) as Heq by crush. subst.
     eapply M_Is. eassumption.
-    apply TypeOfVal_And; crush.
+    apply TOV_And; crush.
   }
   { (* P_Empty *)
     assert (Sat r (Is π tEmpty)) as H by auto.
@@ -1215,7 +1277,7 @@ Proof.
     assert (Sat r (Is π t1)) as Ht1 by auto.
     inversion Ht1; subst.
     econstructor. eassumption.
-    eapply TypeOfVal_Subsume. eassumption. assumption.
+    eapply TOV_Sub. eassumption. assumption.
   }
   { (* P_Fst *)
     assert (Sat r (Is (pFst π) t)) as H by auto.
@@ -1228,18 +1290,18 @@ Proof.
             | [ H : rStuck = rVal _ |- _] => inversion H; crush
             end.
       same_rVal.
-      exists v0_2.
-      reflexivity.      
+      eexists. eauto.
     }
     destruct H' as [v' Hv'].
+    assert (path_lookup r (pSnd π) = rVal v') as Hlookup' by crush.
+    assert (exists t', TypeOfVal v' t') as Ht'
+        by (eapply well_formed_path_lookup; eassumption).
+    destruct Ht' as [t' Ht'].
     eapply (M_Is π r Hv').
-    econstructor. eassumption.
-    (* BOOKMARK *)
-    apply interp_tProd_full; auto.
-    rewrite interp_tAny.
-    constructor.
+    econstructor. eassumption. eassumption.
+    apply Subtype_Prod...
   }
-  { (* P_Snd *)
+  { (* P_Snd *)    
     assert (Sat r (Is (pSnd π) t)) as H by auto.
     inversion H; subst.
     assert (exists v', path_lookup r π = rVal (vPair v' v)) as H'.
@@ -1250,14 +1312,16 @@ Proof.
             | [ H : rStuck = rVal _ |- _] => inversion H; crush
             end.
       same_rVal.
-      exists v0_1.
-      reflexivity.      
+      eexists. eauto.
     }
     destruct H' as [v' Hv'].
+    assert (path_lookup r (pFst π) = rVal v') as Hlookup' by crush.
+    assert (exists t', TypeOfVal v' t') as Ht'
+        by (eapply well_formed_path_lookup; eassumption).
+    destruct Ht' as [t' Ht'].
     eapply (M_Is π r Hv').
-    apply interp_tProd_full; auto.
-    rewrite interp_tAny.
-    constructor.
+    econstructor. eassumption. eassumption.
+    apply Subtype_Prod...
   }
   { (* P_Absurd *)
     assert (Sat r Absurd) as Hnope by auto.
@@ -1298,6 +1362,7 @@ Qed.
 
 Lemma Proves_implies_Sat' : forall Γ p r,
     Forall (Sat r) Γ ->
+    WellFormedRho r ->
     Proves Γ p ->
     Sat r p.
 Proof.
@@ -1327,7 +1392,7 @@ Inductive SoundTypeRes : rho -> val -> tres -> Prop :=
 | STR : forall r v t p q o,
     ObjSatVal r o v ->
     SatProps r v p q ->
-    In val (tInterp t) v ->
+    TypeOfVal v t ->
     SoundTypeRes r v (Res t p q o).
 Hint Constructors SoundTypeRes.
 
@@ -1342,17 +1407,21 @@ Qed.
 
 Lemma In_IsEmpty : forall v t (P:Prop),
     IsEmpty t ->
-    In val (tInterp t) v ->
+    v ∈ (tInterp t) ->
     P.
 Proof.
   intros v t P H1 H2.
   inversion H1; crush.
-  rewrite H in H2.
-  inversion H2.
+  match goal with
+  | [H : _ = Empty_set val |- _] => rewrite H in *
+  end.
+  match goal with
+  | [H : v ∈ Empty_set val |- _] => inversion H
+  end.
 Qed.  
 
 Lemma In_empty : forall v P,
-    In val (Empty_set val) v ->
+    v ∈ (Empty_set val) ->
     P.
 Proof.
   intros v p H. inversion H.
@@ -1360,9 +1429,9 @@ Qed.
 
 Hint Extern 1 =>
 match goal with
-| [H : In val (Empty_set val) ?v |- ?P] =>
+| [H : ?v ∈ (Empty_set val) |- ?P] =>
   apply (In_empty P H)
-| [H : IsEmpty ?t, H' : In val (tInterp ?t) ?v |- ?P] =>
+| [H : IsEmpty ?t, H' : ?v ∈ (tInterp ?t) |- ?P] =>
   apply (In_IsEmpty v t P)
 end.
 
@@ -1382,51 +1451,52 @@ Qed.
 
 Lemma Complement_singleton : forall v v',
     v <> v' ->
-    In val (Complement val (Singleton val v')) v.
+    v ∈ (Complement val (Singleton val v')).
 Proof.    
   intros v v' Hneq.
   intros H. inversion H; crush.
 Qed.
   
-Hint Extern 1 (In val _ _) =>
+Hint Extern 1 (_ ∈ _) =>
 match goal with
-| [ |- In val (Full_set val) _]
+| [ |- _ ∈ (Full_set val)]
     => constructor
-| [ |- In val (tInterp tTrue) _]
+| [ |- _ ∈ (tInterp tTrue)]
   => rewrite interp_tTrue
-| [ |- In val (tInterp tFalse) _]
+| [ |- _ ∈ (tInterp tFalse)]
   => rewrite interp_tFalse
-| [ |- In val (tInterp (tAnd _ _)) _]
+| [ |- _ ∈ (tInterp (tAnd _ _))]
   => rewrite interp_tAnd
-| [ |- In val (Setminus val ?A ?B) ?v]
+| [ |- _ ∈ (Setminus val _ _)]
   => rewrite Setminus_eq
-| [ |- In val (Intersection val ?A ?B) ?v]
+| [ |- _ ∈ (Intersection val _ _)]
   => constructor
-| [ |- In val (Complement val (Singleton val _)) _]
+| [ |- _ ∈ (Complement val (Singleton val _))]
   => apply Complement_singleton
 end. 
 
 Lemma neq_false_Not_False : forall v,
     v <> (vBool false) ->
-    In val (tInterp (tNot tFalse)) v.
+    TypeOfVal v (tNot tFalse).
 Proof.
-  crush.
-Qed.
+Admitted.
 
 Lemma Sat_false_val : forall r v t1 p1 q1 o1,
     SoundTypeRes r v (Res t1 p1 q1 o1) ->
     v = (vBool false) ->
     Sat r (isa o1 (tAnd t1 tFalse)).
-Proof.
+Proof with auto.
   intros r v t1 p1 q1 o1 Hstr Heq.
   inversion Hstr; subst.
   cbv.
   ifcase.
   { (* is empty (tAnd t1 (tBase btFalse)) *)
-    assert (In val (tInterp (tAnd t1 (tBase btFalse))) (vBool false))
-      as Hand by (rewrite interp_tAnd; crush).
+    assert (TypeOfVal (vBool false) (tAnd t1 (tBase btFalse)))
+      as Hand by (apply TOV_And; auto).
     assert (IsEmpty (tAnd t1 (tBase btFalse))) as Hmtand by auto.
-    eapply In_IsEmpty; eauto.
+    assert False as impossible.
+    eapply IsEmpty_no_vals; eassumption.
+    contradiction.
   }
   { (* is not empty (tAnd t1 (tBase btFalse)) *)
     destruct o1.
@@ -1442,10 +1512,12 @@ Proof.
           by assumption.
       inversion Hobj; subst.
       eapply (M_Is p r); crush.
+      apply TOV_And; auto.
     }
   }
 Qed.
-  
+
+
 Lemma Sat_nonfalse_val : forall r v t1 p1 q1 o1,
     SoundTypeRes r v (Res t1 p1 q1 o1) ->
     v <> (vBool false) ->
@@ -1456,15 +1528,15 @@ Proof.
   cbv.
   ifcase.
   { (* is empty (tAnd t1 (tNot (tBase btFalse))) *)
-    assert (In val (tInterp t1) v) as Ht1 by auto.
-    assert (In val (tInterp (tNot tFalse)) v) as Hnotfalse
+    assert (TypeOfVal v t1) as Ht1 by auto.
+    assert (TypeOfVal v (tNot tFalse)) as Hnotfalse
     by (apply neq_false_Not_False; crush).
-    assert (In val (tInterp (tAnd t1 (tNot tFalse))) v) as Hand
-        by (rewrite interp_tAnd; crush).
+    assert (TypeOfVal v (tAnd t1 (tNot tFalse))) as Hand
+        by (apply TOV_And; crush).
     assert (IsEmpty (tAnd t1 (tNot tFalse))) as Hmtand by auto.
-    assert (tInterp (tAnd t1 (tNot tFalse)) = Empty_set val)
-      as Heqmt by (inversion Hmtand; crush).
-    rewrite Heqmt in *. crush.
+    assert False as impossible by
+          (eapply IsEmpty_no_vals; eassumption).
+    contradiction.
   }
   { (* is not empty (tAnd t1 (tNot (tBase btFalse))) *)
     destruct o1.
@@ -1481,7 +1553,8 @@ Proof.
       inversion Hobj; subst.
       eapply (M_Is p r).
       eassumption.
-      crush.
+      apply TOV_And. eassumption.
+      apply neq_false_Not_False. auto.
     }
   }
 Qed.
@@ -1496,11 +1569,12 @@ end.
 
 Lemma Subres_sound : forall Γ r v R1 R2,
     Forall (Sat r) Γ ->
+    WellFormedRho r ->
     SoundTypeRes r v R1 ->
     Subres Γ R1 R2 ->
     SoundTypeRes r v R2.
 Proof.
-  intros Γ r v R R' Hsat Hstr Hsr.
+  intros Γ r v R R' Hsat Hwfr Hstr Hsr.
   induction Hsr.
   {
     inversion Hstr; subst.
@@ -1512,7 +1586,8 @@ Proof.
       apply SP_False.
       assert (Sat r (isa o1 (tAnd t1 tFalse))) as Hv
           by (eapply Sat_false_val; eauto).
-      crush.
+      eapply Proves_implies_Sat. eassumption.
+      crush. crush.
     }
     { (* v <> false *)
       apply SP_NonFalse; auto.
@@ -1520,9 +1595,7 @@ Proof.
           by (eapply Sat_nonfalse_val; eauto).
       crush.
     }
-    match goal with
-      [H : Subtype _ _ |- _] => inversion H
-    end; crush.
+    eapply TOV_Sub. eassumption. assumption.
   }
   {
     destruct (val_dec v (vBool false)) as [Heq | Hneq].
@@ -1576,14 +1649,8 @@ Proof.
     }
     {
       inversion Hstr; subst.
-      rewrite interp_tAnd.
-      constructor; crush.
-      destruct (val_dec v (vBool false)) as [Heq | Hneq].
-      { (* v = false *)
-        match goal with
-        | [H : SatProps _ _ _ _ |- _] => inversion H
-        end; crush.
-      }
+      apply TOV_And; crush.
+      destruct (val_dec v (vBool false)) as [Heq | Hneq]; crush.
       { (* v <> false *)
         match goal with
         | [H : SatProps _ _ _ _ |- _] => inversion H
@@ -1627,8 +1694,7 @@ Proof.
     }
     {
       inversion Hstr; subst.
-      rewrite interp_tAnd.
-      constructor; crush.
+      apply TOV_And; crush.
       destruct (val_dec v (vBool false)) as [Heq | Hneq].
       { (* v = false *)
         match goal with
@@ -1643,7 +1709,7 @@ Proof.
         inversion impossible.
       }
       { (* v <> false *)
-        crush.
+        apply neq_false_Not_False; auto.
       }
     }    
   }
@@ -1654,69 +1720,55 @@ Ltac notIsProc :=
   | [H : IsProc _ |- _] => inversion H
   end.
 
+Lemma tArrow_top : forall t1 t2 t3,
+    Subtype (tArrow t1 t2) (tArrow tEmpty t3).
+Proof.
+Admitted.
+Hint Resolve tArrow_top.
+
 Lemma op_is_tArrow : forall o,
-    In val (tInterp (tArrow tEmpty tAny)) (vOp o).
+    TypeOfVal (vOp o) (tArrow tEmpty tAny).
 Proof.
   intros o.
-  apply interp_tArrow_full.
-  constructor; crush.
+  constructor.
+  destruct o; crush; try (unfold predicate);
+    try (apply Subtype_tAnd_L); crush.
 Qed.
 
-Lemma clos_is_tArrow : forall r f i x e,
-    In val (tInterp (tArrow tEmpty tAny)) (vClos r f i x e).
+Lemma IsEmpty_And_tAny : forall t,
+    IsEmpty (tAnd t tAny) ->
+    IsEmpty t.
 Proof.
-  intros r f i x e.
-  apply interp_tArrow_full.
-  constructor; crush.
-Qed.
-
-
-Lemma closure_interface_lemma : forall i r f x e Γ,
-    x <> f ->
-    ~ List.In f (fvs Γ) ->
-    ~ List.In x (fvs Γ) ->
-    (forall t t' : ty,
-        InInterface t t' i ->
-        TypeOf (Is (pVar x) t :: Is (pVar f) (int_to_ty i) :: Γ) e
-               (Res t' Trivial Trivial oTop)) ->
-    Forall (Sat r) Γ ->
-    In val (tInterp (int_to_ty i)) (vClos r f i x e).
-Proof.
-  intro i.
-  induction i as [| t1 t2 i' IH].
-  {
-    intros r f x e Γ Hneq Hffresh Hxfresh HInInt Hsat.
-    simpl.
-    apply interp_tArrow_full.
-    constructor; crush.
-  }
-  {
-    intros r f x e Γ Hneq Hffresh Hxfresh HInInt Hsat.
-    simpl.
-    rewrite interp_tAnd.
-    split.
-    { (* t1 -> t2 *)
-      apply interp_tArrow_full.
-      constructor; auto.
-      intros v1 H1.
-(*      
-    }
-    { (* i' *)
-      
-    }
-  }
-*)
 Admitted.
+
+Lemma interface_non_empty : forall i,
+    ~ IsEmpty (interface_ty i).
+Proof.
+Admitted.
+
+Lemma Subtype_And_R1_Refl : forall t t',
+    Subtype t (tAnd t t').
+Proof.
+Admitted.
+Hint Resolve Subtype_And_R1_Refl.
+
+Lemma Subtype_And_R2_Refl : forall t t',
+    Subtype t (tAnd t' t).
+Proof.
+Admitted.
+Hint Resolve Subtype_And_R2_Refl.
+
 
 Lemma lemma3 : forall Γ e R r n res,
       TypeOf Γ e R ->
       Forall (Sat r) Γ ->
+      WellFormedRho r ->
       ValOf n r e res ->
       (exists v, res = rVal v /\ SoundTypeRes r v R)
       \/ res = rError
       \/ res = rTimeout.
-Proof.
-  intros Γ e R r n res Htype Hsat Hvalof.
+Proof with crush.
+  intros Γ e R r n res Htype Hsat Hwfv Hvalof.
   induction Hvalof.
   { (* V_Timeout *)
     crush.
@@ -1743,14 +1795,14 @@ Proof.
         destruct (val_dec v (vBool false)) as [Heq | Hneq]; subst.
         { (* v = false *)
           constructor. eapply M_Is; crush.
-          constructor; crush.
       }
         { (* v <> false *)
           apply SP_NonFalse. assumption.
           eapply M_Is. eassumption.
-          crush. constructor; crush.
-          constructor; crush.
-          applyH; crush.
+          crush.
+          apply TOV_And; crush.
+          apply neq_false_Not_False.
+          crush.
         }
         crush.
       }
@@ -1810,7 +1862,8 @@ Proof.
         simpl in *.
         left. exists (vBool false).
         split; auto.
-        assert (SoundTypeRes r (vBool false) (Res tFalse Absurd Trivial oTop))
+        assert (SoundTypeRes r (vBool false)
+                             (Res tFalse Absurd Trivial oTop))
           as Hstr by crush.
         eapply Subres_sound; eauto.
       }      
@@ -1827,13 +1880,6 @@ Proof.
         {
           constructor; crush.
           apply SP_NonFalse; crush.
-          apply interp_tArrow_full.
-          constructor. constructor.
-          intros v1 Hv1.
-          apply interp_tNat_exists in Hv1.
-          destruct Hv1 as [n' Heq].
-          subst. right. right.
-          exists (vNat (n' + 1)); crush.
         }
         eapply Subres_sound; eauto.
       }
@@ -1847,13 +1893,6 @@ Proof.
         {
           constructor; crush.
           apply SP_NonFalse; crush.
-          apply interp_tArrow_full.
-          constructor. constructor.
-          intros v1 Hv1.
-          apply interp_tNat_exists in Hv1.
-          destruct Hv1 as [n' Heq].
-          subst. right. right.
-          exists (vNat (n' - 1)); crush.
         }
         eapply Subres_sound; eauto.
       }
@@ -1867,13 +1906,6 @@ Proof.
         {
           constructor; crush.
           apply SP_NonFalse; crush.
-          apply interp_tArrow_full.
-          constructor. constructor.
-          intros v1 Hv1.
-          apply interp_tStr_exists in Hv1.
-          destruct Hv1 as [s Heq].
-          subst. right. right.
-          exists (vNat (String.length s)); crush.
         }
         eapply Subres_sound; eauto.
       }
@@ -1887,29 +1919,6 @@ Proof.
         {
           constructor; crush.
           apply SP_NonFalse; crush.
-          unfold predicate.
-          rewrite interp_tAnd.
-          split.
-          {
-            apply interp_tArrow_full.
-            constructor. constructor.
-            intros v1 Hv1.
-            rewrite interp_tFalse in Hv1.
-            inversion Hv1; subst. right. right.
-            exists (vBool true); crush.
-          }
-          {
-            apply interp_tArrow_full.
-            constructor. constructor.
-            intros v1 Hv1.
-            rewrite interp_tNot in Hv1.
-            inversion Hv1; subst. right. right.
-            exists (vBool false); crush.
-            constructor. simpl.
-            destruct v1; crush.
-            destruct c; crush.
-            destruct b; crush.
-          }
         }
         eapply Subres_sound; eauto.
       }
@@ -1921,30 +1930,8 @@ Proof.
                              (Res (predicate tNat) Trivial Absurd oTop))
           as Hstr.
         {
-          constructor; crush.
+          constructor; crush. 
           apply SP_NonFalse; crush.
-          unfold predicate.
-          rewrite interp_tAnd.
-          split.
-          {
-            apply interp_tArrow_full.
-            constructor. constructor.
-            intros v1 Hv1.
-            apply interp_tNat_exists in Hv1.
-            destruct Hv1 as [n' Heq]. subst. right. right.
-            exists (vBool true); crush.
-          }
-          {
-            apply interp_tArrow_full.
-            constructor. constructor.
-            intros v1 Hv1.
-            rewrite interp_tNot in Hv1.
-            inversion Hv1; subst. right. right.
-            exists (vBool false); crush.
-            constructor. simpl.
-            destruct v1; crush.
-            destruct c; crush.
-          }
         }
         eapply Subres_sound; eauto.
       }
@@ -1958,28 +1945,6 @@ Proof.
         {
           constructor; crush.
           apply SP_NonFalse; crush.
-          unfold predicate.
-          rewrite interp_tAnd.
-          split.
-          {
-            apply interp_tArrow_full.
-            constructor. constructor.
-            intros v1 Hv1.
-            apply interp_tStr_exists in Hv1.
-            destruct Hv1 as [n' Heq]. subst. right. right.
-            exists (vBool true); crush.
-          }
-          {
-            apply interp_tArrow_full.
-            constructor. constructor.
-            intros v1 Hv1.
-            rewrite interp_tNot in Hv1.
-            inversion Hv1; subst. right. right.
-            exists (vBool false); crush.
-            constructor. simpl.
-            destruct v1; crush.
-            destruct c; crush.
-          }
         }
         eapply Subres_sound; eauto.
       }
@@ -1996,32 +1961,6 @@ Proof.
         {
           constructor; crush.
           apply SP_NonFalse; crush.
-          unfold predicate.
-          rewrite interp_tAnd.
-          split.
-          {
-            apply interp_tArrow_full.
-            constructor. constructor.
-            intros v1 Hv1.
-            apply interp_tProd_exists in Hv1.
-            destruct Hv1 as [v [v' [Heq [HIn1 HIn2]]]].
-            subst. right. right.
-            exists (vBool true); crush.
-          }
-          {
-            apply interp_tArrow_full.
-            constructor. constructor.
-            intros v1 Hv1.
-            rewrite interp_tNot in Hv1.
-            inversion Hv1; subst. right. right.
-            exists (vBool false); crush.
-            constructor. simpl.
-            destruct v1; crush.
-            assert False as impossible.
-            applyH.
-            apply interp_tProd_full; crush.
-            contradiction.
-          }
         }
         eapply Subres_sound; eauto.
       }
@@ -2038,46 +1977,6 @@ Proof.
         {
           constructor; crush.
           apply SP_NonFalse; crush.
-          unfold predicate.
-          rewrite interp_tAnd.
-          split.
-          {
-            apply interp_tArrow_full.
-            constructor. constructor.
-            intros v1 Hv1.
-            apply interp_tArrow_exists in Hv1.
-            inversion Hv1; subst.
-            right. right.
-            destruct v1.
-            { (* (vConst c) *)
-              destruct c; inversion Hv1; subst; try solve[notIsProc].
-              exists (vBool true); crush.
-            }
-            { (* (vPair _ _) *)
-              notIsProc.
-            }
-            { (* (vClos _ _ _ _ _) *)
-              exists (vBool true); crush.
-            }
-          }
-          {
-            apply interp_tArrow_full.
-            constructor; crush.
-            match goal with
-            | [H : In val _ _ |- _] => inversion H
-            end.
-            right. right. exists (vBool false).
-            split.
-            constructor.
-            destruct v1; crush.
-            destruct c; crush.
-            remember op_is_tArrow.
-            remember clos_is_tArrow.
-            assert False as impossible. applyH; crush. contradiction.
-            remember clos_is_tArrow.
-            assert False as impossible. applyH; crush. contradiction.
-            crush.
-          }
         }
         eapply Subres_sound; eauto.
       }
@@ -2091,15 +1990,6 @@ Proof.
         {
           constructor; crush.
           apply SP_NonFalse; crush.
-          apply interp_tArrow_full.
-          constructor. constructor.
-          intros v1 Hv1.
-          apply interp_tNat_exists in Hv1.
-          destruct Hv1 as [n' Heq].
-          subst. right. right.
-          destruct n'.
-          exists (vBool true); crush.
-          exists (vBool false); crush.
         }
         eapply Subres_sound; eauto.
       }
@@ -2113,12 +2003,6 @@ Proof.
         {
           constructor; crush.
           apply SP_NonFalse; crush.
-          apply interp_tArrow_full.
-          constructor. constructor.
-          intros v1 Hv1.
-          apply interp_tStr_exists in Hv1.
-          destruct Hv1 as [s Heq].
-          subst. right. left. constructor; auto.
         }
         eapply Subres_sound; eauto.
       }
@@ -2126,6 +2010,7 @@ Proof.
   }
   { (* V_Abs *)
     inversion Htype; subst.
+    (* BOOKMARK *)
     left. exists (vClos r f i x e); split; auto.
     assert (SoundTypeRes r (vClos r f i x e)
                          (Res (int_to_ty i)
