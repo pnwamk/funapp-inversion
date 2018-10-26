@@ -121,7 +121,7 @@ Notation "(eOp o )"   := (eConst (cOp o)).
 Inductive val : Set :=
   vConst : const -> val
 | vPair  : val -> val -> val
-| vClos  : rho -> var -> interface -> var -> exp -> val
+| vAbs   : var -> interface -> var -> exp -> val
 with
 rho : Set :=
   rhoNull  : rho
@@ -171,12 +171,8 @@ Hint Constructors failure.
 
 Inductive result : Set :=
   rVal  : val -> result
-| rFail : failure -> result.
+| rErr : result.
 Hint Constructors result.
-
-Notation rError   := (rFail fError).
-Notation rStuck   := (rFail fStuck).
-Notation rTimeout := (rFail fTimeout).
 
 Hint Resolve PeanoNat.Nat.eq_dec.
 Hint Resolve string_dec.
@@ -264,54 +260,54 @@ Hint Resolve result_dec.
 (* Dynamic Semantics                                      *)
 (**********************************************************)
 
-Definition apply_op (o:op) (v:val) : result :=
+Definition apply_op (o:op) (v:val) : option result :=
   match o , v with
-  | opAdd1   , (vNat n)          => rVal (vNat (n + 1))
-  | opAdd1   , _                 => rStuck
-  | opSub1   , (vNat n)          => rVal (vNat (n - 1))
-  | opSub1   , _                 => rStuck
-  | opStrLen , (vStr s)          => rVal (vNat (String.length s))
-  | opStrLen , _                 => rStuck
-  | opNot    , (vBool false)     => rVal (vBool true)
-  | opNot    , _                 => rVal (vBool false)
-  | opIsNat  , (vNat _)          => rVal (vBool true)
-  | opIsNat  , _                 => rVal (vBool false)
-  | opIsStr  , (vStr _)          => rVal (vBool true)
-  | opIsStr  , _                 => rVal (vBool false)
-  | opIsPair , (vPair _ _)       => rVal (vBool true)
-  | opIsPair , _                 => rVal (vBool false)
-  | opIsProc , (vOp _)           => rVal (vBool true)
-  | opIsProc , (vClos _ _ _ _ _) => rVal (vBool true)
-  | opIsProc , _                 => rVal (vBool false)
-  | opIsZero , (vNat 0)          => rVal (vBool true)
-  | opIsZero , (vNat _)          => rVal (vBool false)
-  | opIsZero , _                 => rStuck
-  | opError  , (vStr s)          => rError
-  | opError  , _                 => rStuck
+  | opAdd1   , (vNat n)       => Some (rVal (vNat (n + 1)))
+  | opAdd1   , _              => None
+  | opSub1   , (vNat n)       => Some (rVal (vNat (n - 1)))
+  | opSub1   , _              => None
+  | opStrLen , (vStr s)       => Some (rVal (vNat (String.length s)))
+  | opStrLen , _              => None
+  | opNot    , (vBool false)  => Some (rVal (vBool true))
+  | opNot    , _              => Some (rVal (vBool false))
+  | opIsNat  , (vNat _)       => Some (rVal (vBool true))
+  | opIsNat  , _              => Some (rVal (vBool false))
+  | opIsStr  , (vStr _)       => Some (rVal (vBool true))
+  | opIsStr  , _              => Some (rVal (vBool false))
+  | opIsPair , (vPair _ _)    => Some (rVal (vBool true))
+  | opIsPair , _              => Some (rVal (vBool false))
+  | opIsProc , (vOp _)        => Some (rVal (vBool true))
+  | opIsProc , (vAbs _ _ _ _) => Some (rVal (vBool true))
+  | opIsProc , _              => Some (rVal (vBool false))
+  | opIsZero , (vNat 0)       => Some (rVal (vBool true))
+  | opIsZero , (vNat _)       => Some (rVal (vBool false))
+  | opIsZero , _              => None
+  | opError  , (vStr s)       => Some rErr
+  | opError  , _              => None
   end.
 Hint Unfold apply_op.
 
-Fixpoint var_lookup (r:rho) (x:var) : result :=
+Fixpoint var_lookup (r:rho) (x:var) : option val :=
   match r with
-  | rhoNull       => rStuck
+  | rhoNull       => None
   | rhoCons y v r' => if var_dec x y
-                      then rVal v
+                      then Some v
                       else var_lookup r' x
   end.
 Hint Unfold var_lookup.
 
-Fixpoint path_lookup (r:rho) (π:path) : result :=
+Fixpoint path_lookup (r:rho) (π:path) : option val :=
   match π with
   | (pVar x) => var_lookup r x
   | (pFst π') =>
     match (path_lookup r π') with
-    | (rVal (vPair v _)) => rVal v
-    | _ => rStuck
+    | Some (vPair v _) => Some v
+    | _ => None
     end
   | (pSnd π') =>
     match (path_lookup r π') with
-    | (rVal (vPair _ v)) => rVal v
-    | _ => rStuck
+    | Some (vPair _ v) => Some v
+    | _ => None
     end
   end.
 Hint Unfold path_lookup.
@@ -324,8 +320,28 @@ Hint Constructors NonOp.
 
 Inductive NonPair : val -> Prop :=
 | NP_Const : forall c, NonPair (vConst c)
-| NP_Clos : forall r f i x e, NonPair (vClos r f i x e).
+| NP_Clos : forall f i x e, NonPair (vAbs f i x e).
 Hint Constructors NonPair.
+
+Fixpoint subsitute (e:exp) (x:var) (v:val) : exp :=
+  match e with
+  | eVar y => if var_dec x y then v else e
+  | eConst _ => e
+  | eAbs f i y e' => if var_dec x f then e
+                     else if var_dec x y then e
+                          else eAbs f i y (substitute e' x v)
+  | eApp e1 e2 => eApp (substitute e1 x v) (substitute e2 x v)
+  | ePair e1 e2 => ePair (substitute e1 x v) (substitute e2 x v)
+  | eFst e' => eFst (substitute e' x v)
+  | eSnd e' => eSnd (substitute e' x v)
+  | eIf e1 e2 e3 => eIf (substitute e1 x v)
+                        (substitute e2 x v)
+                        (substitute e3 x v)
+  | eLet y e1 e2 => 
+  end.
+Hint Constructors exp.
+
+Inductive Step : exp -> 
 
 
 Inductive ValOf : nat -> rho -> exp -> result -> Prop :=
