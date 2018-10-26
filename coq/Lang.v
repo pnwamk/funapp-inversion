@@ -1759,16 +1759,16 @@ Admitted.
 Hint Resolve Subtype_And_R2_Refl.
 
 
-Lemma lemma3 : forall Γ e R r n res,
+Lemma lemma3 : forall Γ e R r n,
       TypeOf Γ e R ->
       Forall (Sat r) Γ ->
       WellFormedRho r ->
-      ValOf n r e res ->
-      (exists v, res = rVal v /\ SoundTypeRes r v R)
-      \/ res = rError
-      \/ res = rTimeout.
+      (exists v, ValOf n r e (rVal v) /\ SoundTypeRes r v R) 
+      \/ (ValOf n r e rError)
+      \/ (ValOf n r e rTimeout).
 Proof with crush.
-  intros Γ e R r n res Htype Hsat Hwfv Hvalof.
+  (* BOOKMARK *)
+  intros Γ e R r n Htype Hsat Hwfv.
   induction Hvalof.
   { (* V_Timeout *)
     crush.
