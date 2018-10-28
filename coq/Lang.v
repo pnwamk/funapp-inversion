@@ -61,10 +61,8 @@ Inductive op : Set :=
 | opNot
 | opIsNat
 | opIsStr
-| opIsPair
 | opIsProc
-| opIsZero
-| opError.
+| opIsZero.
 Hint Constructors op.
 
 Inductive const : Set :=
@@ -81,7 +79,6 @@ Inductive ty : Set :=
   tAny   : ty
 | tEmpty : ty
 | tBase  : bty -> ty
-| tProd  : ty -> ty -> ty
 | tArrow : ty -> ty -> ty
 | tOr    : ty -> ty -> ty
 | tAnd   : ty -> ty -> ty
@@ -105,9 +102,6 @@ Inductive exp : Set :=
 | eConst : const -> exp
 | eAbs   : var -> interface -> var -> exp -> exp
 | eApp   : exp -> exp -> exp
-| ePair  : exp -> exp -> exp
-| eFst   : exp -> exp
-| eSnd   : exp -> exp
 | eIf    : exp -> exp -> exp -> exp
 | eLet   : var -> exp -> exp -> exp.
 Hint Constructors exp.
@@ -117,46 +111,25 @@ Notation "(eStr s )"  := (eConst (cStr s)).
 Notation "(eBool b )" := (eConst (cBool b)).
 Notation "(eOp o )"   := (eConst (cOp o)).
 
-
-Inductive val : Set :=
-  vConst : const -> val
-| vPair  : val -> val -> val
-| vAbs   : var -> interface -> var -> exp -> val
-with
-rho : Set :=
-  rhoNull  : rho
-| rhoCons  : var -> val -> rho -> rho.
-Hint Constructors val rho.
-
-Notation "(vNat n )"  := (vConst (cNat n)).
-Notation "(vStr s )"  := (vConst (cStr s)).
-Notation "(vBool b )" := (vConst (cBool b)).
-Notation "(vOp o )"   := (vConst (cOp o)).
-
-Inductive path : Set :=
-  pVar : var -> path
-| pFst : path -> path
-| pSnd : path -> path.
-Hint Constructors path.
+Inductive IsVal : exp -> Prop :=
+| IV_Const : forall c,
+    IsVal (eConst c)
+| IV_Abs : forall f i x e,
+    IsVal (eAbs f i x e).
 
 Inductive obj : Set :=
   oTop  : obj
 | oBot  : obj
-| oPath : path -> obj.
+| oVar : var -> obj.
 Hint Constructors obj.
-
-Notation "(oFst p )"  := (oPath (pFst p)).
-Notation "(oSnd p )"  := (oPath (pSnd p)).
-Notation "(oVar x )"  := (oPath (pVar x)).
-
 
 Inductive prop : Set :=
   Trivial : prop
 | Absurd  : prop
 | And     : prop -> prop -> prop
 | Or      : prop -> prop -> prop
-| Is      : path -> ty -> prop
-| Eq      : path -> path -> prop.
+| Is      : var -> ty -> prop
+| Eq      : var -> var -> prop.
 Hint Constructors prop.
 
 Definition gamma := list prop.
@@ -165,14 +138,6 @@ Hint Unfold gamma.
 Inductive tres : Set :=
   Res : ty -> prop -> prop -> obj -> tres.
 Hint Constructors tres.
-
-Inductive failure : Set := fError | fStuck | fTimeout.
-Hint Constructors failure.
-
-Inductive result : Set :=
-  rVal  : val -> result
-| rErr : result.
-Hint Constructors result.
 
 Hint Resolve PeanoNat.Nat.eq_dec.
 Hint Resolve string_dec.
@@ -217,20 +182,6 @@ Definition exp_dec : forall (x y : exp),
 Proof. decide equality. Defined.
 Hint Resolve exp_dec.
 
-Fixpoint val_dec (x y : val) : { x = y } + { x <> y }
-with
-rho_dec (x y : rho) : { x = y } + { x <> y }.
-Proof.
-  decide equality.
-  decide equality.
-Defined.
-Hint Resolve val_dec rho_dec.
-
-Definition path_dec : forall (x y : path),
-    {x = y} + {x <> y}.
-Proof. decide equality. Defined.
-Hint Resolve path_dec.
-
 Definition obj_dec : forall (x y : obj),
     {x = y} + {x <> y}.
 Proof. decide equality. Defined.
@@ -246,84 +197,61 @@ Definition tres_dec : forall (x y : tres),
 Proof. decide equality. Defined.
 Hint Resolve tres_dec.
 
-Definition failure_dec : forall (x y : failure),
-    {x = y} + {x <> y}.
-Proof. decide equality. Defined.
-Hint Resolve failure_dec.
-
-Definition result_dec : forall (x y : result),
-    {x = y} + {x <> y}.
-Proof. decide equality. Defined.
-Hint Resolve result_dec.
 
 (**********************************************************)
 (* Dynamic Semantics                                      *)
 (**********************************************************)
 
-Definition apply_op (o:op) (v:val) : option result :=
-  match o , v with
-  | opAdd1   , (vNat n)       => Some (rVal (vNat (n + 1)))
-  | opAdd1   , _              => None
-  | opSub1   , (vNat n)       => Some (rVal (vNat (n - 1)))
-  | opSub1   , _              => None
-  | opStrLen , (vStr s)       => Some (rVal (vNat (String.length s)))
-  | opStrLen , _              => None
-  | opNot    , (vBool false)  => Some (rVal (vBool true))
-  | opNot    , _              => Some (rVal (vBool false))
-  | opIsNat  , (vNat _)       => Some (rVal (vBool true))
-  | opIsNat  , _              => Some (rVal (vBool false))
-  | opIsStr  , (vStr _)       => Some (rVal (vBool true))
-  | opIsStr  , _              => Some (rVal (vBool false))
-  | opIsPair , (vPair _ _)    => Some (rVal (vBool true))
-  | opIsPair , _              => Some (rVal (vBool false))
-  | opIsProc , (vOp _)        => Some (rVal (vBool true))
-  | opIsProc , (vAbs _ _ _ _) => Some (rVal (vBool true))
-  | opIsProc , _              => Some (rVal (vBool false))
-  | opIsZero , (vNat 0)       => Some (rVal (vBool true))
-  | opIsZero , (vNat _)       => Some (rVal (vBool false))
-  | opIsZero , _              => None
-  | opError  , (vStr s)       => Some rErr
-  | opError  , _              => None
-  end.
-Hint Unfold apply_op.
+(*
+Inductive bty : Set := btNat | btTrue | btFalse | btStr.
 
-Fixpoint var_lookup (r:rho) (x:var) : option val :=
-  match r with
-  | rhoNull       => None
-  | rhoCons y v r' => if var_dec x y
-                      then Some v
-                      else var_lookup r' x
-  end.
-Hint Unfold var_lookup.
+*)
 
-Fixpoint path_lookup (r:rho) (π:path) : option val :=
-  match π with
-  | (pVar x) => var_lookup r x
-  | (pFst π') =>
-    match (path_lookup r π') with
-    | Some (vPair v _) => Some v
-    | _ => None
-    end
-  | (pSnd π') =>
-    match (path_lookup r π') with
-    | Some (vPair _ v) => Some v
-    | _ => None
-    end
-  end.
-Hint Unfold path_lookup.
+Inductive IsNat : exp -> Prop :=
+| Is_Nat : forall n, IsNat (eNat n).
+Hint Constructors IsNat.
 
-Inductive NonOp : const -> Prop :=
-| NO_Nat : forall n, NonOp (cNat n)
-| NO_Str : forall s, NonOp (cStr s)
-| NO_Bool : forall b, NonOp (cBool b).
-Hint Constructors NonOp.
+Inductive IsStr : exp -> Prop :=
+| Is_Str : forall s, IsStr (eStr s).
+Hint Constructors IsStr.
 
-Inductive NonPair : val -> Prop :=
-| NP_Const : forall c, NonPair (vConst c)
-| NP_Clos : forall f i x e, NonPair (vAbs f i x e).
-Hint Constructors NonPair.
+Inductive IsProc : exp -> Prop :=
+| Is_Proc_Op : forall o, IsProc (eOp o)
+| Is_Proc_Abs : forall f i x e, IsProc (eAbs f i x e).
+Hint Constructors IsProc.
 
-Fixpoint subsitute (e:exp) (x:var) (v:val) : exp :=
+
+Inductive ApplyOp : op -> exp -> exp -> Prop :=
+| AO_Add1 : forall n, ApplyOp opAdd1 (eNat n) (eNat (n + 1))
+| AO_Sub1 : forall n, ApplyOp opSub1 (eNat n) (eNat (n - 1))
+| AO_StrLen : forall s, ApplyOp opStrLen (eStr s) (eNat (String.length s))
+| AO_Not1 : ApplyOp opNot (eBool false) (eBool true)
+| AO_Not2 : forall e,
+    IsVal e ->
+    e <> (eBool false) ->
+    ApplyOp opNot e (eBool false)
+| AO_IsNat1 : forall n, ApplyOp opIsNat (eNat n) (eBool true)
+| AO_IsNat2 : forall e,
+    IsVal e ->
+    ~ IsNat e ->
+    ApplyOp opIsNat e (eBool false)
+| AO_IsStr1 : forall s, ApplyOp opIsStr (eStr s) (eBool true)
+| AO_IsStr2 : forall e,
+    IsVal e ->
+    ~ IsStr e ->
+    ApplyOp opIsStr e (eBool false)
+| AO_IsProc1 : forall e,
+    IsProc e ->
+    ApplyOp opIsProc e (eBool true)
+| AO_IsProc2 : forall e,
+    ~ IsProc e ->
+    ApplyOp opIsProc e (eBool false)
+| AO_IsZero1 :  ApplyOp opIsProc (eNat 0) (eBool true)
+| AO_IsZero2 : forall n,
+    n <> 0 ->
+    ApplyOp opIsProc (eNat n) (eBool false).
+
+Fixpoint substitute (e:exp) (x:var) (v:exp) : exp :=
   match e with
   | eVar y => if var_dec x y then v else e
   | eConst _ => e
@@ -331,159 +259,54 @@ Fixpoint subsitute (e:exp) (x:var) (v:val) : exp :=
                      else if var_dec x y then e
                           else eAbs f i y (substitute e' x v)
   | eApp e1 e2 => eApp (substitute e1 x v) (substitute e2 x v)
-  | ePair e1 e2 => ePair (substitute e1 x v) (substitute e2 x v)
-  | eFst e' => eFst (substitute e' x v)
-  | eSnd e' => eSnd (substitute e' x v)
   | eIf e1 e2 e3 => eIf (substitute e1 x v)
                         (substitute e2 x v)
                         (substitute e3 x v)
-  | eLet y e1 e2 => 
-  end.
-Hint Constructors exp.
-
-Inductive Step : exp -> 
-
-
-Inductive ValOf : nat -> rho -> exp -> result -> Prop :=
-| V_Timeout : forall r e,
-    ValOf O r e rTimeout
-| V_Var : forall n r x,
-    ValOf (S n) r (eVar x) (var_lookup r x)
-| V_Const : forall n r c,
-    ValOf (S n) r (eConst c) (rVal (vConst c))
-| V_Abs : forall n r f i x e,
-    ValOf (S n) r (eAbs f i x e) (rVal (vClos r f i x e))
-| V_App_Fail1 : forall n r e1 e2 f,
-    ValOf n r e1 (rFail f) ->
-    ValOf (S n) r (eApp e1 e2) (rFail f)
-| V_App_Fail2 : forall n r e1 e2 c,
-    ValOf n r e1 (rVal (vConst c)) ->
-    NonOp c ->
-    ValOf (S n) r (eApp e1 e2) rStuck
-| V_App_Fail3 : forall n r e1 e2 v1 f,
-    ValOf n r e1 (rVal v1) ->
-    ValOf n r e2 (rFail f) ->
-    ValOf (S n) r (eApp e1 e2) (rFail f)
-| V_App_Op : forall n r e1 e2 o1 v2,
-    ValOf n r e1 (rVal (vOp o1)) ->
-    ValOf n r e2 (rVal v2) ->
-    ValOf (S n) r (eApp e1 e2) (apply_op o1 v2)
-| V_App_Clos : forall n r e1 e2 r' f i x e' v2 r'' res,
-    ValOf n r e1 (rVal (vClos r' f i x e')) ->
-    ValOf n r e2 (rVal v2) ->
-    r'' = (rhoCons x v2 (rhoCons f (vClos r' f i x e') r')) ->
-    ValOf n r'' e' res ->
-    ValOf (S n) r (eApp e1 e2) res
-| V_Pair_Fail1 : forall n r e1 e2 f,
-    ValOf n r e1 (rFail f) ->
-    ValOf (S n) r (ePair e1 e2) (rFail f)
-| V_Pair_Fail2 : forall n r e1 e2 v1 f,
-    ValOf n r e1 (rVal v1) ->
-    ValOf n r e2 (rFail f) ->
-    ValOf (S n) r (ePair e1 e2) (rFail f)
-| V_Pair : forall n r e1 e2 v1 v2,
-    ValOf n r e1 (rVal v1) ->
-    ValOf n r e2 (rVal v2) ->
-    ValOf (S n) r (ePair e1 e2) (rVal (vPair v1 v2))
-| V_Fst_Fail1 : forall n r e f,
-    ValOf n r e (rFail f) ->
-    ValOf (S n) r (eFst e) (rFail f)
-| V_Fst_Fail2 : forall n r e v,
-    ValOf n r e (rVal v) ->
-    NonPair v ->
-    ValOf (S n) r (eFst e) rStuck
-| V_Fst : forall n r e v1 v2,
-    ValOf n r e (rVal (vPair v1 v2)) ->
-    ValOf (S n) r (eFst e) (rVal v1)
-| V_Snd_Fail1 : forall n r e f,
-    ValOf n r e (rFail f) ->
-    ValOf (S n) r (eSnd e) (rFail f)
-| V_Snd_Fail2 : forall n r e v,
-    ValOf n r e (rVal v) ->
-    NonPair v ->
-    ValOf (S n) r (eSnd e) rStuck
-| V_Snd : forall n r e v1 v2,
-    ValOf n r e (rVal (vPair v1 v2)) ->
-    ValOf (S n) r e (rVal v2)
-| V_If_Fail1 : forall n r e1 e2 e3 f,
-    ValOf n r e1 (rFail f) ->
-    ValOf (S n) r (eIf e1 e2 e3) (rFail f)
-| V_If_NonFalse : forall n r e1 e2 e3 v1 res,
-    ValOf n r e1 (rVal v1) ->
-    v1 <> (vBool false) ->
-    ValOf n r e2 res ->
-    ValOf (S n) r (eIf e1 e2 e3) res
-| V_If_False : forall n r e1 e2 e3 res,
-    ValOf n r e1 (rVal (vBool false)) ->
-    ValOf n r e3 res ->
-    ValOf (S n) r (eIf e1 e2 e3) res
-| V_Let_Fail : forall n r x e1 e2 f,
-    ValOf n r e1 (rFail f) ->
-    ValOf (S n) r (eLet x e1 e2) (rFail f)
-| V_Let : forall n r x e1 e2 v1 res,
-    ValOf n r e1 (rVal v1) ->
-    ValOf n (rhoCons x v1 r) e2 res ->
-    ValOf (S n) r (eLet x e1 e2) res.
-Hint Constructors ValOf.
-
-Fixpoint eval (fuel:nat) (r:rho) (expr:exp) : result :=
-  match fuel with
-  | O => rTimeout
-  | S n =>
-    match expr with
-    | eVar x => var_lookup r x
-    | eConst c => rVal (vConst c)
-    | eAbs f i x e => rVal (vClos r f i x e)
-    | eApp e1 e2 =>
-      match (eval n r e1) , (eval n r e2) with
-      | rFail f, _ => rFail f
-      | _, rFail f => rFail f
-      | rVal v1, rVal v2 =>
-        match v1 with
-        | vConst (cOp o) => apply_op o v2
-        | vClos r f i x e =>
-          let r' := rhoCons x v2 (rhoCons f v1 r) in
-          eval n r' e
-        | _ => rStuck
-        end
-      end
-    | ePair e1 e2 =>
-      match (eval n r e1) , (eval n r e2) with
-      | rFail f, _ => rFail f
-      | _, rFail f => rFail f
-      | rVal v1, rVal v2 => rVal (vPair v1 v2)
-      end
-    | eFst e =>
-      match (eval n r e) with
-      | rFail f => rFail f
-      | rVal (vPair v1 v2) => rVal v1
-      | rVal _ => rStuck
-      end
-    | eSnd e =>
-      match (eval n r e) with
-      | rFail f => rFail f
-      | rVal (vPair v1 v2) => rVal v2
-      | rVal _ => rStuck
-      end
-    | eIf e1 e2 e3 =>
-      match (eval n r e1) with
-      | rFail f => rFail f
-      | rVal (vBool false) => eval n r e3
-      | rVal _ => eval n r e2
-      end
-    | eLet x e1 e2 =>
-      match (eval n r e1) with
-      | rFail f => rFail f
-      | rVal v => eval n (rhoCons x v r) e2
-      end
-    end 
+  | eLet y e1 e2 =>
+    let e1' := (substitute e1 x v) in
+    let e2' := if var_dec x y then e2 else (substitute e2 x v) in
+    eLet y e1' e2'
   end.
 
-(* TODO? May be interesting, may not. *)
-Lemma ValOf_iff_eval : forall n r e res,
-    ValOf n r e res <-> eval n r e = res.
-Proof.
-  Admitted.
+Inductive Step : exp -> exp -> Prop :=
+| S_App_Cong : forall e1 e1' e2,
+    Step e1 e1' ->
+    Step (eApp e1 e2) (eApp e1' e2)
+| S_App_Prim : forall o e e',
+    IsVal e ->
+    ApplyOp o e e' ->
+    Step (eApp (eOp o) e) e'
+| S_App_Abs : forall f i x body e e',
+    IsVal e ->
+    e' = substitute (substitute body x e) f (eAbs f i x body) ->
+    Step (eApp (eAbs f i x body) e) e'
+| S_If_Cong : forall e1 e1' e2 e3,
+    Step e1 e1' ->
+    Step (eIf e1 e2 e3) (eIf e1' e2 e3)
+| S_If_False : forall e e',
+    Step (eIf (eBool false) e e') e'
+| S_If_NonFalse : forall v e e',
+    IsVal v ->
+    v <> (eBool false) ->
+    Step (eIf v e e') e
+| S_If_Let_Cong : forall x e1 e1' e2,
+    Step e1 e1' ->
+    Step (eLet x e1 e2) (eLet x e1' e2)
+| S_If_Let : forall x e1 e2,
+    IsVal e1 ->
+    Step (eLet x e1 e2) (substitute e2 x e1).
+Hint Constructors Step.
+
+
+Inductive Steps : exp -> exp -> Prop :=
+| S_Null : forall e,
+    Steps e e
+| S_Cons : forall e1 e2 e3,
+    Step e1 e2 ->
+    Steps e2 e3 ->
+    Steps e1 e3.
+Hint Constructors Steps.
+(* BOOKMARK *)
 
 (**********************************************************)
 (* Subtyping                                              *)
