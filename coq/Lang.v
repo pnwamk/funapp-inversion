@@ -198,6 +198,41 @@ Definition tres_dec : forall (x y : tres),
 Proof. decide equality. Defined.
 Hint Resolve tres_dec.
 
+Fixpoint fvsO (o:obj) : list var :=
+  match o with
+  | oVar x => [x]
+  | oTop => []
+  | oBot => []
+  end.
+Hint Unfold fvsO.
+
+
+Fixpoint fvsP (p:prop) : list var :=
+  match p with
+  | Trivial => []
+  | Absurd => []
+  | And p1 p2 => (fvsP p1) ++ (fvsP p2)
+  | Or p1 p2 => (fvsP p1) ++ (fvsP p2)
+  | Is x t => [x]
+  | Eq x y => [x ; y]
+  end.
+Hint Unfold fvsP.
+
+Fixpoint fvsR (R:tres) : list var :=
+  match R with
+  | Res t p q (oVar x) => [x] ++ (fvsP p) ++ (fvsP q)
+  | Res t p q _ => (fvsP p) ++ (fvsP q)
+  end.
+Hint Unfold fvsP.
+
+
+Fixpoint fvs (Γ:gamma) : list var :=
+  match Γ with
+  | [] => []
+  | p::ps => (fvsP p) ++ (fvs ps)
+  end.
+Hint Unfold fvs.
+
 
 (**********************************************************)
 (* Dynamic Semantics                                      *)
@@ -347,25 +382,102 @@ Notation "A '⊆' B" :=
 Definition Subtype (t1 t2:ty) : Prop := (tInterp t1) ⊆ (tInterp t2).
 
 
-Lemma Subtype_refl : forall t, Subtype t t.
-Proof.
-  crush.
-Qed.
-
-
 Definition IsEmpty (t: ty) := (tInterp t) = (Empty_set val).
 Hint Unfold IsEmpty.
 
 Axiom empty_dec : forall (t: ty), {IsEmpty t} + {~ IsEmpty t}.
 
-Inductive Subobj : obj -> obj -> Prop :=
-| SO_Refl : forall o,
-    Subobj o o
-| SO_Bot : forall o,
-    Subobj oBot o
-| SO_Top : forall o,
-    Subobj o oTop.
+
+Lemma Subtype_refl : forall t, Subtype t t.
+Proof.
+  crush.
+Qed.
+
+Lemma Subtype_trans : forall t1 t2 t3,
+    Subtype t1 t2 ->
+    Subtype t2 t3 ->
+    Subtype t1 t3.
+Proof.
+  intros.
+  unfold Subtype in *.
+  crush.
+Qed.
+
+Lemma Subtype_tAnd_L : forall t1 t2 t3,
+    Subtype t1 t2 ->
+    Subtype (tAnd t1 t3) (tAnd t2 t3).
+Proof.
+  intros t1 t2 t3 H12.
+  unfold Subtype.
+  intros x Hx.
+  crush.
+  apply Intersection_inv in Hx.
+  crush.
+Qed.
+
+Lemma Subtype_tAnd_LL : forall t1 t2 t3 t4,
+    Subtype t1 t2 ->
+    Subtype (tAnd t2 t3) t4 ->
+    Subtype (tAnd t1 t3) t4.
+Proof.
+Admitted.
+
+Lemma Subtype_Empty : forall t1 t2,
+    Subtype t1 t2 ->
+    IsEmpty t2 ->
+    IsEmpty t1.
+Proof.
+  intros.
+  unfold Subtype in *.
+  unfold IsEmpty in *. rewrite H0 in H.
+  crush.
+Qed.
+
+Lemma Subtype_tAnd_LFalse : forall t1 t2,
+    Subtype (tAnd t1 tFalse) t2 ->
+    Subtype (tAnd t1 tFalse) (tAnd t2 tFalse).
+Proof.
+Admitted.
+
+Lemma Subtype_tAnd_LNotFalse : forall t1 t2,
+    Subtype (tAnd t1 (tNot tFalse)) t2 ->
+    Subtype (tAnd t1 (tNot tFalse)) (tAnd t2 (tNot tFalse)).
+Proof.
+Admitted.
+
+Lemma Subtype_L_tAnd : forall t1 t2 t3,
+    Subtype t1 t3 ->
+    Subtype (tAnd t1 t2) t3.
+Proof.
+  intros.
+  unfold Subtype in *.
+  intros x Hx.
+  rewrite interp_tAnd in Hx.
+  apply Intersection_inv in Hx. crush.
+Qed.
+
+Inductive Subobj : gamma -> obj -> obj -> Prop :=
+| SO_Refl : forall Γ o,
+    Subobj Γ o o
+| SO_Bot : forall Γ o,
+    incl (fvsO o) (fvs Γ) ->
+    Subobj Γ oBot o
+| SO_Top : forall Γ o,
+    Subobj Γ o oTop.
 Hint Constructors Subobj.
+
+Lemma Subobj_trans : forall Γ o1 o2 o3,
+    Subobj Γ o1 o2 ->
+    Subobj Γ o2 o3 ->
+    Subobj Γ o1 o3.
+Proof.
+  intros Γ o1 o2 o3 H12.
+  generalize dependent o3.
+  induction H12; crush.
+  inversion H0; crush.
+  inversion H; crush.
+Qed.
+
 
 (* (SubstPath z x y z' *)
 (* z[x ↦ y] = z' but where the substitution is optional *)
@@ -397,33 +509,6 @@ Inductive SubstProp : prop -> var -> var -> prop -> Prop :=
     SubstVar z2 x y z2' ->
     SubstProp (Eq z1 z2) x y (Eq z1' z2').
 
-
-Fixpoint fvsP (p:prop) : list var :=
-  match p with
-  | Trivial => []
-  | Absurd => []
-  | And p1 p2 => (fvsP p1) ++ (fvsP p2)
-  | Or p1 p2 => (fvsP p1) ++ (fvsP p2)
-  | Is x t => [x]
-  | Eq x y => [x ; y]
-  end.
-Hint Unfold fvsP.
-
-Fixpoint fvsR (R:tres) : list var :=
-  match R with
-  | Res t p q (oVar x) => [x] ++ (fvsP p) ++ (fvsP q)
-  | Res t p q _ => (fvsP p) ++ (fvsP q)
-  end.
-Hint Unfold fvsP.
-
-
-Fixpoint fvs (Γ:gamma) : list var :=
-  match Γ with
-  | [] => []
-  | p::ps => (fvsP p) ++ (fvs ps)
-  end.
-Hint Unfold fvs.
-
 Inductive WellFormedProp : gamma -> prop -> Prop :=
 | WFP : forall Γ p,
     incl (fvsP p) (fvs Γ) ->
@@ -442,8 +527,9 @@ Inductive Proves : gamma -> prop -> Prop :=
     Proves Γ (Is x t1) ->
     Proves Γ (Is x t2) ->
     Proves Γ (Is x (tAnd t1 t2))
-| P_Empty : forall Γ x p,
-    Proves Γ (Is x tEmpty) ->
+| P_Empty : forall Γ x p t,
+    IsEmpty t ->
+    Proves Γ (Is x t) ->
     incl (fvsP p) (fvs Γ) ->
     Proves Γ p
 | P_Sub : forall Γ x t1 t2,
@@ -487,6 +573,22 @@ Inductive Proves : gamma -> prop -> Prop :=
     Proves Γ q.
 Hint Constructors Proves.
 
+Lemma P_Cut : forall Γ p q,
+    Proves Γ p ->
+    Proves (p::Γ) q ->
+    Proves Γ q.
+Proof.
+Admitted.
+
+
+Lemma P_Env_Cut : forall Γ Γ' p,
+    Forall (Proves Γ) Γ' ->
+    Proves Γ' p ->
+    Proves Γ p.
+Proof.
+Admitted.
+
+
 Lemma Proves_sound : ~ Proves [] Absurd.
 Proof.
 Admitted.
@@ -510,6 +612,7 @@ Proof.
   }
 Qed.
 
+Hint Unfold incl.
 
 Lemma fvs_incl : forall Γ Γ',
     incl Γ Γ' ->
@@ -517,10 +620,7 @@ Lemma fvs_incl : forall Γ Γ',
 Proof.
   intros Γ.
   induction Γ; crush.
-  unfold incl. intros a Ha; inversion Ha.
-  unfold incl. intros b Hb.
-  unfold incl in H.
-  apply in_app_iff in Hb. destruct Hb.
+  unfold incl. intros b Hb. apply in_app_iff in Hb. destruct Hb.
   assert (In a Γ') as HIn by
         (apply H; left; auto).
   eapply fvs_inP_inΓ. eassumption. assumption.
@@ -534,12 +634,12 @@ Lemma P_Subset : forall Γ Γ' p,
     Proves Γ p ->
     incl Γ Γ' ->
     Proves Γ' p.
-Proof with auto.
+Proof with crush.
   intros Γ Γ' p Hproves.
   generalize dependent Γ'. 
-  induction Hproves; crush.
+  induction Hproves...
   {
-    eapply P_Empty...
+    eapply P_Empty... assumption. 
     eapply incl_tran. eassumption.
     apply fvs_incl. assumption.
   }
@@ -560,8 +660,6 @@ Proof with auto.
   }
   {
     eapply P_OrE...
-    apply IHHproves2; crush.
-    apply IHHproves3; crush.
   }
   {
     eapply P_OrI_L; auto. eapply incl_tran.
@@ -622,17 +720,6 @@ Proof.
   }
   {
     inversion H; inversion H0; crush.
-    intros y Hy.
-    inversion Hy; subst.
-    right; left; auto.
-    inversion H1; subst. left; auto.
-    crush.
-    intros y Hy.
-    inversion Hy; subst.
-    left; auto.
-    inversion H1; subst.
-    left; auto.
-    crush.
   }
 Qed.
 
@@ -647,64 +734,303 @@ Proof.
     eapply fvs_inP_inΓ; eauto.
   }
   {
-    unfold incl; crush.
-  }
-  {
-    assert (incl (fvsP p1) (fvsP p1 ++ fvsP p2)) as Hincl by crush.
-    eapply incl_tran. eassumption. assumption.
-  }
-  {
-    assert (incl (fvsP p2) (fvsP p1 ++ fvsP p2)) as Hincl by crush.
-    eapply incl_tran. eassumption. assumption.
-  }
-  {
     eapply incl_tran. eassumption.
     apply incl_app; crush.
-    eapply incl_tran. eapply incl_appr.
-    apply incl_refl. eassumption.
   }
   {
     apply SubstProp_fvs in H.
-    eapply incl_tran. eassumption.
-    intros z Hz.
-    inversion Hz; subst.
-    apply IHHp1. right; left; auto.
-    simpl in *.
-    apply IHHp2. assumption.
+    eapply incl_tran. eassumption. crush.
   }
 Qed.    
   
 
 Definition isa (o:obj) (t:ty) : prop :=
-  if empty_dec t
-  then Absurd
-  else match o with
-       | oVar x => Is x t
-       | oTop => Trivial
-       | oBot => Absurd    
-       end.
+  match o with
+  | oVar x => Is x t
+  | oTop => if empty_dec t then Absurd else Trivial
+  | oBot => Absurd    
+  end.
 Hint Unfold isa.
+
+
+Lemma Prove_sub_isa : forall Γ o1 o2 t1 t2,
+    Subobj Γ o1 o2 ->
+    Subtype t1 t2 ->
+    Proves Γ (isa o1 t1) ->
+    Proves Γ (isa o2 t2).
+Proof with crush.
+  intros Γ o1 o2 t1 t2 HSO HS HP.
+  inversion HSO; subst.
+  {
+    destruct o2...
+    {
+      unfold isa in *.
+      destruct (empty_dec t1)...
+      apply P_Absurd... ifcase...
+      ifcase.
+      assert (IsEmpty t1) as Hmt1 by (eapply Subtype_Empty; eauto).
+      contradiction.
+      crush.
+    }
+    {
+      eapply P_Sub; eauto.
+    }
+  }
+  {
+    unfold isa in *.
+    apply P_Absurd; destruct o2... ifcase...
+  }
+  {
+    unfold isa in *.
+    ifcase...
+    ifcaseH.
+    destruct o1...
+    assert (IsEmpty t1) as Hmt1 by (eapply Subtype_Empty; eauto).
+    eapply P_Empty; try eassumption.
+    crush.
+    assert (IsEmpty t1) as Hmt1 by (eapply Subtype_Empty; eauto).
+    contradiction.
+  }
+Qed.
+
+Inductive WellFormedRes : gamma -> tres -> Prop :=
+| WFR : forall Γ R,
+    incl (fvsR R) (fvs Γ) ->
+    WellFormedRes Γ R.
+Hint Constructors WellFormedRes.
 
 Inductive Subres : gamma -> tres -> tres -> Prop :=
 | SR_Sub : forall Γ t1 p1 q1 o1 t2 p2 q2 o2,
+    WellFormedRes Γ (Res t1 p1 q1 o1) ->
     Subtype t1 t2 ->
-    Subobj o1 o2 ->
-    Proves ((isa o1 (tAnd t1 (tNot tFalse)))::Γ) p2 ->
-    Proves ((isa o1 (tAnd t1 tFalse))::Γ) q2 ->
+    Subobj Γ o1 o2 ->
+    Proves ((isa o1 (tAnd t1 (tNot tFalse)))::p1::Γ) p2 ->
+    Proves ((isa o1 (tAnd t1 tFalse))::q1::Γ) q2 ->
+    WellFormedRes Γ (Res t2 p2 q2 o2) ->
     Subres Γ (Res t1 p1 q1 o1) (Res t2 p2 q2 o2)
-| SR_Absurd : forall Γ t1 p1 q1 o1,
-    Proves ((isa o1 (tAnd t1 (tNot tFalse)))::Γ) Absurd ->
-    Proves ((isa o1 (tAnd t1 tFalse))::Γ) Absurd ->
-    Subres Γ (Res t1 p1 q1 o1) (Res tEmpty Absurd Absurd oBot)
-| SR_False : forall Γ t1 p1 q1 o1,
+| SR_Absurd : forall Γ t1 p1 q1 o1 t2 p2 q2 o2,
+    WellFormedRes Γ (Res t1 p1 q1 o1) ->
     Proves ((isa o1 (tAnd t1 (tNot tFalse)))::p1::Γ) Absurd ->
-    Subres Γ (Res t1 p1 q1 o1) (Res (tAnd t1 tFalse) Absurd q1 o1)
-| SR_NonFalse : forall Γ t1 p1 q1 o1,
     Proves ((isa o1 (tAnd t1 tFalse))::q1::Γ) Absurd ->
-    Subres Γ (Res t1 p1 q1 o1) (Res (tAnd t1 (tNot tFalse)) p1 Absurd o1).
+    WellFormedRes Γ (Res t2 p2 q2 o2) ->
+    Subres Γ (Res t1 p1 q1 o1) (Res t2 p2 q2 o2)
+| SR_False : forall Γ t1 p1 q1 o1 t2 p2 q2 o2,
+    WellFormedRes Γ (Res t1 p1 q1 o1) ->
+    Subtype (tAnd t1 tFalse) t2 ->
+    Subobj Γ o1 o2 ->
+    Proves ((isa o1 (tAnd t1 (tNot tFalse)))::p1::Γ) Absurd ->
+    Proves ((isa o1 (tAnd t1 tFalse))::q1::Γ) q2 ->
+    WellFormedRes Γ (Res t2 p2 q2 o2) ->
+    Subres Γ (Res t1 p1 q1 o1) (Res t2 p2 q2 o2)
+| SR_NonFalse : forall Γ t1 p1 q1 o1 t2 p2 q2 o2,
+    WellFormedRes Γ (Res t1 p1 q1 o1) ->
+    Subtype (tAnd t1 (tNot tFalse)) t2 ->
+    Subobj Γ o1 o2 ->
+    Proves ((isa o1 (tAnd t1 (tNot tFalse)))::p1::Γ) p2 ->
+    Proves ((isa o1 (tAnd t1 tFalse))::q1::Γ) Absurd ->
+    WellFormedRes Γ (Res t2 p2 q2 o2) ->
+    Subres Γ (Res t1 p1 q1 o1) (Res t2 p2 q2 o2).
 Hint Constructors Subres.
 
 
+Lemma Subobj_Weakening : forall Γ Γ' o1 o2,
+    Subobj Γ o1 o2 ->
+    incl Γ Γ' ->
+    Subobj Γ' o1 o2.
+Proof with crush.
+  intros Γ Γ' o1 o2 Hsub Hincl.
+  destruct Hsub...
+  apply SO_Bot.
+  intros x Hx.
+  apply H in Hx.
+  assert (incl (fvs Γ) (fvs Γ')) as Hincl' by (apply fvs_incl; auto).
+  crush.
+Qed.
+
+Lemma Subtype_tAnds_False_trans : forall t1 t2 t3,
+    Subtype (tAnd t1 tFalse) t2 ->
+    Subtype (tAnd t2 tFalse) t3 ->
+    Subtype (tAnd t1 tFalse) t3.
+Proof.
+Admitted.
+  
+Lemma Proves_incl : forall Γ Γ',
+    incl Γ' Γ ->
+    Forall (Proves Γ) Γ'.
+Proof.
+Admitted.
+
+Lemma Subres_trans : forall Γ R1 R2 R3,
+    Subres Γ R1 R2 ->
+    Subres Γ R2 R3 ->
+    Subres Γ R1 R3.
+Proof with crush.
+  intros Γ R1 R2 R3 H12.
+  generalize dependent R3.
+  induction H12; intros R3 H23.  
+  { (* SR_Sub *)
+    assert (Forall (Proves (isa o1 (tAnd t1 (tNot tFalse)) :: p1 :: Γ))
+                   (isa o2 (tAnd t2 (tNot tFalse)) :: p2 :: Γ))
+      as Hp1.
+    {
+      constructor.
+      eapply Prove_sub_isa.
+      eapply Subobj_Weakening. eassumption.
+      repeat apply incl_tl...
+      apply Subtype_tAnd_L. eassumption.
+      apply P_Atom...
+      constructor...
+      apply Proves_incl...
+    }
+    assert (Forall (Proves (isa o1 (tAnd t1 tFalse) :: q1 :: Γ))
+                   (isa o2 (tAnd t2 tFalse) :: q2 :: Γ))
+      as Hp2.
+    {
+      constructor.
+      eapply Prove_sub_isa.
+      eapply Subobj_Weakening. eassumption.
+      repeat apply incl_tl...
+      apply Subtype_tAnd_L. eassumption.
+      apply P_Atom...
+      constructor...
+      apply Proves_incl...        
+    }
+    remember (Res t2 p2 q2 o2) as R2.
+    induction H23;
+      match goal with
+      | [ H : Res _ _ _ _ = Res _ _ _ _ |- _ ] =>
+        inversion H; subst
+      end.
+    {
+      apply SR_Sub...
+      {
+        eapply Subtype_trans; eassumption.        
+      }
+      {
+        eapply Subobj_trans; eassumption.        
+      }
+      {
+        eapply P_Env_Cut; try eassumption.
+      }
+      {
+        eapply P_Env_Cut; try eassumption.
+      }
+    }
+    {
+      apply SR_Absurd...
+      eapply P_Env_Cut. eassumption. assumption.
+      eapply P_Env_Cut. eassumption. assumption.
+    }
+    {
+      eapply SR_False...
+      eapply Subtype_tAnd_LL. eassumption. assumption.
+      eapply Subobj_trans. eassumption. assumption.      
+      eapply P_Env_Cut. eassumption. assumption.
+      eapply P_Env_Cut. eassumption. assumption.      
+    }
+    {
+      apply SR_NonFalse...
+      eapply Subtype_tAnd_LL. eassumption. assumption.
+      eapply Subobj_trans. eassumption. assumption.      
+      eapply P_Env_Cut. eassumption. assumption.
+      eapply P_Env_Cut. eassumption. assumption.
+    }
+  }
+  { (* SR_Absurd *)
+    remember (Res t2 p2 q2 o2) as R2.
+    induction H23; eapply SR_Absurd; crush.
+  }
+  { (* SR_False *)
+    assert (Subtype (tAnd t1 tFalse) (tAnd t2 tFalse)) as Hsub
+        by (apply Subtype_tAnd_LFalse; auto).
+    assert (Forall (Proves (isa o1 (tAnd t1 tFalse) :: q1 :: Γ))
+                   (isa o2 (tAnd t2 tFalse) :: q2 :: Γ))
+      as Hp2.
+    {
+      constructor.
+      eapply Prove_sub_isa.
+      eapply Subobj_Weakening. eassumption.
+      repeat apply incl_tl... eassumption.
+      apply P_Atom... 
+      constructor...
+      apply Proves_incl...        
+    }
+    remember (Res t2 p2 q2 o2) as R2.
+    induction H23;
+      match goal with
+      | [ H : Res _ _ _ _ = Res _ _ _ _ |- _ ] =>
+        inversion H; subst
+      end.
+    {
+      apply SR_False...
+      eapply Subtype_trans. eassumption. apply Subtype_L_tAnd. assumption.
+      eapply Subobj_trans. eassumption. assumption.
+      eapply P_Env_Cut. eassumption. assumption.
+    }
+    {
+      apply SR_Absurd...
+      eapply P_Env_Cut. eassumption. assumption.
+    }
+    {
+      eapply SR_False...
+      apply (@Subtype_tAnds_False_trans t1 t2 t3); auto.
+      eapply Subobj_trans. eassumption. assumption.      
+      eapply P_Env_Cut. eassumption. assumption.
+    }
+    {
+      eapply SR_Absurd...
+      eapply P_Env_Cut. eassumption. assumption.
+    }
+  }
+  { (* SR_NonFalse *)
+    assert (Subtype (tAnd t1 (tNot tFalse)) (tAnd t2 (tNot tFalse)))
+      as Hsub by (apply Subtype_tAnd_LNotFalse; auto).
+    assert (Forall (Proves (isa o1 (tAnd t1 (tNot tFalse)) :: p1 :: Γ))
+                   (isa o2 (tAnd t2 (tNot tFalse)) :: p2 :: Γ))
+      as Hp2.
+    {
+      constructor.
+      eapply Prove_sub_isa.
+      eapply Subobj_Weakening. eassumption.
+      repeat apply incl_tl... eassumption.
+      apply P_Atom... 
+      constructor...
+      apply Proves_incl...        
+    }
+    remember (Res t2 p2 q2 o2) as R2.
+    induction H23;
+      match goal with
+      | [ H : Res _ _ _ _ = Res _ _ _ _ |- _ ] =>
+        inversion H; subst
+      end.
+    {
+      apply SR_NonFalse...
+      eapply (@Subtype_trans (tAnd t1 (tNot tFalse)) t2 t3).
+      eassumption. assumption.
+      eapply Subobj_trans. eassumption. assumption.
+      eapply P_Env_Cut. eassumption. assumption.
+    }
+    {
+      apply SR_Absurd...
+      eapply P_Env_Cut. eassumption. assumption.
+    }
+    {
+      apply SR_Absurd...
+      eapply P_Env_Cut. eassumption. assumption.      
+    }
+    {
+      eapply SR_NonFalse...
+      apply (@Subtype_trans (tAnd t1 (tNot tFalse))
+                            (tAnd t2 (tNot tFalse))
+                            t3); auto.
+      eapply Subobj_trans. eassumption. assumption.      
+      eapply P_Env_Cut. eassumption. assumption.
+    }
+  }
+Qed.  
+
+  
+  
 (**********************************************************)
 (* Type System                                            *)
 (**********************************************************)
@@ -806,12 +1132,6 @@ Axiom Pred : ty -> ty -> ty -> ty -> Prop.
    For this module, we just keep this abstract.  *)
 
 
-Inductive WellFormedRes : gamma -> tres -> Prop :=
-| WFR : forall Γ R,
-    incl (fvsR R) (fvs Γ) ->
-    WellFormedRes Γ R.
-Hint Constructors WellFormedRes.    
-
 Inductive TypeOf : gamma -> exp -> tres -> Prop :=
 | T_Var : forall Γ x y t R,
     Proves Γ (Eq x y) ->
@@ -886,6 +1206,19 @@ Axiom Pred_def : forall funty argty tpos tneg,
       (v3 <> (vBool false) /\ TypeOfVal v2 tpos)
       \/
       (v3 = (vBool false) /\ TypeOfVal v2 tneg).
+
+Lemma Pred_pos_arg : forall t1 t2 tpos tneg,
+    Pred t1 t2 tpos tneg ->
+    Subtype tpos t2.
+Proof.
+Admitted.
+
+Lemma Pred_neg_arg : forall t1 t2 tpos tneg,
+    Pred t1 t2 tpos tneg ->
+    Subtype tneg t2.
+Proof.  
+Admitted.
+  
 
 (**********************************************************)
 (* Soundness                                              *)
@@ -1035,6 +1368,13 @@ Proof.
         apply P_Atom. left; auto.
         contradiction.
         constructor. simpl. crush.
+        assert (Subtype tneg tNat) as Hneg.
+        {
+          assert (Subtype tneg t2) as Htneg2
+              by (eapply Pred_neg_arg; eassumption).
+          eapply Subtype_trans; eauto.
+        }
+        
         (* BOOKMARK *)
       }      
       {
