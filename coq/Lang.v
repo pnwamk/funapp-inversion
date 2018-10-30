@@ -300,10 +300,10 @@ Inductive Step : exp -> exp -> Prop :=
 | S_If_NonFalse : forall v e e',
     v <> (vBool false) ->
     Step (eIf (eVal v) e e') e
-| S_If_Let_Cong : forall x e1 e1' e2,
+| S_Let_Cong : forall x e1 e1' e2,
     Step e1 e1' ->
     Step (eLet x e1 e2) (eLet x e1' e2)
-| S_If_Let : forall x v e,
+| S_Let : forall x v e,
     Step (eLet x (eVal v) e) (substitute e x v).
 Hint Constructors Step.
 
@@ -1266,6 +1266,12 @@ Lemma TypeOf_tNat : forall Γ v p q o,
 Proof.
 Admitted.
 
+Lemma TypeOf_cNat_obj : forall Γ n t p q o,
+    TypeOf Γ (eVal (vNat n)) (Res t p q o) ->
+    o = oTop.
+Proof.
+Admitted.
+  
 Lemma TypeOf_tStr : forall Γ v p q o,
     TypeOf Γ (eVal v) (Res tNat p q o) ->
     exists s, v = vConst (cStr s).
@@ -1289,15 +1295,150 @@ Lemma Empty_neq_tBase : forall bty1 bty2,
     IsEmpty (tAnd (tBase bty1) (tBase bty2)).
 Proof.
 Admitted.
-  
+
+
+Lemma TypeOf_Nat_lower_bound : forall Γ n t p q o,
+    TypeOf Γ (eVal (vNat n)) (Res t p q o) ->
+    Subtype tNat t.
+Proof.
+Admitted.
+Lemma tNat_not_empty : forall t,
+    Subtype tNat t ->
+    ~ IsEmpty t.
+Proof.
+Admitted.
+
+Lemma tNat_and_tFalse_not_empty : forall t,
+    Subtype tNat t ->
+    ~ IsEmpty (tAnd t (tNot tFalse)).
+Proof.
+Admitted.
+
+Lemma NonEmpty_tpos : forall t1 t2 tpos tneg,
+    Pred t1 t2 tpos tneg ->
+    ~ IsEmpty t2 ->
+    ~ IsEmpty (tAnd t2 (tNot tFalse)) ->
+    ~ IsEmpty tpos.
+Proof.
+Admitted.
+
+
+
+Lemma Progress_App_op : forall t1 t2 o2 t tpos tneg R v2 o,
+    TypeOf [] (eVal v2) (Res t2 Trivial Trivial o2) ->
+    TypeOf [] (eVal (vOpo)) (Res t1 Trivial Trivial oTop) ->
+    Subtype t1 (tArrow t2 t) ->
+    Pred t1 t2 tpos tneg ->
+    WellFormedRes [] R ->
+    Subres [] (Res t (isa o2 tpos) (isa o2 tneg) oTop) R ->
+    Subtype (op_type o) (tArrow t2 t) ->
+    (exists e' : exp,
+        Step (eApp (eVal (vOpo)) (eVal v2)) e' /\
+        (exists R' : tres, TypeOf [] e' R' /\ Subres [] R' R)).
+Proof with crush.
+  intros t1 t2 o2 t tpos tneg R v2 o Htype2 Htype1 Hsub2 Hpred Hwfr Hsres Hsub1.
+  destruct o; simpl in *.
+  { (* opAdd1 *)
+    assert (Subtype t2 tNat) as Ht2.
+    {
+      eapply Subtype_tArrow_dom. eassumption.
+    }
+    assert (Subtype tNat t) as Ht.
+    {
+      eapply Subtype_tArrow_cdom. eassumption.
+    }
+    assert (TypeOf [] (eVal v2) (Res tNat Trivial Trivial o2)) as Hv2Nat.
+    {
+      eapply TypeOf_Sub_type; eassumption.
+    }
+    apply TypeOf_tNat in Hv2Nat.
+    destruct Hv2Nat as [n Hn]. subst.
+    exists (eVal (vNat (n + 1))). split.
+    apply S_App_Op. simpl. reflexivity.
+    exists (Res t Trivial Absurd oTop). split.
+    apply T_Const. simpl.
+    apply SR_Sub; auto.
+    assert (IsEmpty (tAnd tNat tFalse)) as Hempty.
+    {
+      apply Empty_neq_tBase. crush.
+    }
+    unfold isa. ifcase.
+    apply P_Atom. left; auto.
+    contradiction.
+    constructor. simpl. crush.
+    assert (Subtype tneg tNat) as Hneg.
+    {
+      assert (Subtype tneg t2) as Htneg
+          by (eapply Pred_neg_arg; eassumption).
+      eapply Subtype_trans; eauto.
+    }
+    assert (o2 = oTop) as Ho2 by
+          (eapply TypeOf_cNat_obj; eassumption).
+    subst.
+    assert (~ IsEmpty tpos) as Hpos.
+    {
+      eapply NonEmpty_tpos. eassumption.
+      apply tNat_not_empty.
+      eapply TypeOf_Nat_lower_bound. eassumption.
+      apply tNat_and_tFalse_not_empty.
+      eapply TypeOf_Nat_lower_bound. eassumption.
+    }
+    apply (@Subres_trans []
+                         (Res t Trivial Absurd oTop)
+                         (Res t (isa oTop tpos) (isa oTop tneg) oTop)
+                         R).
+    {
+      apply SR_NonFalse...
+      apply Subtype_L_tAnd. apply Subtype_refl.
+      ifcase. ifcase... ifcase.
+      contradiction.
+      crush. repeat ifcase; crush.
+    }
+    {
+      eassumption.
+    }
+  }
+  { (* opSub1 *)
+    admit.
+  }
+  { (* opStrLen *)
+    admit.
+  }
+  { (* opNot *)
+    admit.
+  }
+  { (* opIsNat *)
+    admit.
+  }
+  { (* opIsStr *)
+    admit.
+  }
+  { (* opIsProc *)
+    admit.
+  }
+  { (* opIsZero *)
+    admit.
+  }
+Abort.
+
+Lemma Progress_App_op : forall t1 t2 o2 t tpos tneg R v2 o,
+    TypeOf [] (eVal v2) (Res t2 Trivial Trivial o2) ->
+    TypeOf [] (eVal (vOpo)) (Res t1 Trivial Trivial oTop) ->
+    Subtype t1 (tArrow t2 t) ->
+    Pred t1 t2 tpos tneg ->
+    WellFormedRes [] R ->
+    Subres [] (Res t (isa o2 tpos) (isa o2 tneg) oTop) R ->
+    Subtype (op_type o) (tArrow t2 t) ->
+    (exists e' : exp, Step (eApp (eVal (vOpo)) (eVal v2)) e').
+Proof with crush.
+Admitted.
+
 Lemma Progress : forall Γ e R,
     Γ = [] ->
     TypeOf Γ e R ->
-    (exists v, e = (eVal v))
-    \/
-    (exists e', Step e e' /\ (exists  R', TypeOf Γ e' R' /\ Subres Γ R' R)).
-Proof.
-  intros Γ e R Hlive Htype. 
+    (exists v, e = (eVal v)) \/ (exists e', Step e e').
+Proof with crush.
+  intros Γ e R Hlive Htype.
   induction Htype; subst.
   { (* T_Var *)
     assert (incl (fvsP (Eq x y)) (fvs [])) as Hcrazy.
@@ -1334,92 +1475,90 @@ Proof.
       {
         eapply TypeOf_arrow_val. eassumption. eassumption.
       }
-      destruct Hv1opts as [[o Ho] | f [i [x [e H]]]]; subst.
-      {
+      destruct Hv1opts as [[o Ho] | [f [i [x [e Habs]]]]]; subst.
+      { (* (vOp o) *)
         assert (Subtype (op_type o) (tArrow t2 t)) as Harrow.
         {
           eapply TypeOf_Op_Subtype. eassumption. eassumption.
         }
-        destruct o; simpl in *.
-        assert (Subtype t2 tNat) as Ht2.
-        {
-          eapply Subtype_tArrow_dom. eassumption.
-        }
-        assert (Subtype tNat t) as Ht.
-        {
-          eapply Subtype_tArrow_cdom. eassumption.
-        }
-        assert (TypeOf [] (eVal v2) (Res tNat Trivial Trivial o2)) as Hv2Nat.
-        {
-          eapply TypeOf_Sub_type; eassumption.
-        }
-        apply TypeOf_tNat in Hv2Nat.
-        destruct Hv2Nat as [n Hn]. subst.
-        exists (eVal (vNat (n + 1))). split.
-        apply S_App_Op. simpl. reflexivity.
-        exists (Res t Trivial Absurd oTop). split.
-        apply T_Const. simpl.
-        apply SR_Sub; auto.
-        assert (IsEmpty (tAnd tNat tFalse)) as Hempty.
-        {
-          apply Empty_neq_tBase. crush.
-        }
-        unfold isa. ifcase.
-        apply P_Atom. left; auto.
-        contradiction.
-        constructor. simpl. crush.
-        assert (Subtype tneg tNat) as Hneg.
-        {
-          assert (Subtype tneg t2) as Htneg2
-              by (eapply Pred_neg_arg; eassumption).
-          eapply Subtype_trans; eauto.
-        }
-        
-        (* BOOKMARK *)
-      }      
-      {
-        
+        eapply Progress_App_op; eauto.
       }
-      {
-        
-      }      
-
-      (*
-        Lemma TypeOf_Op_Subtype : forall Γ o t1 t2 t,
-        TypeOf Γ (eVal (vOp o)) (Res t1 Trivial Trivial oTop) ->
-        Subtype t1 (tArrow t2 t) ->
-        Subtype (op_type o) (tArrow t2 t).
-        Proof.
-        Admitted.
-       *)
-      
-      assert (TypeOf [] (eVal v1) (Res (tArrow t2 t) Trivial Trivial oTop))
-        as Htype1'.
-      {
-        eapply TypeOf_Const_Subtype. eassumption. eassumption.
+      { (* (vAbs f i x e) *)
+        exists (substitute (substitute e x v2) f (vAbs f i x e)).
+        constructor. reflexivity.
       }
-      clear Htype1.
-
-      
     }
     {
-      
+      match goal with
+      | [H : (exists _, Step _ _) |- _]
+        =>  destruct H as [e1' Hstep1]
+      end.
+      exists (eApp e1' e2). apply S_App_Cong1...
     }
     {
-      
+      match goal with
+      | [H : (exists _, _ = eVal _) |- _]
+        =>  destruct H as [v1 Hv1]
+      end.
+      subst.
+      match goal with
+      | [H : (exists _, Step _ _) |- _]
+        =>  destruct H as [e2' Hstep2]
+      end.
+      exists (eApp (eVal v1) e2'). apply S_App_Cong2...
     }
     {
-      
+      match goal with
+      | [H : (exists _, Step _ _) |- _]
+        =>  destruct H as [e1' Hstep1]
+      end.
+      exists (eApp e1' e2). apply S_App_Cong1...
     }
-    
-    
   }
   {
+    intuition.
+    match goal with
+    | [H : (exists _, _ = eVal _) |- _]
+      =>  destruct H as [v1 Hv1]
+    end.
+    subst.
+    destruct (val_dec v1 (vBool false)) as [Htrue | Hfalse].
+    {
+      subst.
+      right. exists e3. apply S_If_False.
+    }
+    {
+      right. exists e2. apply S_If_NonFalse...
+    }
+    match goal with
+    | [H : (exists _, Step _ _) |- _]
+      =>  destruct H as [e1' Hstep1]
+    end.
+    right. exists (eIf e1' e2 e3). apply S_If_Cong...
   }
   {
+    intuition.
+    {
+      match goal with
+      | [H : (exists _, _ = eVal _) |- _]
+        =>  destruct H as [v1 Hv1]
+      end.
+      subst.
+      right. exists (substitute e2 x v1).
+      apply S_Let...
+    }
+    {
+      match goal with
+      | [H : (exists _, Step _ _) |- _]
+        =>  destruct H as [e1' Hstep1]
+      end.
+      right. exists (eLet x e1' e2). apply S_Let_Cong...
+    }
   }
   {
+    remember Proves_sound. crush.
   }
+Qed.
   
   
 Lemma Preservation : forall Γ e e' R R',
@@ -1430,1205 +1569,3 @@ Lemma Preservation : forall Γ e e' R R',
 
 
 (* ARCHIVE // OLD *)
-
-
-Ltac same_rVal :=
-  match goal with
-  | [H : rVal _ = rVal _ |- _] => inversion H; subst
-  end.
-
-Inductive Sat : rho -> prop -> Prop :=
-| M_Trivial : forall r,
-    Sat r Trivial
-| M_And : forall p q r,
-    Sat r p ->
-    Sat r q ->
-    Sat r (And p q)
-| M_Or_L : forall p q r,
-    Sat r p ->
-    Sat r (Or p q)
-| M_Or_R : forall p q r,
-    Sat r q ->
-    Sat r (Or p q)
-| M_Is : forall π t r v,
-    path_lookup r π = rVal v ->
-    TypeOfVal v t ->
-    Sat r (Is π t)
-| M_Eq : forall π1 π2 v r,
-    path_lookup r π1 = rVal v ->
-    path_lookup r π2 = rVal v ->
-    Sat r (Eq π1 π2)
-
-with
-TypeOfVal : val -> ty -> Prop :=
-| TOV_Const : forall c t,
-    Subtype (const_type c) t ->
-    TypeOfVal (vConst c) t
-| TOV_Pair : forall v1 v2 t1 t2 t,
-    TypeOfVal v1 t1 ->
-    TypeOfVal v2 t2 ->
-    Subtype (tProd t1 t2) t ->
-    TypeOfVal (vPair v1 v2) t
-| TOV_Clos : forall r f i i' x e t funt Γ,
-    f <> x ->
-    ~ In f (fvs Γ) ->
-    ~ In x (fvs Γ) ->
-    t = (tAnd (interface_ty i) (neg_interface_ty i')) ->
-    ~ IsEmpty t ->
-    Forall (Sat r) Γ ->
-    (forall t1 t2,
-        InInterface t1 t2 i ->
-        TypeOf ((Is (pVar x) t1)::(Is (pVar f) t)::Γ)
-               e
-               (Res t2 Trivial Trivial oTop)) ->
-    Subtype t funt ->
-    TypeOfVal (vClos r f i x e) funt.      
-Hint Constructors Sat TypeOfVal.
-
-
-Inductive ApplyVal : val -> val -> result -> Prop :=
-| Apply_Op : forall o v res,
-    apply_op o v = res ->
-    ApplyVal (vOp o) v res
-| Apply_Error : forall r f i x e v,
-    (exists n, ValOf n (rhoCons x v (rhoCons f (vClos r f i x e) r))
-                     e
-                     rError) ->
-    ApplyVal (vClos r f i x e) v rError
-| Apply_Stuck : forall r f i x e v,
-    (exists n, ValOf n (rhoCons x v (rhoCons f (vClos r f i x e) r))
-                     e
-                     rStuck) ->
-    ApplyVal (vClos r f i x e) v rStuck
-| Apply_Val : forall r f i x e v,
-    (exists n v, ValOf n (rhoCons x v (rhoCons f (vClos r f i x e) r))
-                       e
-                       (rVal v)) ->
-    ApplyVal (vClos r f i x e) v rStuck
-| Apply_Timeout : forall r f i x e v,
-    (forall n, ValOf n (rhoCons x v (rhoCons f (vClos r f i x e) r))
-                     e
-                     rTimeout) ->
-    ApplyVal (vClos r f i x e) v rTimeout.
-Hint Constructors ApplyVal.
-
-Inductive IsProc : val -> Prop :=
-| IP_Op : forall o, IsProc (vOp o)
-| IP_Clos : forall r f i x e, IsProc (vClos r f i x e).
-Hint Constructors IsProc.
-
-Inductive ValMaps : val -> ty -> ty -> Prop :=
-| Maps : forall v t1 t2,
-    IsProc v ->
-    (forall v1,
-        TypeOfVal v1 t1 ->
-        ApplyVal v v1 rTimeout
-        \/ ApplyVal v v1 rError
-        \/ (exists v2, ApplyVal v v1 (rVal v2)
-                       /\ TypeOfVal v2 t2)) ->
-    ValMaps v t1 t2.
-Hint Constructors ValMaps.
-
-Axiom interp_tArrow_exists : forall (t1 t2:ty) (v:val),
-    v ∈ (tInterp (tArrow t1 t2)) ->
-    ValMaps v t1 t2.
-Axiom interp_tArrow_full : forall (v:val) (t1 t2:ty),
-    ValMaps v t1 t2 ->
-    v ∈ (tInterp (tArrow t1 t2)).
-
-Axiom Pred_def : forall funty argty tpos tneg,
-    Pred funty argty tpos tneg ->
-    forall v1 v2 v3,
-      TypeOfVal v1 funty ->
-      TypeOfVal v2 argty ->
-      ApplyVal v1 v2 (rVal v3) ->
-      (v3 <> (vBool false) /\ TypeOfVal v2 tpos)
-      \/
-      (v3 = (vBool false) /\ TypeOfVal v2 tneg).
-
-
-
-Lemma SubstPath_lookup_eq : forall r π1 π1' π π' v,
-    SubstPath π1 π π' π1' ->
-    path_lookup r π = rVal v ->
-    path_lookup r π' = rVal v ->
-    path_lookup r π1 = path_lookup r π1'.
-Proof.
-  intros r π1 π1' π π' v Hsub.
-  generalize dependent r.
-  induction Hsub; crush.
-Qed.  
-  
-Lemma Sat_transport : forall r p π π' q,
-    SubstProp p π π' q ->
-    Sat r p ->
-    Sat r (Eq π π') ->
-    Sat r q.
-Proof.
-  intros r p π π' q Hsubst.
-  generalize dependent r.
-  induction Hsubst.
-  {
-    (* SProp_Refl *)
-    crush.
-  }
-  {
-    (* SProp_And *)
-    intros r Hand Heq.
-    inversion Hand; crush.
-  }
-  {
-    (* SProp_Or *)
-    intros r Hor Heq.
-    inversion Hor; crush.
-  }
-  {
-    (* SProp_Is *)
-    intros r His Heq.
-    inversion Heq; subst.
-    inversion His; subst.
-    assert (path_lookup r π1 = path_lookup r π1') as Heq1
-        by (eapply SubstPath_lookup_eq; eassumption).
-    assert (path_lookup r π1' = rVal v0) as Heq0 by crush.
-    econstructor; eauto.
-  }
-  {
-    (* SProp_Eq *)
-    intros r Heq Heq'.
-    inversion Heq; subst.
-    inversion Heq'; subst.
-    assert (path_lookup r π1 = path_lookup r π1') as Heq1
-        by (eapply SubstPath_lookup_eq; eassumption).
-    assert (path_lookup r π1' = rVal v) as Heq1' by crush.
-    assert (path_lookup r π2 = path_lookup r π2') as Heq2
-        by (eapply SubstPath_lookup_eq; eassumption).
-    assert (path_lookup r π2' = rVal v) as Heq2' by crush.
-    econstructor; eauto.
-  }
-Qed.  
-
-Lemma TOV_Sub : forall v t t',
-    TypeOfVal v t ->
-    Subtype t t' ->
-    TypeOfVal v t'.
-Proof.
-Admitted.
-
-Lemma Subtype_tAnd_R : forall t t1 t2,
-    Subtype t t1 ->
-    Subtype t t2 ->
-    Subtype t (tAnd t1 t2).
-Proof.
-  intros.
-  unfold Subtype in *.
-  crush.
-Qed.
-
-Lemma Subtype_tAnd_L : forall t1 t2 t,
-    Subtype t1 t ->
-    Subtype t2 t ->
-    Subtype (tAnd t1 t2) t.
-Proof.
-Admitted.
-
-Lemma Subtype_tProd_And : forall t1 t2 t1' t2' t t',
-    Subtype (tProd t1 t2) t ->
-    Subtype (tProd t1' t2') t' ->
-    Subtype (tProd (tAnd t1 t1') (tAnd t2 t2')) (tAnd t t').
-Proof.
-Admitted.
-(* TODO this should be a fairly straightforward proof *)
-
-Lemma non_IsEmpty_interface_combine_neg : forall i i' i'',
-    ~ IsEmpty (tAnd (interface_ty i) (neg_interface_ty i')) ->
-    ~ IsEmpty (tAnd (interface_ty i) (neg_interface_ty i'')) ->
-    ~ IsEmpty (tAnd (interface_ty i) (neg_interface_ty (i' ++ i''))).
-Proof.
-Admitted.
-(* Justification: if you look at the emptiness algorithm, a
-   single negative arrow must refute the combination of the
-   positive ones, thus if none of the negative arrows in i'
-   and i'' made i a contradiction before, they cannot
-   together since they are just the sum of their parts. *)
-
-Lemma TypeOf_env_weakening : forall Γ Γ' e R,
-    Forall (Proves Γ') Γ ->
-    TypeOf Γ e R ->
-    TypeOf Γ' e R.
-Proof.
-Admitted.
-(* TODO should be straightforward *)
-
-Lemma neg_interface_ty_app : forall i i',
-    neg_interface_ty (i ++ i') =
-    tAnd (neg_interface_ty i) (neg_interface_ty i').
-Proof.
-Admitted. (* Obvious *)
-
-Lemma no_fvs_app : forall v Γ Γ',
-    ~ In v (fvs Γ) ->
-    ~ In v (fvs Γ') ->
-    ~ In v (fvs (Γ ++ Γ')).
-Proof.
-Admitted.
-
-Lemma Sat_app : forall r Γ Γ',
-    Forall (Sat r) Γ ->
-    Forall (Sat r) Γ' ->
-    Forall (Sat r) (Γ ++ Γ').
-Proof.
-Admitted.  
-
-Lemma Proves_I_am_lazy : forall v0 t v i i' i'0 Γ Γ0,
-    Forall
-      (Proves
-         (Is (pVar v0) t
-             :: Is (pVar v)
-             (tAnd (interface_ty i) (neg_interface_ty (i' ++ i'0)))
-             :: Γ ++ Γ0))
-      (Is (pVar v0) t
-          :: Is (pVar v) (tAnd (interface_ty i) (neg_interface_ty i'0)) :: Γ0).
-Proof.
-Admitted.
-
-Lemma IsEmpty_no_vals : forall v t,
-    IsEmpty t ->
-  ~ TypeOfVal v t.
-Proof.
-Admitted.  
-
-Lemma TOV_And : forall v t1 t2,
-    TypeOfVal v t1 ->
-    TypeOfVal v t2 ->
-    TypeOfVal v (tAnd t1 t2).
-Proof.
-  intros v.
-  induction v.
-  {
-    intros t1 t2 H1 H2.
-    constructor.
-    inversion H1. inversion H2. subst.
-    apply Subtype_tAnd_R; auto.
-  }
-  {
-    intros t1 t2 H1 H2.
-    inversion H1. inversion H2. subst.
-    assert (TypeOfVal v1 (tAnd t0 t4)) as H1And by crush.
-    assert (TypeOfVal v2 (tAnd t3 t5)) as H2And by crush.
-    apply (TOV_Pair H1And H2And).
-    apply Subtype_tProd_And; auto.
-  }
-  {
-    intros t1 t2 H1 H2.
-    inversion H1.
-    inversion H2.
-    subst.
-    assert (v <> v0) as Hneq by assumption.
-    assert (~ In v (fvs (Γ ++ Γ0))) as Hnov
-        by (apply no_fvs_app; auto).
-    assert (~ In v0 (fvs (Γ ++ Γ0))) as Hnov0
-        by (apply no_fvs_app; auto).
-    eapply TOV_Clos.
-    assumption.
-    exact Hnov.
-    exact Hnov0.
-    reflexivity.
-    apply (non_IsEmpty_interface_combine_neg i i' i'0); assumption.
-    apply Sat_app; assumption.
-    intros t t' HIn.
-    assert
-      (TypeOf
-         (Is (pVar v0) t
-             :: Is (pVar v) (tAnd (interface_ty i) (neg_interface_ty i'0))
-             :: Γ0) e (Res t' Trivial Trivial oTop)) as Hfun by auto.
-    eapply (TypeOf_env_weakening _ Hfun).
-    rewrite neg_interface_ty_app.
-    unfold Subtype in *.
-    unfold Included in *.
-    intros x Hx. repeat rewrite interp_tAnd in *.
-    split. applyH.
-    inversion Hx; subst.
-    split. auto. inversion H0; subst. auto.
-    applyH.
-    inversion Hx; subst.
-    split. auto. inversion H0; subst. auto.
-    Unshelve.
-    apply Proves_I_am_lazy.
-  }
-Qed.
-
-Inductive WellFormedRho : rho -> Prop :=
-| WFR_Nil : WellFormedRho rhoNull
-| WFR_Cons : forall x v r,
-    WellFormedRho r ->
-    TypeOfVal v tAny ->
-    WellFormedRho (rhoCons x v r).
-Hint Constructors WellFormedRho.
-
-Lemma well_formed_path_lookup : forall r π v,
-    WellFormedRho r ->
-    path_lookup r π = rVal v ->
-    exists t, TypeOfVal v t.
-Proof.
-Admitted.
-
-Lemma Subtype_Prod : forall t1 t2 t3 t4,
-    Subtype t1 t3 ->
-    Subtype t2 t4 ->
-    Subtype (tProd t1 t2) (tProd t3 t4).
-Proof.
-Admitted.
-
-Lemma Subtype_Refl : forall t,
-    Subtype t t.
-Proof.
-Admitted.
-Hint Resolve Subtype_Refl.
-  
-Lemma Subtype_Top : forall t,
-    Subtype t tAny.
-Proof.
-Admitted.
-Hint Resolve Subtype_Top.
-
-
-(* i.e. lemma 1 from ICFP 2010 *)
-Lemma Proves_implies_Sat : forall Γ p r,
-    Proves Γ p ->
-    WellFormedRho r ->
-    Forall (Sat r) Γ ->
-    Sat r p.
-Proof with auto.
-  intros Γ p r Hproves.
-  generalize dependent r.
-  induction Hproves; intros r Hwfv Hsat.
-  { (* P_Atom *)
-    eapply Forall_forall; eassumption.
-  }
-  { (* P_Trivial *)
-    crush.
-  }
-  { (* P_Combine *)
-    assert (Sat r (Is π t1)) as H1 by auto.
-    assert (Sat r (Is π t2)) as H2 by auto.
-    inversion H1. inversion H2. subst.
-    assert (v = v0) as Heq by crush. subst.
-    eapply M_Is. eassumption.
-    apply TOV_And; crush.
-  }
-  { (* P_Empty *)
-    assert (Sat r (Is π tEmpty)) as H by auto.
-    inversion H. subst. remember IsEmpty_no_vals as nomt.
-    applyHinH. contradiction. unfold IsEmpty. crush.
-  }
-  { (* P_Sub *)
-    assert (Sat r (Is π t1)) as Ht1 by auto.
-    inversion Ht1; subst.
-    econstructor. eassumption.
-    eapply TOV_Sub. eassumption. assumption.
-  }
-  { (* P_Fst *)
-    assert (Sat r (Is (pFst π) t)) as H by auto.
-    inversion H; subst.
-    assert (exists v', path_lookup r π = rVal (vPair v v')) as H'.
-    {
-      simpl in *. destruct (path_lookup r π); crush.
-      destruct v0;
-        try match goal with
-            | [ H : rStuck = rVal _ |- _] => inversion H; crush
-            end.
-      same_rVal.
-      eexists. eauto.
-    }
-    destruct H' as [v' Hv'].
-    assert (path_lookup r (pSnd π) = rVal v') as Hlookup' by crush.
-    assert (exists t', TypeOfVal v' t') as Ht'
-        by (eapply well_formed_path_lookup; eassumption).
-    destruct Ht' as [t' Ht'].
-    eapply (M_Is π r Hv').
-    econstructor. eassumption. eassumption.
-    apply Subtype_Prod...
-  }
-  { (* P_Snd *)    
-    assert (Sat r (Is (pSnd π) t)) as H by auto.
-    inversion H; subst.
-    assert (exists v', path_lookup r π = rVal (vPair v' v)) as H'.
-    {
-      simpl in *. destruct (path_lookup r π); crush.
-      destruct v0;
-        try match goal with
-            | [ H : rStuck = rVal _ |- _] => inversion H; crush
-            end.
-      same_rVal.
-      eexists. eauto.
-    }
-    destruct H' as [v' Hv'].
-    assert (path_lookup r (pFst π) = rVal v') as Hlookup' by crush.
-    assert (exists t', TypeOfVal v' t') as Ht'
-        by (eapply well_formed_path_lookup; eassumption).
-    destruct Ht' as [t' Ht'].
-    eapply (M_Is π r Hv').
-    econstructor. eassumption. eassumption.
-    apply Subtype_Prod...
-  }
-  { (* P_Absurd *)
-    assert (Sat r Absurd) as Hnope by auto.
-    inversion Hnope.
-  }
-  { (* P_AndE_L *)
-    assert (Sat r (And p1 p2)) as Hsat' by auto.
-    inversion Hsat'; auto.
-  }
-  { (* P_AndE_R *)
-    assert (Sat r (And p1 p2)) as Hsat' by auto.
-    inversion Hsat'; auto.
-  }
-  { (* P_AndI *)
-    crush.
-  }
-  { (* P_OrE *)
-    assert (Sat r (Or p1 p2)) as Hsat' by auto.
-    inversion Hsat'; subst; intuition.
-  }
-  { (* P_OrI_L *)
-    apply M_Or_L. auto.
-  }
-  { (* P_OrI_R *)
-    apply M_Or_R. auto.
-  }
-  { (* P_Refl *)
-    assert (Sat r (Is π t)) as Hsat' by auto.
-    inversion Hsat'; subst.
-    eapply M_Eq; eauto.
-  }
-  { (* P_Subst *)
-    assert (Sat r (Eq π π')) as Heq by auto.
-    assert (Sat r p) as Hp by auto.
-    eapply Sat_transport; eauto.    
-  }
-Qed.
-
-Lemma Proves_implies_Sat' : forall Γ p r,
-    Forall (Sat r) Γ ->
-    WellFormedRho r ->
-    Proves Γ p ->
-    Sat r p.
-Proof.
-  intros.
-  eapply Proves_implies_Sat; eauto.
-Qed.
-
-Inductive ObjSatVal : rho -> obj -> val -> Prop :=
-| OSV_Top : forall r v,
-    ObjSatVal r oTop v
-| OSV_Path : forall r v π,
-    path_lookup r π = (rVal v) ->
-    ObjSatVal r (oPath π) v.
-Hint Constructors ObjSatVal.
-
-Inductive SatProps : rho -> val -> prop -> prop -> Prop :=
-| SP_False : forall r p q,
-    Sat r q ->
-    SatProps r (vBool false) p q
-| SP_NonFalse : forall r p q v,
-    v <> (vBool false) ->
-    Sat r p ->
-    SatProps r v p q.
-Hint Constructors SatProps.
-
-Inductive SoundTypeRes : rho -> val -> tres -> Prop :=
-| STR : forall r v t p q o,
-    ObjSatVal r o v ->
-    SatProps r v p q ->
-    TypeOfVal v t ->
-    SoundTypeRes r v (Res t p q o).
-Hint Constructors SoundTypeRes.
-
-Lemma Subobj_sound : forall r o1 o2 v,
-    ObjSatVal r o1 v ->
-    Subobj o1 o2 ->
-    ObjSatVal r o2 v.
-Proof.
-  intros r o1 o2 v H1 Hsub.
-  inversion H1; inversion Hsub; crush.
-Qed.
-
-Lemma In_IsEmpty : forall v t (P:Prop),
-    IsEmpty t ->
-    v ∈ (tInterp t) ->
-    P.
-Proof.
-  intros v t P H1 H2.
-  inversion H1; crush.
-  match goal with
-  | [H : _ = Empty_set val |- _] => rewrite H in *
-  end.
-  match goal with
-  | [H : v ∈ Empty_set val |- _] => inversion H
-  end.
-Qed.  
-
-Lemma In_empty : forall v P,
-    v ∈ (Empty_set val) ->
-    P.
-Proof.
-  intros v p H. inversion H.
-Qed.  
-
-Hint Extern 1 =>
-match goal with
-| [H : ?v ∈ (Empty_set val) |- ?P] =>
-  apply (In_empty P H)
-| [H : IsEmpty ?t, H' : ?v ∈ (tInterp ?t) |- ?P] =>
-  apply (In_IsEmpty v t P)
-end.
-
-Lemma Setminus_eq : forall X A B,
-    (Setminus X A B) = (Intersection X A (Complement X B)).
-Proof.
-  intros X A B.
-  apply Extensionality_Ensembles.
-  split.
-  constructor.
-  inversion H; crush.
-  inversion H; crush.
-  constructor; crush.
-  inversion H; crush.
-  inversion H; crush.
-Qed.  
-
-Lemma Complement_singleton : forall v v',
-    v <> v' ->
-    v ∈ (Complement val (Singleton val v')).
-Proof.    
-  intros v v' Hneq.
-  intros H. inversion H; crush.
-Qed.
-  
-Hint Extern 1 (_ ∈ _) =>
-match goal with
-| [ |- _ ∈ (Full_set val)]
-    => constructor
-| [ |- _ ∈ (tInterp tTrue)]
-  => rewrite interp_tTrue
-| [ |- _ ∈ (tInterp tFalse)]
-  => rewrite interp_tFalse
-| [ |- _ ∈ (tInterp (tAnd _ _))]
-  => rewrite interp_tAnd
-| [ |- _ ∈ (Setminus val _ _)]
-  => rewrite Setminus_eq
-| [ |- _ ∈ (Intersection val _ _)]
-  => constructor
-| [ |- _ ∈ (Complement val (Singleton val _))]
-  => apply Complement_singleton
-end. 
-
-Lemma neq_false_Not_False : forall v,
-    v <> (vBool false) ->
-    TypeOfVal v (tNot tFalse).
-Proof.
-Admitted.
-
-Lemma Sat_false_val : forall r v t1 p1 q1 o1,
-    SoundTypeRes r v (Res t1 p1 q1 o1) ->
-    v = (vBool false) ->
-    Sat r (isa o1 (tAnd t1 tFalse)).
-Proof with auto.
-  intros r v t1 p1 q1 o1 Hstr Heq.
-  inversion Hstr; subst.
-  cbv.
-  ifcase.
-  { (* is empty (tAnd t1 (tBase btFalse)) *)
-    assert (TypeOfVal (vBool false) (tAnd t1 (tBase btFalse)))
-      as Hand by (apply TOV_And; auto).
-    assert (IsEmpty (tAnd t1 (tBase btFalse))) as Hmtand by auto.
-    assert False as impossible.
-    eapply IsEmpty_no_vals; eassumption.
-    contradiction.
-  }
-  { (* is not empty (tAnd t1 (tBase btFalse)) *)
-    destruct o1.
-    { (* o1 = oTop *)
-      apply M_Trivial.
-    }
-    { (* o1 = oBot *)
-      assert (ObjSatVal r oBot (vBoolfalse)) as Hobj by assumption.
-      inversion Hobj.
-    }
-    { (* o1 = (oPath _) *)
-      assert (ObjSatVal r (oPath p) (vBoolfalse)) as Hobj
-          by assumption.
-      inversion Hobj; subst.
-      eapply (M_Is p r); crush.
-      apply TOV_And; auto.
-    }
-  }
-Qed.
-
-
-Lemma Sat_nonfalse_val : forall r v t1 p1 q1 o1,
-    SoundTypeRes r v (Res t1 p1 q1 o1) ->
-    v <> (vBool false) ->
-    Sat r (isa o1 (tAnd t1 (tNot tFalse))).
-Proof.
-  intros r v t1 p1 q1 o1 Hstr Hneq.
-  inversion Hstr; subst.
-  cbv.
-  ifcase.
-  { (* is empty (tAnd t1 (tNot (tBase btFalse))) *)
-    assert (TypeOfVal v t1) as Ht1 by auto.
-    assert (TypeOfVal v (tNot tFalse)) as Hnotfalse
-    by (apply neq_false_Not_False; crush).
-    assert (TypeOfVal v (tAnd t1 (tNot tFalse))) as Hand
-        by (apply TOV_And; crush).
-    assert (IsEmpty (tAnd t1 (tNot tFalse))) as Hmtand by auto.
-    assert False as impossible by
-          (eapply IsEmpty_no_vals; eassumption).
-    contradiction.
-  }
-  { (* is not empty (tAnd t1 (tNot (tBase btFalse))) *)
-    destruct o1.
-    { (* o1 = oTop *)
-      apply M_Trivial.
-    }
-    { (* o1 = oBot *)
-      assert (ObjSatVal r oBot v) as Hobj by assumption.
-      inversion Hobj.
-    }
-    { (* o1 = (oPath _) *)
-      assert (ObjSatVal r (oPath p) v) as Hobj
-          by assumption.
-      inversion Hobj; subst.
-      eapply (M_Is p r).
-      eassumption.
-      apply TOV_And. eassumption.
-      apply neq_false_Not_False. auto.
-    }
-  }
-Qed.
- 
-Hint Extern 1 (Sat _ _) => 
-match goal with
-| [H : Proves ?Γ ?p |- Sat ?r ?p]
-  => apply (Proves_implies_Sat H)
-| [H : (Forall (Sat ?r) ?Γ) |- Sat ?r ?p]
-  => apply (Proves_implies_Sat' H)
-end. 
-
-Lemma Subres_sound : forall Γ r v R1 R2,
-    Forall (Sat r) Γ ->
-    WellFormedRho r ->
-    SoundTypeRes r v R1 ->
-    Subres Γ R1 R2 ->
-    SoundTypeRes r v R2.
-Proof.
-  intros Γ r v R R' Hsat Hwfr Hstr Hsr.
-  induction Hsr.
-  {
-    inversion Hstr; subst.
-    constructor.
-    eapply Subobj_sound; eassumption.    
-    destruct (val_dec v (vBool false)) as [Heq | Hneq].
-    { (* v = false *)
-      subst.
-      apply SP_False.
-      assert (Sat r (isa o1 (tAnd t1 tFalse))) as Hv
-          by (eapply Sat_false_val; eauto).
-      eapply Proves_implies_Sat. eassumption.
-      crush. crush.
-    }
-    { (* v <> false *)
-      apply SP_NonFalse; auto.
-      assert (Sat r (isa o1 (tAnd t1 (tNot tFalse)))) as Hv
-          by (eapply Sat_nonfalse_val; eauto).
-      crush.
-    }
-    eapply TOV_Sub. eassumption. assumption.
-  }
-  {
-    destruct (val_dec v (vBool false)) as [Heq | Hneq].
-    { (* v = false *)
-      assert (Sat r Absurd) as impossible.
-      {
-        assert (Sat r (isa o1 (tAnd t1 tFalse)))
-          as Hisa by (eapply Sat_false_val; eauto).
-        crush.
-      }
-      inversion impossible.
-    }
-    { (* v <> false *)
-      assert (Sat r Absurd) as impossible.
-      {
-        assert (Sat r (isa o1 (tAnd t1 (tNot tFalse))))
-          as Hisa by (eapply Sat_nonfalse_val; eauto).
-        assert (Forall (Sat r) (isa o1 (tAnd t1 (tNot tFalse)) :: Γ))
-          as Hsat' by auto.
-        crush.
-      }
-      inversion impossible.
-    }
-  }
-  {
-    inversion Hstr; subst.
-    constructor.
-    {
-      eapply Subobj_sound. eassumption.
-      apply SO_Refl.
-    }
-    {
-      destruct (val_dec v (vBool false)) as [Heq | Hneq].
-      { (* v = false *)
-        match goal with
-        | [H : SatProps _ _ _ _ |- _] => inversion H
-        end; crush.
-      }
-      { (* v <> false *)
-        match goal with
-        | [H : SatProps _ _ _ _ |- _] => inversion H
-        end; crush.
-        assert (Sat r Absurd) as impossible.
-        {
-          assert (Sat r (isa o1 (tAnd t1 (tNot tFalse))))
-            as Hisa by (eapply Sat_nonfalse_val; eauto).
-          crush.
-        }
-        inversion impossible.
-      }
-    }
-    {
-      inversion Hstr; subst.
-      apply TOV_And; crush.
-      destruct (val_dec v (vBool false)) as [Heq | Hneq]; crush.
-      { (* v <> false *)
-        match goal with
-        | [H : SatProps _ _ _ _ |- _] => inversion H
-        end; crush.
-        assert (Sat r Absurd) as impossible.
-        {
-          assert (Sat r (isa o1 (tAnd t1 (tNot tFalse))))
-            as Hisa by (eapply Sat_nonfalse_val; eauto).
-          crush.
-        }
-        inversion impossible.
-      }
-    }    
-  }
-  {
-    inversion Hstr; subst.
-    constructor.
-    {
-      eapply Subobj_sound. eassumption.
-      apply SO_Refl.
-    }
-    {
-      destruct (val_dec v (vBool false)) as [Heq | Hneq].
-      { (* v = false *)
-        match goal with
-        | [H : SatProps _ _ _ _ |- _] => inversion H
-        end; crush.
-        assert (Sat r Absurd) as impossible.
-        {
-          assert (Sat r (isa o1 (tAnd t1 tFalse)))
-            as Hisa by (eapply Sat_false_val; eauto).
-          crush.
-        }
-        inversion impossible.
-      }
-      { (* v <> false *)
-        match goal with
-        | [H : SatProps _ _ _ _ |- _] => inversion H
-        end; crush.        
-      }
-    }
-    {
-      inversion Hstr; subst.
-      apply TOV_And; crush.
-      destruct (val_dec v (vBool false)) as [Heq | Hneq].
-      { (* v = false *)
-        match goal with
-        | [H : SatProps _ _ _ _ |- _] => inversion H
-        end; crush.
-        assert (Sat r Absurd) as impossible.
-        {
-          assert (Sat r (isa o1 (tAnd t1 tFalse)))
-            as Hisa by (eapply Sat_false_val; eauto).
-          crush.
-        }
-        inversion impossible.
-      }
-      { (* v <> false *)
-        apply neq_false_Not_False; auto.
-      }
-    }    
-  }
-Qed.
-
-Ltac notIsProc :=
-  match goal with
-  | [H : IsProc _ |- _] => inversion H
-  end.
-
-Lemma tArrow_top : forall t1 t2 t3,
-    Subtype (tArrow t1 t2) (tArrow tEmpty t3).
-Proof.
-Admitted.
-Hint Resolve tArrow_top.
-
-Lemma op_is_tArrow : forall o,
-    TypeOfVal (vOp o) (tArrow tEmpty tAny).
-Proof.
-  intros o.
-  constructor.
-  destruct o; crush; try (unfold predicate);
-    try (apply Subtype_tAnd_L); crush.
-Qed.
-
-Lemma IsEmpty_And_tAny : forall t,
-    IsEmpty (tAnd t tAny) ->
-    IsEmpty t.
-Proof.
-Admitted.
-
-Lemma interface_non_empty : forall i,
-    ~ IsEmpty (interface_ty i).
-Proof.
-Admitted.
-
-Lemma Subtype_And_R1_Refl : forall t t',
-    Subtype t (tAnd t t').
-Proof.
-Admitted.
-Hint Resolve Subtype_And_R1_Refl.
-
-Lemma Subtype_And_R2_Refl : forall t t',
-    Subtype t (tAnd t' t).
-Proof.
-Admitted.
-Hint Resolve Subtype_And_R2_Refl.
-
-
-Lemma lemma3 : forall Γ e R r n,
-      TypeOf Γ e R ->
-      Forall (Sat r) Γ ->
-      WellFormedRho r ->
-      (exists v, ValOf n r e (rVal v) /\ SoundTypeRes r v R) 
-      \/ (ValOf n r e rError)
-      \/ (ValOf n r e rTimeout).
-Proof with crush.
-  (* BOOKMARK *)
-  intros Γ e R r n Htype Hsat Hwfv.
-  induction Hvalof.
-  { (* V_Timeout *)
-    crush.
-  }
-  { (* V_Var *)
-    inversion Htype; subst.
-    remember (var_lookup r x) as Hlook.
-    destruct Hlook.
-    { (* rVal v = var_lookup r x *)
-      left. eexists. split. reflexivity.
-      assert (Sat r (Is π t)) as Hsatis
-          by (eapply Proves_implies_Sat; eassumption).
-      inversion Hsatis; subst.
-      assert (Sat r (Eq (pVar x) π)) as Hsateq
-          by (eapply Proves_implies_Sat; eassumption).
-      inversion Hsateq; subst.
-      assert (SoundTypeRes r v (Res t
-                                    (Is π (tAnd t (tNot tFalse)))
-                                    (Is π (tAnd t tFalse))
-                                    (oPath π)))
-        as Hstr.
-      {
-        constructor. constructor. crush.
-        destruct (val_dec v (vBool false)) as [Heq | Hneq]; subst.
-        { (* v = false *)
-          constructor. eapply M_Is; crush.
-      }
-        { (* v <> false *)
-          apply SP_NonFalse. assumption.
-          eapply M_Is. eassumption.
-          crush.
-          apply TOV_And; crush.
-          apply neq_false_Not_False.
-          crush.
-        }
-        crush.
-      }
-      eapply Subres_sound; eauto.
-    }
-    { (* rFail f = var_lookup r x *)
-      assert (Sat r (Is π t)) as Hsatis
-          by (eapply Proves_implies_Sat; eassumption).
-      inversion Hsatis; subst.
-      assert (Sat r (Eq (pVar x) π)) as Hsateq
-          by (eapply Proves_implies_Sat; eassumption).
-      inversion Hsateq; crush.
-    }
-  }
-  { (* V_Const *)
-    inversion Htype; subst.
-    destruct c.
-    { (* vNat *)
-      simpl in *.
-      left. exists (vNat n0).
-      split; auto.
-      assert (SoundTypeRes r (vNat n0) (Res tNat Trivial Absurd oTop))
-        as Hstr.
-      {
-        constructor; crush.
-        apply SP_NonFalse; crush.
-      }
-      eapply Subres_sound; eauto.
-    }
-    { (* vStr *)
-      simpl in *.
-      left. exists (vStr s).
-      split; auto.
-      assert (SoundTypeRes r (vStr s) (Res tStr Trivial Absurd oTop))
-        as Hstr.
-      {
-        constructor; crush.
-        apply SP_NonFalse; crush.
-      }
-      eapply Subres_sound; eauto.
-    }
-    { (* vBool *)
-      destruct b.
-      { (* b = true *)
-        simpl in *.
-        left. exists (vBool true).
-        split; auto.
-        assert (SoundTypeRes r (vBool true) (Res tTrue Trivial Absurd oTop))
-          as Hstr.
-        {
-          constructor; crush.
-          apply SP_NonFalse; crush.
-        }
-        eapply Subres_sound; eauto.
-      }
-      { (* b = false *)
-        simpl in *.
-        left. exists (vBool false).
-        split; auto.
-        assert (SoundTypeRes r (vBool false)
-                             (Res tFalse Absurd Trivial oTop))
-          as Hstr by crush.
-        eapply Subres_sound; eauto.
-      }      
-    }
-    { (* vOp *)
-      destruct o.
-      { (* opAdd1 *)
-        simpl in *.
-        left. exists (vOp opAdd1).
-        split; auto.
-        assert (SoundTypeRes r (vOp opAdd1)
-                             (Res (tArrow tNat tNat) Trivial Absurd oTop))
-          as Hstr.
-        {
-          constructor; crush.
-          apply SP_NonFalse; crush.
-        }
-        eapply Subres_sound; eauto.
-      }
-      { (* opSub1 *)
-        simpl in *.
-        left. exists (vOp opSub1).
-        split; auto.
-        assert (SoundTypeRes r (vOp opSub1)
-                             (Res (tArrow tNat tNat) Trivial Absurd oTop))
-          as Hstr.
-        {
-          constructor; crush.
-          apply SP_NonFalse; crush.
-        }
-        eapply Subres_sound; eauto.
-      }
-      { (* opStrLen *)
-        simpl in *.
-        left. exists (vOp opStrLen).
-        split; auto.
-        assert (SoundTypeRes r (vOp opStrLen)
-                             (Res (tArrow tStr tNat) Trivial Absurd oTop))
-          as Hstr.
-        {
-          constructor; crush.
-          apply SP_NonFalse; crush.
-        }
-        eapply Subres_sound; eauto.
-      }
-      { (* opNot *)
-        simpl in *.
-        left. exists (vOp opNot).
-        split; auto.
-        assert (SoundTypeRes r (vOp opNot)
-                             (Res (predicate tFalse) Trivial Absurd oTop))
-          as Hstr.
-        {
-          constructor; crush.
-          apply SP_NonFalse; crush.
-        }
-        eapply Subres_sound; eauto.
-      }
-      { (* opIsNat *)
-        simpl in *.
-        left. exists (vOp opIsNat).
-        split; auto.
-        assert (SoundTypeRes r (vOp opIsNat)
-                             (Res (predicate tNat) Trivial Absurd oTop))
-          as Hstr.
-        {
-          constructor; crush. 
-          apply SP_NonFalse; crush.
-        }
-        eapply Subres_sound; eauto.
-      }
-      { (* opIsStr *)
-        simpl in *.
-        left. exists (vOp opIsStr).
-        split; auto.
-        assert (SoundTypeRes r (vOp opIsStr)
-                             (Res (predicate tStr) Trivial Absurd oTop))
-          as Hstr.
-        {
-          constructor; crush.
-          apply SP_NonFalse; crush.
-        }
-        eapply Subres_sound; eauto.
-      }
-      { (* opIsPair *)
-        simpl in *.
-        left. exists (vOp opIsPair).
-        split; auto.
-        assert (SoundTypeRes r (vOp opIsPair)
-                             (Res (predicate (tProd tAny tAny))
-                                  Trivial
-                                  Absurd
-                                  oTop))
-          as Hstr.
-        {
-          constructor; crush.
-          apply SP_NonFalse; crush.
-        }
-        eapply Subres_sound; eauto.
-      }
-      { (* opIsProc *)
-        simpl in *.
-        left. exists (vOp opIsProc).
-        split; auto.
-        assert (SoundTypeRes r (vOp opIsProc)
-                             (Res (predicate (tArrow tEmpty tAny))
-                                  Trivial
-                                  Absurd
-                                  oTop))
-          as Hstr.
-        {
-          constructor; crush.
-          apply SP_NonFalse; crush.
-        }
-        eapply Subres_sound; eauto.
-      }
-      { (* opIsZero *)
-        simpl in *.
-        left. exists (vOp opIsZero).
-        split; auto.
-        assert (SoundTypeRes r (vOp opIsZero)
-                             (Res (tArrow tNat tBool) Trivial Absurd oTop))
-          as Hstr.
-        {
-          constructor; crush.
-          apply SP_NonFalse; crush.
-        }
-        eapply Subres_sound; eauto.
-      }
-      { (* opError *)
-        simpl in *.
-        left. exists (vOp opError).
-        split; auto.
-        assert (SoundTypeRes r (vOp opError)
-                             (Res (tArrow tStr tEmpty) Trivial Absurd oTop))
-          as Hstr.
-        {
-          constructor; crush.
-          apply SP_NonFalse; crush.
-        }
-        eapply Subres_sound; eauto.
-      }
-    }
-  }
-  { (* V_Abs *)
-    inversion Htype; subst.
-    (* BOOKMARK *)
-    left. exists (vClos r f i x e); split; auto.
-    assert (SoundTypeRes r (vClos r f i x e)
-                         (Res (int_to_ty i)
-                              Trivial
-                              Absurd
-                              oTop))
-      as Hstr.
-    {
-      constructor; crush.
-      constructor; crush.
-      eapply closure_interface_lemma; eauto.
-    }
-      (* BOOKMARK *)
-      eapply Subres_sound; eauto.
-  }
-  { (* V_App_Fail1 *)
-  }
-  { (* V_App_Fail2 *)
-  }
-  {
-    (* V_App_Fail3 *)
-  }
-  {
-    (* V_App_Op *)
-  }
-  {
-    (* V_App_Clos *)
-  }
-  {
-    (* V_Pair_Fail1 *)
-  }
-  {
-    (* V_Pair_Fail2 *)
-  }
-  {
-    (* V_Pair *)
-  }
-  {
-    (* V_Fst_Fail1 *)
-  }
-  {
-    (* V_Fst_Fail2 *)
-  }
-  {
-    (* V_Fst *)
-  }
-  {
-    (* V_Snd_Fail1 *)
-  }
-  {
-    (* V_Snd_Fail2 *)
-  }
-  {
-    (* V_Snd *)
-  }
-  {
-    (* V_If_Fail1 *)
-  }
-  {
-    (* V_If_NonFalse *)
-  }
-  {
-    (* V_If_False *)
-  }
-  {
-    (* V_Let_Fail *)
-  }
-  {
-    (* V_Let *)
-  }
-Admitted.
-
-  
