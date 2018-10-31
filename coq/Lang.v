@@ -1667,33 +1667,86 @@ Proof with crush.
   }
 Qed.
 
-Lemma Preservation : forall Γ e e' R,
-    Γ = [] ->
+
+Inductive SimpleRes : tres -> Prop :=
+| SRes : forall t p q,
+    (p = Trivial \/ p = Absurd) ->
+    (q = Trivial \/ q = Absurd) ->
+    SimpleRes (Res t p q oTop).
+Hint Constructors SimpleRes.
+
+Lemma TypeOf_minimal : forall e R,
+    TypeOf [] e R ->
+    exists R', Subres [] R' R /\ SimpleRes R'.
+Proof.
+Admitted.
+
+Lemma TypeOf_oTop : forall e t p q o,
+    TypeOf [] e (Res t p q o) ->
+    o = oTop.
+Proof.
+Admitted.
+
+Lemma T_Subsume : forall Γ e R R',
     TypeOf Γ e R ->
+    Subres Γ R R' ->
+    TypeOf Γ e R'.
+Proof.
+Admitted.
+
+Lemma SimpleRes_WellFormedRes : forall Γ R,
+    SimpleRes R ->
+    WellFormedRes Γ R.
+Proof.
+Admitted.  
+
+Lemma Preservation : forall e e' R,
+    TypeOf [] e R ->
+    SimpleRes R ->
     Step e e' ->
-    exists R', TypeOf Γ e' R' /\ Subres Γ R' R.
+    exists R', TypeOf [] e' R'
+               /\ SimpleRes R'
+               /\ Subres [] R' R.
 Proof with crush.
-  intros Γ e e' R Hmt Htype.
+  intros e e' R Htype.  
   generalize dependent e'.
-  induction Htype; intros e' Hstep; try solve[inversion Hstep].
+  remember [] as Γ.
+  induction Htype;
+    intros e' Hsimp Hstep;
+    try solve[inversion Hstep].
   { (* T_App *)
     inversion Hstep; subst.
     { (* lhs congruence *)
       assert (exists R' : tres,
                  TypeOf [] e1' R'
+                 /\ SimpleRes R'
                  /\ Subres [] R' (Res t1 Trivial Trivial oTop))
         as IH1 by crush.
-      destruct IH1 as [[t1' p1' q1' o1'] [Htype1' HSR1']].
-      crush. exists R. split.
-      assert (Subtype t1' t1) as Hsub1.
+      destruct IH1 as [[t1' p1' q1' o1'] [Htype1' [Hsimp1' HSR1']]].
+      assert (o2 = oTop) as Ho2 by (eapply TypeOf_oTop; eassumption).
+      subst.
+      inversion HSR1'; subst.
       {
-        (* BOOKMARK *)
+        exists (Res t (isa oTop tpos) (isa oTop tneg) oTop).
+        split.
+        eapply T_App.
+        eapply T_Subsume. eassumption.
+        apply SR_Sub... eassumption. eassumption. eassumption.
+        eassumption. apply SR_Sub... apply SimpleRes_WellFormedRes...
+        ifcase; ifcase; crush. ifcase; ifcase; crush.
+        constructor; crush. ifcase; ifcase; crush.
+        split... ifcase; ifcase; crush.
       }
-      eapply T_App.
-      applyH...
-      eassumption. eassumption. eassumption.
+      {
+        (* BOOKMARK *)  
+      }
+      {
+
+      }
+      {
+
+      }
       
-(* BOOKMARK *)      
     }
     {
     }
