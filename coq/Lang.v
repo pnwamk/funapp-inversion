@@ -1125,7 +1125,7 @@ Definition alias (x : var) (R:tres) : prop :=
 Hint Unfold alias.
 
 
-Axiom Pred : ty -> ty -> ty -> ty -> Prop.
+Axiom pred_inv : ty -> ty -> (ty * ty).
 (* Metafunction to determine what types a function
    is a predicate for. In another module we formally
    define and prove properties about such an algorithm.
@@ -1166,7 +1166,7 @@ Inductive TypeOf : gamma -> exp -> tres -> Prop :=
     TypeOf Γ e1 (Res t1 Trivial Trivial oTop) ->
     TypeOf Γ e2 (Res t2 Trivial Trivial o2) ->
     Subtype t1 (tArrow t2 t) ->
-    Pred t1 t2 tpos tneg ->
+    pred_inv t1 t2 = (tpos , tneg) ->
     Subres Γ (Res t (isa o2 tpos) (isa o2 tneg) oTop) R ->
     WellFormedRes Γ R ->
     TypeOf Γ (eApp e1 e2) R
@@ -1197,8 +1197,8 @@ Inductive TypeOfVal : val -> ty -> Prop :=
 
 
 (* See Inv.v for details/proofs/etc about function inversion. *)
-Axiom Pred_def : forall funty argty tpos tneg,
-    Pred funty argty tpos tneg ->
+Axiom pred_inv_props : forall funty argty tpos tneg,
+    pred_inv funty argty = (tpos, tneg) ->
     forall v1 v2 v3,
       TypeOfVal v1 funty ->
       TypeOfVal v2 argty ->
@@ -1207,15 +1207,31 @@ Axiom Pred_def : forall funty argty tpos tneg,
       \/
       (v3 = (vBool false) /\ TypeOfVal v2 tneg).
 
-Lemma Pred_pos_arg : forall t1 t2 tpos tneg,
-    Pred t1 t2 tpos tneg ->
-    Subtype tpos t2.
+Axiom pred_inv_tNat_tNat :
+  pred_inv (tArrow tNat tNat) tNat = (tNat, tEmpty).
+Axiom pred_inv_tStr_tNat :
+  pred_inv (tArrow tStr tNat) tStr = (tStr, tEmpty).
+Axiom pred_inv_tNat_tBool :
+  pred_inv (tArrow tNat tBool) tNat = (tNat, tNat).
+Axiom pred_inv_tFalse_predicate :
+  pred_inv (predicate tFalse) tAny = (tFalse, (tNot tFalse)).
+Axiom pred_inv_tNat_predicate :
+  pred_inv (predicate tNat) tAny = (tNat, (tNot tNat)).
+Axiom pred_inv_tStr_predicate :
+  pred_inv (predicate tStr) tAny = (tStr, (tNot tStr)).
+Axiom pred_inv_tProc_predicate :
+  pred_inv (predicate (tArrow tEmpty tAny)) tAny
+  = ((tArrow tEmpty tAny), (tNot (tArrow tEmpty tAny))).
+
+Lemma Pred_pos_arg : forall funty argty tpos tneg,
+    pred_inv funty argty = (tpos, tneg) ->
+    Subtype tpos argty.
 Proof.
 Admitted.
 
-Lemma Pred_neg_arg : forall t1 t2 tpos tneg,
-    Pred t1 t2 tpos tneg ->
-    Subtype tneg t2.
+Lemma Pred_neg_arg : forall funty argty tpos tneg,
+    pred_inv funty argty = (tpos, tneg) ->
+    Subtype tneg argty.
 Proof.  
 Admitted.
   
@@ -1232,10 +1248,9 @@ Lemma TypeOf_arrow_val : forall v t t1 t2,
 Proof.
 Admitted.
 
-Lemma TypeOf_Op_Subtype : forall Γ o t1 t2 t,
-    TypeOf Γ (eVal (vOp o)) (Res t1 Trivial Trivial oTop) ->
-    Subtype t1 (tArrow t2 t) ->
-    Subtype (op_type o) (tArrow t2 t).
+Lemma TypeOf_Op_Subtype : forall Γ o t,
+    TypeOf Γ (eVal (vOp o)) (Res t Trivial Trivial oTop) ->
+    Subtype (op_type o) t.
 Proof.
 Admitted.
 
@@ -1273,7 +1288,7 @@ Proof.
 Admitted.
   
 Lemma TypeOf_tStr : forall Γ v p q o,
-    TypeOf Γ (eVal v) (Res tNat p q o) ->
+    TypeOf Γ (eVal v) (Res tStr p q o) ->
     exists s, v = vConst (cStr s).
 Proof.
 Admitted.
@@ -1302,6 +1317,7 @@ Lemma TypeOf_Nat_lower_bound : forall Γ n t p q o,
     Subtype tNat t.
 Proof.
 Admitted.
+
 Lemma tNat_not_empty : forall t,
     Subtype tNat t ->
     ~ IsEmpty t.
@@ -1314,124 +1330,111 @@ Lemma tNat_and_tFalse_not_empty : forall t,
 Proof.
 Admitted.
 
-Lemma NonEmpty_tpos : forall t1 t2 tpos tneg,
-    Pred t1 t2 tpos tneg ->
-    ~ IsEmpty t2 ->
-    ~ IsEmpty (tAnd t2 (tNot tFalse)) ->
-    ~ IsEmpty tpos.
-Proof.
-Admitted.
-
 
 
 Lemma Progress_App_op : forall t1 t2 o2 t tpos tneg R v2 o,
     TypeOf [] (eVal v2) (Res t2 Trivial Trivial o2) ->
     TypeOf [] (eVal (vOpo)) (Res t1 Trivial Trivial oTop) ->
-    Subtype t1 (tArrow t2 t) ->
-    Pred t1 t2 tpos tneg ->
-    WellFormedRes [] R ->
-    Subres [] (Res t (isa o2 tpos) (isa o2 tneg) oTop) R ->
-    Subtype (op_type o) (tArrow t2 t) ->
-    (exists e' : exp,
-        Step (eApp (eVal (vOpo)) (eVal v2)) e' /\
-        (exists R' : tres, TypeOf [] e' R' /\ Subres [] R' R)).
-Proof with crush.
-  intros t1 t2 o2 t tpos tneg R v2 o Htype2 Htype1 Hsub2 Hpred Hwfr Hsres Hsub1.
-  destruct o; simpl in *.
-  { (* opAdd1 *)
-    assert (Subtype t2 tNat) as Ht2.
-    {
-      eapply Subtype_tArrow_dom. eassumption.
-    }
-    assert (Subtype tNat t) as Ht.
-    {
-      eapply Subtype_tArrow_cdom. eassumption.
-    }
-    assert (TypeOf [] (eVal v2) (Res tNat Trivial Trivial o2)) as Hv2Nat.
-    {
-      eapply TypeOf_Sub_type; eassumption.
-    }
-    apply TypeOf_tNat in Hv2Nat.
-    destruct Hv2Nat as [n Hn]. subst.
-    exists (eVal (vNat (n + 1))). split.
-    apply S_App_Op. simpl. reflexivity.
-    exists (Res t Trivial Absurd oTop). split.
-    apply T_Const. simpl.
-    apply SR_Sub; auto.
-    assert (IsEmpty (tAnd tNat tFalse)) as Hempty.
-    {
-      apply Empty_neq_tBase. crush.
-    }
-    unfold isa. ifcase.
-    apply P_Atom. left; auto.
-    contradiction.
-    constructor. simpl. crush.
-    assert (Subtype tneg tNat) as Hneg.
-    {
-      assert (Subtype tneg t2) as Htneg
-          by (eapply Pred_neg_arg; eassumption).
-      eapply Subtype_trans; eauto.
-    }
-    assert (o2 = oTop) as Ho2 by
-          (eapply TypeOf_cNat_obj; eassumption).
-    subst.
-    assert (~ IsEmpty tpos) as Hpos.
-    {
-      eapply NonEmpty_tpos. eassumption.
-      apply tNat_not_empty.
-      eapply TypeOf_Nat_lower_bound. eassumption.
-      apply tNat_and_tFalse_not_empty.
-      eapply TypeOf_Nat_lower_bound. eassumption.
-    }
-    apply (@Subres_trans []
-                         (Res t Trivial Absurd oTop)
-                         (Res t (isa oTop tpos) (isa oTop tneg) oTop)
-                         R).
-    {
-      apply SR_NonFalse...
-      apply Subtype_L_tAnd. apply Subtype_refl.
-      ifcase. ifcase... ifcase.
-      contradiction.
-      crush. repeat ifcase; crush.
-    }
-    {
-      eassumption.
-    }
-  }
-  { (* opSub1 *)
-    admit.
-  }
-  { (* opStrLen *)
-    admit.
-  }
-  { (* opNot *)
-    admit.
-  }
-  { (* opIsNat *)
-    admit.
-  }
-  { (* opIsStr *)
-    admit.
-  }
-  { (* opIsProc *)
-    admit.
-  }
-  { (* opIsZero *)
-    admit.
-  }
-Abort.
-
-Lemma Progress_App_op : forall t1 t2 o2 t tpos tneg R v2 o,
-    TypeOf [] (eVal v2) (Res t2 Trivial Trivial o2) ->
-    TypeOf [] (eVal (vOpo)) (Res t1 Trivial Trivial oTop) ->
-    Subtype t1 (tArrow t2 t) ->
-    Pred t1 t2 tpos tneg ->
+    pred_inv t1 t2 = (tpos, tneg) ->
     WellFormedRes [] R ->
     Subres [] (Res t (isa o2 tpos) (isa o2 tneg) oTop) R ->
     Subtype (op_type o) (tArrow t2 t) ->
     (exists e' : exp, Step (eApp (eVal (vOpo)) (eVal v2)) e').
 Proof with crush.
-Admitted.
+  intros funty argty o2 t tpos tneg R v2 o Hfunty Hargty
+         Hpred Hwfr Hsres Hargsub.
+  destruct o; simpl in *.
+  { (* opAdd1 *)
+    assert (Subtype argty tNat) as Hargty2
+        by (eapply Subtype_tArrow_dom; eassumption).
+    assert (exists n, v2 = vConst (cNat n)) as Hex
+        by (eapply TypeOf_tNat; eapply TypeOf_Sub_type; eauto; crush).
+    destruct Hex as [n Hn]; subst.
+    exists (eVal (vNat (n + 1))).
+    apply S_App_Op...
+  }
+  { (* opSub1 *)
+    assert (Subtype argty tNat) as Hargty2
+        by (eapply Subtype_tArrow_dom; eassumption).
+    assert (exists n, v2 = vConst (cNat n)) as Hex
+        by (eapply TypeOf_tNat; eapply TypeOf_Sub_type; eauto; crush).
+    destruct Hex as [n Hn]; subst.
+    exists (eVal (vNat (n - 1))).
+    apply S_App_Op...
+  }
+  { (* opStrLen *)
+    assert (Subtype argty tStr) as Hargty2
+        by (eapply Subtype_tArrow_dom; eassumption).
+    assert (exists s, v2 = vConst (cStr s)) as Hex
+        by (eapply TypeOf_tStr; eapply TypeOf_Sub_type; eauto; crush).
+    destruct Hex as [s Hs]; subst.
+    exists (eVal (vNat (String.length s))).
+    apply S_App_Op...
+  }
+  { (* opNot *)
+    destruct (val_dec v2 (vBool false)) as [Hfalse | Hnonfalse].
+    {
+      exists (eVal (vBool true)).
+      apply S_App_Op...
+    }
+    {
+      exists (eVal (vBool false)).
+      apply S_App_Op; destruct v2; simpl;
+        repeat first[matchcase | ifcase | crush]...
+    }
+  }
+  { (* opIsNat *)
+    destruct v2.
+    destruct c; try solve[exists (eVal (vBool false));
+                                 apply S_App_Op; simpl;
+                                 repeat first[matchcase | ifcase | crush]].
+    { (* vNat *)
+      exists (eVal (vBool true)); apply S_App_Op...
+    }
+    { (* vAbs *)
+      exists (eVal (vBool false)).
+      apply S_App_Op; simpl;
+        repeat first[matchcase | ifcase | crush]...
+    }
+  }
+  { (* opIsStr *)
+    destruct v2.
+    destruct c; try solve[exists (eVal (vBool false));
+                                 apply S_App_Op; simpl;
+                                 repeat first[matchcase | ifcase | crush]].
+    { (* vStr *)
+      exists (eVal (vBool true)); apply S_App_Op...
+    }
+    { (* vAbs *)
+      exists (eVal (vBool false)).
+      apply S_App_Op; simpl;
+        repeat first[matchcase | ifcase | crush]...
+    }
+  }
+  { (* opIsProc *)
+    destruct v2.
+    destruct c; try solve[exists (eVal (vBool false));
+                                 apply S_App_Op; simpl;
+                                 repeat first[matchcase | ifcase | crush]].
+    { (* vOp *)
+      exists (eVal (vBool true)); apply S_App_Op...
+    }
+    { (* vAbs *)
+      exists (eVal (vBool true)); apply S_App_Op...
+    }
+  }
+  { (* opIsZero *)
+    assert (Subtype argty tNat) as Hargty2
+        by (eapply Subtype_tArrow_dom; eassumption).
+    assert (exists n, v2 = vConst (cNat n)) as Hex
+        by (eapply TypeOf_tNat; eapply TypeOf_Sub_type; eauto; crush).
+    destruct Hex as [n Hn]; subst.
+    destruct n.
+    exists (eVal (vBool true)); apply S_App_Op...
+    exists (eVal (vBool false)); apply S_App_Op...
+  }
+Qed.
+
 
 Lemma Progress : forall Γ e R,
     Γ = [] ->
@@ -1476,12 +1479,10 @@ Proof with crush.
         eapply TypeOf_arrow_val. eassumption. eassumption.
       }
       destruct Hv1opts as [[o Ho] | [f [i [x [e Habs]]]]]; subst.
-      { (* (vOp o) *)
-        assert (Subtype (op_type o) (tArrow t2 t)) as Harrow.
-        {
-          eapply TypeOf_Op_Subtype. eassumption. eassumption.
-        }
+      { 
         eapply Progress_App_op; eauto.
+        eapply Subtype_trans.
+        eapply TypeOf_Op_Subtype. eassumption. assumption.
       }
       { (* (vAbs f i x e) *)
         exists (substitute (substitute e x v2) f (vAbs f i x e)).
@@ -1560,7 +1561,8 @@ Proof with crush.
   }
 Qed.
   
-  
+
+(* BOOKMARK *)
 Lemma Preservation : forall Γ e e' R R',
     Γ = [] ->
     TypeOf Γ e R ->
