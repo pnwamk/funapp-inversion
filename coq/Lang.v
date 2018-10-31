@@ -573,6 +573,11 @@ Inductive Proves : gamma -> prop -> Prop :=
     Proves Γ q.
 Hint Constructors Proves.
 
+Lemma Proves_dec : forall Γ p,
+    Proves Γ p \/ ~ Proves Γ p.
+Proof.
+Admitted.
+  
 Lemma P_Cut : forall Γ p q,
     Proves Γ p ->
     Proves (p::Γ) q ->
@@ -860,6 +865,15 @@ Lemma Proves_incl : forall Γ Γ',
 Proof.
 Admitted.
 
+Lemma Subres_refl : forall Γ R,
+    WellFormedRes Γ R ->
+    Subres Γ R R.
+Proof.
+  intros Γ R Hwfr.
+  destruct R.
+  apply SR_Sub; crush.
+Qed.
+  
 Lemma Subres_trans : forall Γ R1 R2 R3,
     Subres Γ R1 R2 ->
     Subres Γ R2 R3 ->
@@ -1029,8 +1043,19 @@ Proof with crush.
   }
 Qed.  
 
-  
-  
+(*
+Lemma Subres_implies_subtype : forall Γ t1 p1 q1 o1 t2 p2 q2 o2,
+    ~ Proves (isa o1 (tAnd t1 (tNot tFalse)) :: p1 :: Γ) Absurd
+    \/ ~ Proves (isa o1 (tAnd t1 tFalse) :: q1 :: Γ) Absurd ->
+    Subres Γ (Res t1 p1 q1 o1) (Res t2 p2 q2 o2) ->
+    Subtype t1 t2.
+Proof with crush.
+  intros Γ t1 p1 q1 o1 t2 p2 q2 o2 Hp Hsubres.
+  inversion Hsubres...
+  apply Subtype_L_tAnd.
+Qed.
+*)
+
 (**********************************************************)
 (* Type System                                            *)
 (**********************************************************)
@@ -1562,12 +1587,131 @@ Proof with crush.
 Qed.
   
 
-(* BOOKMARK *)
-Lemma Preservation : forall Γ e e' R R',
+
+
+Lemma Typeof_type_subsume : forall Γ e t p q o t',
+    ~ Proves Γ Absurd ->
+    TypeOf Γ e (Res t p q o) ->
+    Subtype t t' ->
+    TypeOf Γ e (Res t' p q o).
+Proof with crush.
+  intros Γ e t p q o t' Hsound Htype Hsub.
+  remember (Res t p q o) as R.
+  inversion Htype; subst.
+  { (* eVar *)
+    assert (WellFormedRes Γ (Res t' p q o)) as Hwfr
+        by match goal with
+           | [ H : WellFormedRes _ _ |- _]
+             => inversion H; crush
+           end.
+    eapply T_Var... eassumption. eassumption.
+    eapply Subres_trans... eassumption.
+    apply SR_Sub...    
+  }
+  { (* vConst *)
+    assert (WellFormedRes Γ (Res t' p q o)) as Hwfr
+        by match goal with
+           | [ H : WellFormedRes _ _ |- _]
+             => inversion H; crush
+           end.
+    eapply T_Const... 
+    eapply Subres_trans... eassumption.
+    apply SR_Sub...    
+  }
+  { (* vAbs *)
+    assert (WellFormedRes Γ (Res t' p q o)) as Hwfr
+        by match goal with
+           | [ H : WellFormedRes _ _ |- _]
+             => inversion H; crush
+           end.
+    eapply T_Abs...
+    applyH. assumption.
+    eapply Subres_trans... eassumption.
+    apply SR_Sub...
+  }
+  { (* eApp *)
+    assert (WellFormedRes Γ (Res t' p q o)) as Hwfr
+        by match goal with
+           | [ H : WellFormedRes _ _ |- _]
+             => inversion H; crush
+           end.
+    eapply T_App...
+    assumption. eassumption. eassumption.
+    eapply Subres_trans... eassumption.
+    apply SR_Sub...
+  }
+  { (* eIf *)
+    assert (WellFormedRes Γ (Res t' p q o)) as Hwfr
+        by match goal with
+           | [ H : WellFormedRes _ _ |- _]
+             => inversion H; crush
+           end.
+    eapply T_If...
+    eassumption. eassumption. eassumption.
+    eapply Subres_trans... eassumption.
+    apply SR_Sub...
+  }
+  {
+    assert (WellFormedRes Γ (Res t' p q o)) as Hwfr
+        by match goal with
+           | [ H : WellFormedRes _ _ |- _]
+             => inversion H; crush
+           end.
+    eapply T_Let...
+    eassumption. eassumption. 
+    eapply Subres_trans... eassumption.
+    apply SR_Sub...
+  }
+  {
+    contradiction.
+  }
+Qed.
+
+Lemma Preservation : forall Γ e e' R,
     Γ = [] ->
     TypeOf Γ e R ->
     Step e e' ->
-    TypeOf Γ e' R' /\ Subres Γ R' R.
+    exists R', TypeOf Γ e' R' /\ Subres Γ R' R.
+Proof with crush.
+  intros Γ e e' R Hmt Htype.
+  generalize dependent e'.
+  induction Htype; intros e' Hstep; try solve[inversion Hstep].
+  { (* T_App *)
+    inversion Hstep; subst.
+    { (* lhs congruence *)
+      assert (exists R' : tres,
+                 TypeOf [] e1' R'
+                 /\ Subres [] R' (Res t1 Trivial Trivial oTop))
+        as IH1 by crush.
+      destruct IH1 as [[t1' p1' q1' o1'] [Htype1' HSR1']].
+      crush. exists R. split.
+      assert (Subtype t1' t1) as Hsub1.
+      {
+        (* BOOKMARK *)
+      }
+      eapply T_App.
+      applyH...
+      eassumption. eassumption. eassumption.
+      
+(* BOOKMARK *)      
+    }
+    {
+    }
+    {
+    }
+    {
+    }
+  }
+  { (* T_If *)
+    
+  }
+  { (* T_Let *)
+    
+  }
+  { (* T_ExFalso *)
+    
+  }
+  
 
 
 (* ARCHIVE // OLD *)
