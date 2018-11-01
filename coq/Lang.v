@@ -113,11 +113,11 @@ val : Set :=
   
 Hint Constructors exp.
 
-Notation "(vNat n )"  := (vConst (cNat n)).
-Notation "(vStr s )"  := (vConst (cStr s)).
-Notation "(vBool b )" := (vConst (cBool b)).
-Notation "(vOp o )"   := (vConst (cOp o)).
-         
+Definition vNat (n:nat) : val := (vConst (cNat n)).
+Definition vStr (s:string) : val := (vConst (cStr s)).
+Definition vBool (b:bool) : val := (vConst (cBool b)).
+Definition vOp (o:op) : val := (vConst (cOp o)).
+                
 Inductive obj : Set :=
   oTop  : obj
 | oBot  : obj
@@ -240,24 +240,24 @@ Hint Unfold fvs.
 
 Definition apply_op (o:op) (arg:val) : option val :=
   match o , arg with
-  | opAdd1   , (vNat n)       => Some (vNat (n + 1))
-  | opAdd1   , _              => None
-  | opSub1   , (vNat n)       => Some (vNat (n - 1))
-  | opSub1   , _              => None
-  | opStrLen , (vStr s)       => Some (vNat (String.length s))
-  | opStrLen , _              => None
-  | opNot    , (vBool false)  => Some (vBool true)
-  | opNot    , _              => Some (vBool false)
-  | opIsNat  , (vNat _)       => Some (vBool true)
-  | opIsNat  , _              => Some (vBool false)
-  | opIsStr  , (vStr _)       => Some (vBool true)
-  | opIsStr  , _              => Some (vBool false)
-  | opIsProc , (vOp _)        => Some (vBool true)
-  | opIsProc , (vAbs _ _ _ _) => Some (vBool true)
-  | opIsProc , _              => Some (vBool false)
-  | opIsZero , (vNat 0)       => Some (vBool true)
-  | opIsZero , (vNat _)       => Some (vBool false)
-  | opIsZero , _              => None
+  | opAdd1   , (vConst (cNat n))      => Some (vConst (cNat (n + 1)))
+  | opAdd1   , _                      => None
+  | opSub1   , (vConst (cNat n))      => Some (vConst (cNat (n - 1)))
+  | opSub1   , _                      => None
+  | opStrLen , (vConst (cStr s))      => Some (vConst (cNat (String.length s)))
+  | opStrLen , _                      => None
+  | opNot    , (vConst (cBool false)) => Some (vConst (cBool true))
+  | opNot    , _                      => Some (vConst (cBool false))
+  | opIsNat  , (vConst (cNat _))      => Some (vConst (cBool true))
+  | opIsNat  , _                      => Some (vConst (cBool false))
+  | opIsStr  , (vConst (cStr _))      => Some (vConst (cBool true))
+  | opIsStr  , _                      => Some (vConst (cBool false))
+  | opIsProc , (vConst (cOp _))       => Some (vConst (cBool true))
+  | opIsProc , (vAbs _ _ _ _)         => Some (vConst (cBool true))
+  | opIsProc , _                      => Some (vConst (cBool false))
+  | opIsZero , (vConst (cNat 0))      => Some (vConst (cBool true))
+  | opIsZero , (vConst (cNat _))      => Some (vConst (cBool false))
+  | opIsZero , _                      => None
   end.
 Hint Unfold apply_op.
 
@@ -1219,7 +1219,7 @@ Inductive TypeOfVal : val -> ty -> Prop :=
 | TOV : forall v t,
     TypeOf [] (eVal v) (Res t Trivial Trivial oTop) ->
     TypeOfVal v t.
-
+Hint Constructors TypeOfVal.
 
 (* See Inv.v for details/proofs/etc about function inversion. *)
 Axiom pred_inv_props : forall funty argty tpos tneg,
@@ -1228,9 +1228,18 @@ Axiom pred_inv_props : forall funty argty tpos tneg,
       TypeOfVal v1 funty ->
       TypeOfVal v2 argty ->
       Steps (eApp (eVal v1) (eVal v2)) (eVal v3) ->
-      (v3 <> (vBool false) /\ TypeOfVal v2 tpos)
-      \/
-      (v3 = (vBool false) /\ TypeOfVal v2 tneg).
+      ((v3 <> (vBool false) /\ TypeOfVal v2 tpos)
+       \/
+       (v3 = (vBool false) /\ TypeOfVal v2 tneg)).
+
+Axiom pred_inv_sub :
+  forall funty funty' argty argty' tpos tneg tpos' tneg',
+    pred_inv funty argty = (tpos, tneg) ->
+    Subtype funty funty' ->
+    Subtype argty' argty ->
+    pred_inv funty' argty' = (tpos', tneg') ->
+    Subtype tpos' tpos /\ Subtype tneg' tneg.
+(* TODO prove in other module *)
 
 Axiom pred_inv_tNat_tNat :
   pred_inv (tArrow tNat tNat) tNat = (tNat, tEmpty).
@@ -1336,6 +1345,13 @@ Lemma Empty_neq_tBase : forall bty1 bty2,
 Proof.
 Admitted.
 
+Lemma tNat_not_tFalse_not_empty : ~ IsEmpty (tAnd tNat (tNot tFalse)).
+Proof.
+Admitted.
+
+Lemma tNat_tFalse_empty : IsEmpty (tAnd tNat tFalse).
+Proof.
+Admitted.
 
 Lemma TypeOf_Nat_lower_bound : forall Γ n t p q o,
     TypeOf Γ (eVal (vNat n)) (Res t p q o) ->
@@ -1359,12 +1375,12 @@ Admitted.
 
 Lemma Progress_App_op : forall t1 t2 o2 t tpos tneg R v2 o,
     TypeOf [] (eVal v2) (Res t2 Trivial Trivial o2) ->
-    TypeOf [] (eVal (vOpo)) (Res t1 Trivial Trivial oTop) ->
+    TypeOf [] (eVal (vOp o)) (Res t1 Trivial Trivial oTop) ->
     pred_inv t1 t2 = (tpos, tneg) ->
     WellFormedRes [] R ->
     Subres [] (Res t (isa o2 tpos) (isa o2 tneg) oTop) R ->
     Subtype (op_type o) (tArrow t2 t) ->
-    (exists e' : exp, Step (eApp (eVal (vOpo)) (eVal v2)) e').
+    (exists e' : exp, Step (eApp (eVal (vOp o)) (eVal v2)) e').
 Proof with crush.
   intros funty argty o2 t tpos tneg R v2 o Hfunty Hargty
          Hpred Hwfr Hsres Hargsub.
@@ -1497,7 +1513,7 @@ Proof with crush.
       | [H : (exists _, e2 = eVal _) |- _] =>  destruct H as [v2 Hv2]
       end.
       subst.
-      assert ((exists o : op, v1 = (vOpo))
+      assert ((exists o : op, v1 = (vOp o))
               \/ (exists f i x e, v1 = vAbs f i x e))
         as Hv1opts.
       {
@@ -1698,8 +1714,21 @@ Lemma SimpleRes_WellFormedRes : forall Γ R,
     SimpleRes R ->
     WellFormedRes Γ R.
 Proof.
-Admitted.  
+Admitted.
 
+Lemma TypeOfVal_lower_bound : forall c t p q o t',
+    TypeOf [] (eVal (vConst c)) (Res t p q o) ->
+    const_type c = t' ->
+    Subtype t' t.
+Proof.
+Admitted.
+
+Lemma TypeOfVal_NonEmpty : forall v t,
+    TypeOfVal v t ->
+    ~ IsEmpty t.
+Proof.
+Admitted.
+  
 Lemma Preservation : forall e e' R,
     TypeOf [] e R ->
     SimpleRes R ->
@@ -1716,7 +1745,9 @@ Proof with crush.
     try solve[inversion Hstep].
   { (* T_App *)
     subst.
-    assert (o2 = oTop) as Ho2 by (eapply TypeOf_oTop; eassumption).
+    assert (o2 = oTop) as Ho2 by (eapply TypeOf_oTop; eassumption). subst.
+    exists (Res t (isa oTop tpos) (isa oTop tneg) oTop).
+    split.
     inversion Hstep; subst.
     { (* (e1 e2) --> (e1' e2) *)
       assert (exists R' : tres,
@@ -1726,13 +1757,11 @@ Proof with crush.
         as IH1 by crush.
       destruct IH1 as [[t1' p1' q1' o1'] [Htype1' [Hsimp1' HSR1']]].
       subst.
-      exists (Res t (isa oTop tpos) (isa oTop tneg) oTop).
-      split. eapply T_App. eapply T_Subsume. eassumption. eassumption.
+      eapply T_App. eapply T_Subsume. eassumption. eassumption.
       eassumption. eassumption. eassumption. apply Subres_refl.
       apply SimpleRes_WellFormedRes...
       repeat ifcase; crush. repeat ifcase; crush.
       constructor; crush. repeat ifcase; crush.
-      split... repeat ifcase; crush.
     }
     { (* (v e2) --> (v e2') *)
       assert (exists R' : tres,
@@ -1741,16 +1770,99 @@ Proof with crush.
                  /\ Subres [] R' (Res t2 Trivial Trivial oTop))
         as IH2 by crush.
       destruct IH2 as [[t2' p2' q2' o2'] [Htype2' [Hsimp2' HSR2']]].
-      exists (Res t (isa oTop tpos) (isa oTop tneg) oTop).
-      split. eapply T_App. eassumption.
+      eapply T_App. eassumption.
       eapply T_Subsume. eassumption. eassumption.
       eassumption. eassumption. apply Subres_refl.
       apply SimpleRes_WellFormedRes...
       repeat ifcase; crush. repeat ifcase; crush.
       constructor; crush. repeat ifcase; crush.
-      split... repeat ifcase; crush.
     }
     { (* (o v) --> v'   where Some v' = apply_op o v *)
+      destruct o.
+      { (* opAdd1 *)
+        assert (Subtype (op_type opAdd1) t1) as Hopt
+            by (eapply TypeOf_Op_Subtype; eauto).
+        simpl in *.
+        assert (Subtype (tArrow tNat tNat) (tArrow t2 t)) as
+            Hopsub by (eapply Subtype_trans; eauto).
+        (* the result is a supertype of the op result *)
+        assert (Subtype tNat t) as Hcdom
+            by (eapply Subtype_tArrow_cdom; eauto).
+        (* the arg type is a subtype of the domain *)
+        assert (Subtype t2 tNat) as Hdom
+            by (eapply Subtype_tArrow_dom; eauto).
+        clear Hopsub.
+        (* if the arg is a subtype of tNat, it must be a nat *)
+        assert (exists n, v = vConst (cNat n)) as Hnat
+            by (eapply TypeOf_tNat; eapply TypeOf_Sub_type; eauto).
+        destruct Hnat as [n Hn].
+        subst.
+        match goal with
+        | [ H : Some (vConst (cNat _)) = Some _ |- _]
+          => inversion H; subst
+        end.
+        assert (Subtype tNat t2) as Ht2low by
+              (eapply TypeOfVal_lower_bound; eauto).
+        assert (pred_inv (tArrow tNat tNat) tNat = (tNat, tEmpty))
+          as Hpred by exact pred_inv_tNat_tNat.        
+        assert (Subtype tpos tNat /\ Subtype tneg tEmpty) as Hpsub
+            by (eapply pred_inv_sub; eauto).
+        destruct Hpsub as [Hpos Hneg].
+        assert (TypeOfVal (vOp opAdd1) t1) as Hval1 by crush.
+        assert (TypeOfVal (vNat n) t2) as Hval2 by crush.
+
+        remember (pred_inv_props H0) as Hinv.
+        assert (((vNat (n + 1)) <> (vBool false) /\ TypeOfVal (vNat n) tpos)
+                \/ ((vNat (n + 1)) = (vBool false) /\ TypeOfVal (vNat n) tneg))
+          as Hres.
+        {
+          eapply pred_inv_props. eassumption. eassumption. eassumption.
+          eapply S_Cons. eassumption.
+          apply S_Null.
+        }
+        destruct Hres as [[Hneq Htpos] | [Heq Htneg]].
+        {
+          assert (~ IsEmpty tpos) as Hnmt
+              by (eapply TypeOfVal_NonEmpty; eauto).
+          eapply T_Subsume. apply T_Const. simpl. apply Subres_refl.
+          crush. crush.
+          apply SR_Sub...
+          ifcase. apply P_Absurd... ifcase; crush.
+          ifcase...
+          assert (IsEmpty (tAnd tNat tFalse))
+            by (apply Empty_neq_tBase; crush).
+          repeat ifcase...
+          repeat ifcase...
+        }
+        {
+          inversion Heq.
+        }
+      }
+      }
+      { (* opSub1 *)
+        
+      }
+      { (* opAdd1 *)
+        
+      }
+      { (* opStrLen *)
+        
+      }
+      { (* opNot *)
+
+      }
+      { (* opIsNat *)
+
+      }
+      { (* opIsStr *)
+
+      }
+      { (* opIsProc *)
+
+      }
+      { (* opIsZero *)
+
+      }
       (* BOOKMARK *)
     }
     { (* ? *)
