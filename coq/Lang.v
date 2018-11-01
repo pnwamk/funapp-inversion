@@ -1715,44 +1715,45 @@ Proof with crush.
     intros e' Hsimp Hstep;
     try solve[inversion Hstep].
   { (* T_App *)
+    subst.
+    assert (o2 = oTop) as Ho2 by (eapply TypeOf_oTop; eassumption).
     inversion Hstep; subst.
-    { (* lhs congruence *)
+    { (* (e1 e2) --> (e1' e2) *)
       assert (exists R' : tres,
                  TypeOf [] e1' R'
                  /\ SimpleRes R'
                  /\ Subres [] R' (Res t1 Trivial Trivial oTop))
         as IH1 by crush.
       destruct IH1 as [[t1' p1' q1' o1'] [Htype1' [Hsimp1' HSR1']]].
-      assert (o2 = oTop) as Ho2 by (eapply TypeOf_oTop; eassumption).
       subst.
-      inversion HSR1'; subst.
-      {
-        exists (Res t (isa oTop tpos) (isa oTop tneg) oTop).
-        split.
-        eapply T_App.
-        eapply T_Subsume. eassumption.
-        apply SR_Sub... eassumption. eassumption. eassumption.
-        eassumption. apply SR_Sub... apply SimpleRes_WellFormedRes...
-        ifcase; ifcase; crush. ifcase; ifcase; crush.
-        constructor; crush. ifcase; ifcase; crush.
-        split... ifcase; ifcase; crush.
-      }
-      {
-        (* BOOKMARK *)  
-      }
-      {
-
-      }
-      {
-
-      }
-      
+      exists (Res t (isa oTop tpos) (isa oTop tneg) oTop).
+      split. eapply T_App. eapply T_Subsume. eassumption. eassumption.
+      eassumption. eassumption. eassumption. apply Subres_refl.
+      apply SimpleRes_WellFormedRes...
+      repeat ifcase; crush. repeat ifcase; crush.
+      constructor; crush. repeat ifcase; crush.
+      split... repeat ifcase; crush.
     }
-    {
+    { (* (v e2) --> (v e2') *)
+      assert (exists R' : tres,
+                 TypeOf [] e2' R'
+                 /\ SimpleRes R'
+                 /\ Subres [] R' (Res t2 Trivial Trivial oTop))
+        as IH2 by crush.
+      destruct IH2 as [[t2' p2' q2' o2'] [Htype2' [Hsimp2' HSR2']]].
+      exists (Res t (isa oTop tpos) (isa oTop tneg) oTop).
+      split. eapply T_App. eassumption.
+      eapply T_Subsume. eassumption. eassumption.
+      eassumption. eassumption. apply Subres_refl.
+      apply SimpleRes_WellFormedRes...
+      repeat ifcase; crush. repeat ifcase; crush.
+      constructor; crush. repeat ifcase; crush.
+      split... repeat ifcase; crush.
     }
-    {
+    { (* (o v) --> v'   where Some v' = apply_op o v *)
+      (* BOOKMARK *)
     }
-    {
+    { (* ? *)
     }
   }
   { (* T_If *)
