@@ -1353,6 +1353,15 @@ Lemma tNat_tFalse_empty : IsEmpty (tAnd tNat tFalse).
 Proof.
 Admitted.
 
+Lemma tStr_not_tFalse_not_empty : ~ IsEmpty (tAnd tStr (tNot tFalse)).
+Proof.
+Admitted.
+
+Lemma tStr_tFalse_empty : IsEmpty (tAnd tStr tFalse).
+Proof.
+Admitted.
+
+
 Lemma TypeOf_Nat_lower_bound : forall Γ n t p q o,
     TypeOf Γ (eVal (vNat n)) (Res t p q o) ->
     Subtype tNat t.
@@ -1803,22 +1812,14 @@ Proof with crush.
         end.
         assert (Subtype tNat t2) as Ht2low by
               (eapply TypeOfVal_lower_bound; eauto).
-        assert (pred_inv (tArrow tNat tNat) tNat = (tNat, tEmpty))
-          as Hpred by exact pred_inv_tNat_tNat.        
-        assert (Subtype tpos tNat /\ Subtype tneg tEmpty) as Hpsub
-            by (eapply pred_inv_sub; eauto).
-        destruct Hpsub as [Hpos Hneg].
         assert (TypeOfVal (vOp opAdd1) t1) as Hval1 by crush.
         assert (TypeOfVal (vNat n) t2) as Hval2 by crush.
-
-        remember (pred_inv_props H0) as Hinv.
         assert (((vNat (n + 1)) <> (vBool false) /\ TypeOfVal (vNat n) tpos)
                 \/ ((vNat (n + 1)) = (vBool false) /\ TypeOfVal (vNat n) tneg))
           as Hres.
         {
-          eapply pred_inv_props. eassumption. eassumption. eassumption.
-          eapply S_Cons. eassumption.
-          apply S_Null.
+          eapply pred_inv_props; try eassumption.
+          eapply S_Cons. eassumption. apply S_Null.
         }
         destruct Hres as [[Hneq Htpos] | [Heq Htneg]].
         {
@@ -1829,27 +1830,115 @@ Proof with crush.
           apply SR_Sub...
           ifcase. apply P_Absurd... ifcase; crush.
           ifcase...
-          assert (IsEmpty (tAnd tNat tFalse))
-            by (apply Empty_neq_tBase; crush).
-          repeat ifcase...
-          repeat ifcase...
+          assert (IsEmpty (tAnd tNat tFalse)) by (apply Empty_neq_tBase; crush).
+          repeat ifcase... repeat ifcase...
         }
         {
           inversion Heq.
         }
       }
+      { (* opSub1 *)
+        assert (Subtype (op_type opSub1) t1) as Hopt
+            by (eapply TypeOf_Op_Subtype; eauto).
+        simpl in *.
+        assert (Subtype (tArrow tNat tNat) (tArrow t2 t)) as
+            Hopsub by (eapply Subtype_trans; eauto).
+        (* the result is a supertype of the op result *)
+        assert (Subtype tNat t) as Hcdom
+            by (eapply Subtype_tArrow_cdom; eauto).
+        (* the arg type is a subtype of the domain *)
+        assert (Subtype t2 tNat) as Hdom
+            by (eapply Subtype_tArrow_dom; eauto).
+        clear Hopsub.
+        (* if the arg is a subtype of tNat, it must be a nat *)
+        assert (exists n, v = vConst (cNat n)) as Hnat
+            by (eapply TypeOf_tNat; eapply TypeOf_Sub_type; eauto).
+        destruct Hnat as [n Hn].
+        subst.
+        match goal with
+        | [ H : Some (vConst (cNat _)) = Some _ |- _]
+          => inversion H; subst
+        end.
+        assert (Subtype tNat t2) as Ht2low by
+              (eapply TypeOfVal_lower_bound; eauto).
+        assert (TypeOfVal (vOp opSub1) t1) as Hval1 by crush.
+        assert (TypeOfVal (vNat n) t2) as Hval2 by crush.
+        assert (((vNat (n - 1)) <> (vBool false) /\ TypeOfVal (vNat n) tpos)
+                \/ ((vNat (n - 1)) = (vBool false) /\ TypeOfVal (vNat n) tneg))
+          as Hres.
+        {
+          eapply pred_inv_props; try eassumption.
+          eapply S_Cons. eassumption. apply S_Null.
+        }
+        destruct Hres as [[Hneq Htpos] | [Heq Htneg]].
+        {
+          assert (~ IsEmpty tpos) as Hnmt
+              by (eapply TypeOfVal_NonEmpty; eauto).
+          eapply T_Subsume. apply T_Const. simpl. apply Subres_refl.
+          crush. crush.
+          apply SR_Sub...
+          ifcase. apply P_Absurd... ifcase; crush.
+          ifcase...
+          assert (IsEmpty (tAnd tNat tFalse)) by (apply Empty_neq_tBase; crush).
+          repeat ifcase... repeat ifcase...
+        }
+        {
+          inversion Heq.
+        }
       }
       { (* opSub1 *)
-        
-      }
-      { (* opAdd1 *)
-        
-      }
-      { (* opStrLen *)
-        
+        assert (Subtype (op_type opStrLen) t1) as Hopt
+            by (eapply TypeOf_Op_Subtype; eauto).
+        simpl in *.
+        assert (Subtype (tArrow tStr tNat) (tArrow t2 t)) as
+            Hopsub by (eapply Subtype_trans; eauto).
+        (* the result is a supertype of the op result *)
+        assert (Subtype tNat t) as Hcdom
+            by (eapply Subtype_tArrow_cdom; eauto).
+        (* the arg type is a subtype of the domain *)
+        assert (Subtype t2 tStr) as Hdom
+            by (eapply Subtype_tArrow_dom; eauto).
+        clear Hopsub.
+        (* if the arg is a subtype of tNat, it must be a nat *)
+        assert (exists s, v = vConst (cStr s)) as Hstr
+            by (eapply TypeOf_tStr; eapply TypeOf_Sub_type; eauto).
+        destruct Hstr as [s Hs].
+        subst.
+        match goal with
+        | [ H : Some (vConst (cNat _)) = Some _ |- _]
+          => inversion H; subst
+        end.
+        assert (Subtype tStr t2) as Ht2low by
+              (eapply TypeOfVal_lower_bound; eauto).
+        assert (TypeOfVal (vOp opStrLen) t1) as Hval1 by crush.
+        assert (TypeOfVal (vStr s) t2) as Hval2 by crush.
+        assert (((vNat (String.length s)) <> (vBool false)
+                 /\ TypeOfVal (vStr s) tpos)
+                \/ ((vNat (String.length s)) = (vBool false)
+                    /\ TypeOfVal (vStr s) tneg))
+          as Hres.
+        {
+          eapply pred_inv_props; try eassumption.
+          eapply S_Cons. eassumption. apply S_Null.
+        }
+        destruct Hres as [[Hneq Htpos] | [Heq Htneg]].
+        {
+          assert (~ IsEmpty tpos) as Hnmt
+              by (eapply TypeOfVal_NonEmpty; eauto).
+          eapply T_Subsume. apply T_Const. simpl. apply Subres_refl.
+          crush. crush.
+          apply SR_Sub...
+          ifcase. apply P_Absurd... ifcase; crush.
+          ifcase...
+          assert (IsEmpty (tAnd tNat tFalse)) by (apply Empty_neq_tBase; crush).
+          repeat ifcase... repeat ifcase...
+        }
+        {
+          inversion Heq.
+        }
       }
       { (* opNot *)
-
+        
       }
       { (* opIsNat *)
 
