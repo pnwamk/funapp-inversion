@@ -1776,7 +1776,27 @@ Lemma pred_single_tArrow_R : forall t,
 Proof.
 Admitted.
 
+Lemma some_tNat_dec : forall v,
+    (exists n, v = (vConst (cNat n)))
+    \/ forall n, ~ v = (vConst (cNat n)).
+Proof.
+Admitted.
 
+Lemma some_tStr_dec : forall v,
+    (exists s, v = (vConst (cStr s)))
+    \/ forall s, ~ v = (vConst (cStr s)).
+Proof.
+Admitted.
+
+Lemma some_Proc_dec : forall v,
+    (exists o, v = (vConst (cOp o)))
+    \/
+    (exists f i x e, v = (vAbs f i x e))
+    \/
+    ((forall o, v <> (vConst (cOp o)))
+     /\ (forall f i x e, v <> (vAbs f i x e))).
+Proof.
+Admitted.
 
   
 Lemma Preservation : forall e e' R,
@@ -2004,15 +2024,9 @@ Proof with crush.
               end;
           try match goal with
               | [ H : Some (vConst (cBool _)) = Some _ |- _]
-                => inversion H;
-                     match goal with
-                     | [ |- _ ] => left; reflexivity
-                     | [ |- _ ] => right; reflexivity
-                     end
+                => inversion H; crush
               end.
         }
-        assert (pred_inv (predicate tFalse) tAny = (tFalse, (tNot tFalse)))
-          as Hinv by (apply pred_inv_predicate).
         assert (TypeOfVal (vOp opNot) t1) as Hval1 by crush.
         assert (TypeOfVal v t2) as Hval2 by crush.
         assert ((v' <> (vBool false) /\ TypeOfVal v tpos)
@@ -2053,8 +2067,8 @@ Proof with crush.
           {
             assert (~ IsEmpty tneg) as Hneg
                 by (eapply TypeOfVal_NonEmpty; eauto).
-            eapply T_Subsume. apply T_Const. simpl. apply Subres_refl.
-            crush. crush.
+            eapply T_Subsume. apply T_Const. simpl. apply Subres_refl...
+            crush.
             apply SR_Sub...
             assert (Subtype tFalse tBool) as Hsubbby by (unfold Subtype; crush).
             eapply Subtype_trans; eauto.
@@ -2065,20 +2079,308 @@ Proof with crush.
         }
       }
       { (* opIsNat *)
-        
+        assert (Subtype (op_type opIsNat) t1) as Hopt
+            by (eapply TypeOf_Op_Subtype; eauto).
+        simpl in *.
+        assert (Subtype (predicate tNat) (tArrow t2 t)) as Hopsub
+            by (eapply Subtype_trans; eassumption).
+        (* the result is a supertype of the op result *)
+        assert (Subtype tBool t) as Hcdom.
+        {
+          eapply tArrow_R_cdom_sub. eassumption.
+          apply codomain_predicate.
+        }
+        (* if the arg is a subtype of tNat, it must be a nat *)
+        assert ((v' = (vConst (cBool true))) \/ (v' = (vConst (cBool false))))
+          as Hvoptions.
+        {
+          destruct v;
+          try match goal with
+              | [ H : TypeOf _ (eVal (vConst ?c)) _ |- _] => destruct c
+              end;
+          try match goal with
+              | [ H : (if ?b then Some _ else Some _) = Some _ |- _]
+                => destruct b
+              end;
+          try match goal with
+              | [ H : Some (vConst (cBool _)) = Some _ |- _]
+                => inversion H; crush
+              end.
+        }
+        assert (TypeOfVal (vOp opIsNat) t1) as Hval1 by crush.
+        assert (TypeOfVal v t2) as Hval2 by crush.
+        assert ((v' <> (vBool false) /\ TypeOfVal v tpos)
+                \/ (v' = (vBool false) /\ TypeOfVal v tneg))
+          as Hres.
+        {
+          eapply pred_inv_props. eassumption. eassumption.
+          eassumption.
+          eapply S_Cons. eassumption. apply S_Null.
+        }
+        destruct Hvoptions; subst.
+        { (* v' = vConst (cBool true) *)
+          destruct Hres as [[Hneq Htpos] | [Heq Htneg]].
+          {
+            assert (~ IsEmpty tpos) as Hpos
+                by (eapply TypeOfVal_NonEmpty; eauto).
+            eapply T_Subsume. apply T_Const. simpl. apply Subres_refl...
+            crush. apply SR_Sub...
+            assert (Subtype tTrue tBool) as Hsubbby by (unfold Subtype; crush).
+            eapply Subtype_trans; eauto.
+            destruct (empty_dec tpos)...
+            assert (IsEmpty (tAnd tTrue tFalse)) as Hmt
+                by (apply Empty_neq_tBase; crush).
+            ifcase... apply P_Absurd... ifcase; crush.
+            repeat ifcase...
+          }
+          {
+            inversion Heq.
+          }
+        }
+        { (* v' = vConst (cBool false) *)
+          destruct Hres as [[Hneq Htpos] | [Heq Htneg]].
+          {
+            assert False as impossible by (apply Hneq; reflexivity).
+            contradiction.
+          }
+          {
+            assert (~ IsEmpty tneg) as Hneg
+                by (eapply TypeOfVal_NonEmpty; eauto).
+            eapply T_Subsume. apply T_Const. simpl. apply Subres_refl...
+            crush. apply SR_Sub...
+            assert (Subtype tFalse tBool) as Hsubbby by (unfold Subtype; crush).
+            eapply Subtype_trans; eauto.
+            destruct (empty_dec tpos)...
+            destruct (empty_dec tneg)...
+            repeat ifcase...
+          }
+        }
       }
       { (* opIsStr *)
-
+        assert (Subtype (op_type opIsStr) t1) as Hopt
+            by (eapply TypeOf_Op_Subtype; eauto).
+        simpl in *.
+        assert (Subtype (predicate tStr) (tArrow t2 t)) as Hopsub
+            by (eapply Subtype_trans; eassumption).
+        (* the result is a supertype of the op result *)
+        assert (Subtype tBool t) as Hcdom.
+        {
+          eapply tArrow_R_cdom_sub. eassumption.
+          apply codomain_predicate.
+        }
+        (* if the arg is a subtype of tNat, it must be a nat *)
+        assert ((v' = (vConst (cBool true))) \/ (v' = (vConst (cBool false))))
+          as Hvoptions.
+        {
+          destruct v;
+          try match goal with
+              | [ H : TypeOf _ (eVal (vConst ?c)) _ |- _] => destruct c
+              end;
+          try match goal with
+              | [ H : (if ?b then Some _ else Some _) = Some _ |- _]
+                => destruct b
+              end;
+          try match goal with
+              | [ H : Some (vConst (cBool _)) = Some _ |- _]
+                => inversion H; crush
+              end.
+        }
+        assert (TypeOfVal (vOp opIsStr) t1) as Hval1 by crush.
+        assert (TypeOfVal v t2) as Hval2 by crush.
+        assert ((v' <> (vBool false) /\ TypeOfVal v tpos)
+                \/ (v' = (vBool false) /\ TypeOfVal v tneg))
+          as Hres.
+        {
+          eapply pred_inv_props. eassumption. eassumption.
+          eassumption.
+          eapply S_Cons. eassumption. apply S_Null.
+        }
+        destruct Hvoptions; subst.
+        { (* v' = vConst (cBool true) *)
+          destruct Hres as [[Hneq Htpos] | [Heq Htneg]].
+          {
+            assert (~ IsEmpty tpos) as Hpos
+                by (eapply TypeOfVal_NonEmpty; eauto).
+            eapply T_Subsume. apply T_Const. simpl. apply Subres_refl...
+            crush. apply SR_Sub...
+            assert (Subtype tTrue tBool) as Hsubbby by (unfold Subtype; crush).
+            eapply Subtype_trans; eauto.
+            destruct (empty_dec tpos)...
+            assert (IsEmpty (tAnd tTrue tFalse)) as Hmt
+                by (apply Empty_neq_tBase; crush).
+            ifcase... apply P_Absurd... ifcase; crush.
+            repeat ifcase...
+          }
+          {
+            inversion Heq.
+          }
+        }
+        { (* v' = vConst (cBool false) *)
+          destruct Hres as [[Hneq Htpos] | [Heq Htneg]].
+          {
+            assert False as impossible by (apply Hneq; reflexivity).
+            contradiction.
+          }
+          {
+            assert (~ IsEmpty tneg) as Hneg
+                by (eapply TypeOfVal_NonEmpty; eauto).
+            eapply T_Subsume. apply T_Const. simpl. apply Subres_refl...
+            crush. apply SR_Sub...
+            assert (Subtype tFalse tBool) as Hsubbby by (unfold Subtype; crush).
+            eapply Subtype_trans; eauto.
+            destruct (empty_dec tpos)...
+            destruct (empty_dec tneg)...
+            repeat ifcase...
+          }
+        }
       }
       { (* opIsProc *)
-
+        assert (Subtype (op_type opIsProc) t1) as Hopt
+            by (eapply TypeOf_Op_Subtype; eauto).
+        simpl in *.
+        assert (Subtype (predicate (tArrow tEmpty tAny)) (tArrow t2 t))
+          as Hopsub by (eapply Subtype_trans; eassumption).
+        (* the result is a supertype of the op result *)
+        assert (Subtype tBool t) as Hcdom.
+        {
+          eapply tArrow_R_cdom_sub. eassumption.
+          apply codomain_predicate.
+        }
+        (* if the arg is a subtype of tNat, it must be a nat *)
+        assert ((v' = (vConst (cBool true))) \/ (v' = (vConst (cBool false))))
+          as Hvoptions.
+        {
+          destruct v;
+          try match goal with
+              | [ H : TypeOf _ (eVal (vConst ?c)) _ |- _] => destruct c
+              end;
+          try match goal with
+              | [ H : (if ?b then Some _ else Some _) = Some _ |- _]
+                => destruct b
+              end;
+          try match goal with
+              | [ H : Some (vConst (cBool _)) = Some _ |- _]
+                => inversion H; crush
+              end.
+        }
+        assert (TypeOfVal (vOp opIsProc) t1) as Hval1 by crush.
+        assert (TypeOfVal v t2) as Hval2 by crush.
+        assert ((v' <> (vBool false) /\ TypeOfVal v tpos)
+                \/ (v' = (vBool false) /\ TypeOfVal v tneg))
+          as Hres.
+        {
+          eapply pred_inv_props. eassumption. eassumption.
+          eassumption.
+          eapply S_Cons. eassumption. apply S_Null.
+        }
+        destruct Hvoptions; subst.
+        { (* v' = vConst (cBool true) *)
+          destruct Hres as [[Hneq Htpos] | [Heq Htneg]].
+          {
+            assert (~ IsEmpty tpos) as Hpos
+                by (eapply TypeOfVal_NonEmpty; eauto).
+            eapply T_Subsume. apply T_Const. simpl. apply Subres_refl...
+            crush. apply SR_Sub...
+            assert (Subtype tTrue tBool) as Hsubb by (unfold Subtype; crush).
+            eapply Subtype_trans; eauto.
+            destruct (empty_dec tpos)...
+            assert (IsEmpty (tAnd tTrue tFalse)) as Hmt
+                by (apply Empty_neq_tBase; crush).
+            ifcase... apply P_Absurd... ifcase; crush.
+            repeat ifcase...
+          }
+          {
+            inversion Heq.
+          }
+        }
+        { (* v' = vConst (cBool false) *)
+          destruct Hres as [[Hneq Htpos] | [Heq Htneg]].
+          {
+            assert False as impossible by (apply Hneq; reflexivity).
+            contradiction.
+          }
+          {
+            assert (~ IsEmpty tneg) as Hneg
+                by (eapply TypeOfVal_NonEmpty; eauto).
+            eapply T_Subsume. apply T_Const. simpl. apply Subres_refl...
+            crush. apply SR_Sub...
+            assert (Subtype tFalse tBool) as Hsubbby by (unfold Subtype; crush).
+            eapply Subtype_trans; eauto.
+            destruct (empty_dec tpos)...
+            destruct (empty_dec tneg)...
+            repeat ifcase...
+          }
+        }
       }
       { (* opIsZero *)
-
+        assert (Subtype (op_type opIsZero) t1) as Hopt
+            by (eapply TypeOf_Op_Subtype; eauto).
+        simpl in *.
+        assert (Subtype (tArrow tNat tBool) (tArrow t2 t)) as
+            Hopsub by (eapply Subtype_trans; eauto).
+        (* the result is a supertype of the op result *)
+        assert (Subtype tBool t) as Hcdom
+            by (eapply Subtype_tArrow_cdom; eauto).
+        (* the arg type is a subtype of the domain *)
+        assert (Subtype t2 tNat) as Hdom
+            by (eapply Subtype_tArrow_dom; eauto).
+        clear Hopsub.
+        (* if the arg is a subtype of tNat, it must be a nat *)
+        assert (exists n, v = vConst (cNat n)) as Hnat
+            by (eapply TypeOf_tNat; eapply TypeOf_Sub_type; eauto).
+        destruct Hnat as [n Hn].
+        subst.
+        assert (exists b, v' = (vConst (cBool b))) as Hbool
+            by (destruct n; match goal with
+                            | [ H : Some (vConst (cBool ?b)) = Some _ |- _]
+                              => exists b; inversion H; crush
+                            end).
+        destruct Hbool as [b Hb]; subst.
+        assert (Subtype tNat t2) as Ht2low by
+              (eapply TypeOfVal_lower_bound; eauto).
+        assert (TypeOfVal (vOp opIsZero) t1) as Hval1 by crush.
+        assert (TypeOfVal (vNat n) t2) as Hval2 by crush.
+        assert (((vConst (cBool b)) <> (vBool false)
+                 /\ TypeOfVal (vNat n) tpos)
+                \/ ((vConst (cBool b)) = (vBool false)
+                    /\ TypeOfVal (vNat n) tneg))
+          as Hres.
+        {
+          eapply pred_inv_props; try eassumption.
+          eapply S_Cons. eassumption. apply S_Null.
+        }
+        destruct Hres as [[Hneq Htpos] | [Heq Htneg]].
+        {
+          assert (~ IsEmpty tpos) as Hnmt
+              by (eapply TypeOfVal_NonEmpty; eauto).
+          eapply T_Subsume. apply T_Const. simpl. apply Subres_refl...
+          ifcase... ifcase... ifcase... 
+          apply SR_Sub...
+          assert (Subtype tTrue tBool) as Hsubb by (unfold Subtype; crush).
+          eapply Subtype_trans; eauto.
+          ifcase. apply P_Absurd... ifcase; crush.
+          ifcase...
+          assert (IsEmpty (tAnd tTrue tFalse)) by (apply Empty_neq_tBase; crush).
+          repeat ifcase... repeat ifcase...
+        }
+        {
+          inversion Heq; subst.
+          assert (~ IsEmpty tneg) as Hnmt
+              by (eapply TypeOfVal_NonEmpty; eauto).
+          eapply T_Subsume. apply T_Const. simpl. apply Subres_refl...
+          crush.
+          apply SR_Sub...
+          assert (Subtype tFalse tBool) as Hsubb by (unfold Subtype; crush).
+          eapply Subtype_trans; eauto.
+          ifcase. apply P_Absurd... ifcase; crush.
+          ifcase...
+          assert (IsEmpty (tAnd tTrue tFalse)) by (apply Empty_neq_tBase; crush).
+          repeat ifcase... repeat ifcase...
+        }
       }
-      (* BOOKMARK *)
     }
-    { (* ? *)
+    { (* vAbs *)
+      (* BOOKMARK *)
     }
   }
   { (* T_If *)
