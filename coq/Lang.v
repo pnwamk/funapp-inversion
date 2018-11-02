@@ -386,7 +386,11 @@ Definition IsEmpty (t: ty) := (tInterp t) = (Empty_set val).
 Hint Unfold IsEmpty.
 
 Axiom empty_dec : forall (t: ty), {IsEmpty t} + {~ IsEmpty t}.
+Axiom domain : ty -> option ty.
+Axiom codomain : ty -> option ty.
 
+Axiom domain_tArrow : forall t1 t2, domain (tArrow t1 t2) = Some t1.
+Axiom codomain_tArrow : forall t1 t2, codomain (tArrow t1 t2) = Some t2.
 
 Lemma Subtype_refl : forall t, Subtype t t.
 Proof.
@@ -1232,14 +1236,31 @@ Axiom pred_inv_props : forall funty argty tpos tneg,
        \/
        (v3 = (vBool false) /\ TypeOfVal v2 tneg)).
 
-Axiom pred_inv_sub :
-  forall funty funty' argty argty' tpos tneg tpos' tneg',
-    pred_inv funty argty = (tpos, tneg) ->
-    Subtype funty funty' ->
-    Subtype argty' argty ->
-    pred_inv funty' argty' = (tpos', tneg') ->
-    Subtype tpos' tpos /\ Subtype tneg' tneg.
-(* TODO prove in other module *)
+
+(*
+  Consider fty ≤ fty' examples:
+
+  1)  (A ∪ B) → C  ≤  A → C
+
+  2)  (A → True)∩(¬A → False)  <:  Any → Bool
+
+  And consider pred_inv(fty,  Any) = (tpos,  tneg)
+  and          pred_inv(fty', Any) = (tpos', tneg')
+
+  For example 1:
+     pred_inv((A ∪ B) → C, Any) = ((A ∪ B), (A ∪ B))
+     pred_inv(A → C,       Any) = (A, A)
+     
+     So fty ≤ fty', tpos' ≤ tpos, and tneg' ≤ tneg.
+     
+  For example 2:
+     pred_inv((A → True)∩(¬A → False), Any) = (A, ¬A)
+     pred_inv(Any → Bool,              Any) = (Any, Any)
+     
+     So fty ≤ fty', tpos ≤ tpos', and tneg ≤ tneg'.
+
+*)
+
 
 Axiom pred_inv_tNat_tNat :
   pred_inv (tArrow tNat tNat) tNat = (tNat, tEmpty).
@@ -1247,15 +1268,12 @@ Axiom pred_inv_tStr_tNat :
   pred_inv (tArrow tStr tNat) tStr = (tStr, tEmpty).
 Axiom pred_inv_tNat_tBool :
   pred_inv (tArrow tNat tBool) tNat = (tNat, tNat).
-Axiom pred_inv_tFalse_predicate :
-  pred_inv (predicate tFalse) tAny = (tFalse, (tNot tFalse)).
-Axiom pred_inv_tNat_predicate :
-  pred_inv (predicate tNat) tAny = (tNat, (tNot tNat)).
-Axiom pred_inv_tStr_predicate :
-  pred_inv (predicate tStr) tAny = (tStr, (tNot tStr)).
-Axiom pred_inv_tProc_predicate :
-  pred_inv (predicate (tArrow tEmpty tAny)) tAny
-  = ((tArrow tEmpty tAny), (tNot (tArrow tEmpty tAny))).
+Axiom pred_inv_predicate : forall t,
+  pred_inv (predicate t) tAny = (t, (tNot t)).
+
+Axiom domain_predicate : forall t, domain (predicate t) = Some tAny.
+Axiom codomain_predicate : forall t, codomain (predicate t) = Some tBool.
+
 
 Lemma Pred_pos_arg : forall funty argty tpos tneg,
     pred_inv funty argty = (tpos, tneg) ->
@@ -1297,6 +1315,20 @@ Admitted.
 Lemma Subtype_tArrow_cdom : forall t1 t2 t3 t4,
     Subtype (tArrow t1 t2) (tArrow t3 t4) ->
     Subtype t2 t4.
+Proof.
+Admitted.
+
+Lemma tArrow_R_dom_sub : forall t1 t2 t t',
+    Subtype t (tArrow t1 t2) ->
+    domain t = Some t' ->
+    Subtype t1 t'.
+Proof.
+Admitted.
+
+Lemma tArrow_R_cdom_sub : forall t1 t2 t t',
+    Subtype t (tArrow t1 t2) ->
+    codomain t = Some t' ->
+    Subtype t' t2.
 Proof.
 Admitted.
 
@@ -1738,15 +1770,13 @@ Lemma TypeOfVal_NonEmpty : forall v t,
 Proof.
 Admitted.
 
-Lemma pred_single_tArrow_L : forall t,
-  Subtype (tArrow tAny tBool) (predicate t).
-Proof.
-Admitted.
 
 Lemma pred_single_tArrow_R : forall t,
   Subtype (predicate t) (tArrow tAny tBool).
 Proof.
 Admitted.
+
+
 
   
 Lemma Preservation : forall e e' R,
@@ -1952,16 +1982,14 @@ Proof with crush.
         assert (Subtype (op_type opNot) t1) as Hopt
             by (eapply TypeOf_Op_Subtype; eauto).
         simpl in *.
-        assert (Subtype (tArrow tAny tBool) (tArrow t2 t)) as
-            Hopsub.
-        {
-          eapply Subtype_trans. eapply pred_single_tArrow_L.
-          eapply Subtype_trans. eassumption. assumption.
-        }
+        assert (Subtype (predicate tFalse) (tArrow t2 t)) as Hopsub
+            by (eapply Subtype_trans; eassumption).
         (* the result is a supertype of the op result *)
-        assert (Subtype tBool t) as Hcdom
-            by (eapply Subtype_tArrow_cdom; eauto).
-        clear Hopsub.
+        assert (Subtype tBool t) as Hcdom.
+        {
+          eapply tArrow_R_cdom_sub. eassumption.
+          apply codomain_predicate.
+        }
         (* if the arg is a subtype of tNat, it must be a nat *)
         assert ((v' = (vConst (cBool true))) \/ (v' = (vConst (cBool false))))
           as Hvoptions.
@@ -1983,81 +2011,61 @@ Proof with crush.
                      end
               end.
         }
+        assert (pred_inv (predicate tFalse) tAny = (tFalse, (tNot tFalse)))
+          as Hinv by (apply pred_inv_predicate).
+        assert (TypeOfVal (vOp opNot) t1) as Hval1 by crush.
+        assert (TypeOfVal v t2) as Hval2 by crush.
+        assert ((v' <> (vBool false) /\ TypeOfVal v tpos)
+                \/ (v' = (vBool false) /\ TypeOfVal v tneg))
+          as Hres.
+        {
+          eapply pred_inv_props. eassumption. eassumption.
+          eassumption.
+          eapply S_Cons. eassumption. apply S_Null.
+        }
         destruct Hvoptions; subst.
         { (* v' = vConst (cBool true) *)
-          (* BOOKMARK *)
-          assert (Subtype tStr t2) as Ht2low by
-                (eapply TypeOfVal_lower_bound; eauto).
-          assert (TypeOfVal (vOp opStrLen) t1) as Hval1 by crush.
-          assert (TypeOfVal (vStr s) t2) as Hval2 by crush.
-          assert (((vNat (String.length s)) <> (vBool false)
-                   /\ TypeOfVal (vStr s) tpos)
-                  \/ ((vNat (String.length s)) = (vBool false)
-                      /\ TypeOfVal (vStr s) tneg))
-            as Hres.
-          {
-            eapply pred_inv_props; try eassumption.
-            eapply S_Cons. eassumption. apply S_Null.
-          }
           destruct Hres as [[Hneq Htpos] | [Heq Htneg]].
           {
-            assert (~ IsEmpty tpos) as Hnmt
+            assert (~ IsEmpty tpos) as Hpos
                 by (eapply TypeOfVal_NonEmpty; eauto).
             eapply T_Subsume. apply T_Const. simpl. apply Subres_refl.
             crush. crush.
             apply SR_Sub...
-            ifcase. apply P_Absurd... ifcase; crush.
-            ifcase...
-            assert (IsEmpty (tAnd tNat tFalse)) by (apply Empty_neq_tBase; crush).
-            repeat ifcase... repeat ifcase...
+            assert (Subtype tTrue tBool) as Hsubbby by (unfold Subtype; crush).
+            eapply Subtype_trans; eauto.
+            destruct (empty_dec tpos)...
+            assert (IsEmpty (tAnd tTrue tFalse)) as Hmt
+                by (apply Empty_neq_tBase; crush).
+            ifcase... apply P_Absurd... ifcase; crush.
+            repeat ifcase...
           }
           {
             inversion Heq.
           }
         }
-        {
-          
-        }
-        destruct v. destruct c.
-        assert (exists s, v = vConst (cStr s)) as Hstr
-            by (eapply TypeOf_tStr; eapply TypeOf_Sub_type; eauto).
-        destruct Hstr as [s Hs].
-        subst.
-        match goal with
-        | [ H : Some (vConst (cNat _)) = Some _ |- _]
-          => inversion H; subst
-        end.
-        assert (Subtype tStr t2) as Ht2low by
-              (eapply TypeOfVal_lower_bound; eauto).
-        assert (TypeOfVal (vOp opStrLen) t1) as Hval1 by crush.
-        assert (TypeOfVal (vStr s) t2) as Hval2 by crush.
-        assert (((vNat (String.length s)) <> (vBool false)
-                 /\ TypeOfVal (vStr s) tpos)
-                \/ ((vNat (String.length s)) = (vBool false)
-                    /\ TypeOfVal (vStr s) tneg))
-          as Hres.
-        {
-          eapply pred_inv_props; try eassumption.
-          eapply S_Cons. eassumption. apply S_Null.
-        }
-        destruct Hres as [[Hneq Htpos] | [Heq Htneg]].
-        {
-          assert (~ IsEmpty tpos) as Hnmt
-              by (eapply TypeOfVal_NonEmpty; eauto).
-          eapply T_Subsume. apply T_Const. simpl. apply Subres_refl.
-          crush. crush.
-          apply SR_Sub...
-          ifcase. apply P_Absurd... ifcase; crush.
-          ifcase...
-          assert (IsEmpty (tAnd tNat tFalse)) by (apply Empty_neq_tBase; crush).
-          repeat ifcase... repeat ifcase...
-        }
-        {
-          inversion Heq.
+        { (* v' = vConst (cBool false) *)
+          destruct Hres as [[Hneq Htpos] | [Heq Htneg]].
+          {
+            assert False as impossible by (apply Hneq; reflexivity).
+            contradiction.
+          }
+          {
+            assert (~ IsEmpty tneg) as Hneg
+                by (eapply TypeOfVal_NonEmpty; eauto).
+            eapply T_Subsume. apply T_Const. simpl. apply Subres_refl.
+            crush. crush.
+            apply SR_Sub...
+            assert (Subtype tFalse tBool) as Hsubbby by (unfold Subtype; crush).
+            eapply Subtype_trans; eauto.
+            destruct (empty_dec tpos)...
+            destruct (empty_dec tneg)...
+            repeat ifcase...
+          }
         }
       }
       { (* opIsNat *)
-
+        
       }
       { (* opIsStr *)
 
