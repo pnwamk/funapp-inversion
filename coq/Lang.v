@@ -2355,8 +2355,35 @@ Proof with crush.
       }
     }
     { (* vAbs *)
+      clear IHHtype1. clear IHHtype2.
+      assert (TypeOf [] (eVal (vAbs x i body))
+                     (Res (tArrow t2 t) Trivial Trivial oTop))
+        as Hfun by (eapply T_Subsume; try eassumption; apply SR_Sub; crush).
+      clear Htype1.
+      assert (TypeOf [] (eVal v) (Res t2 Trivial Trivial oTop))
+        as Harg by assumption. clear Htype2.
       
-      (* BOOKMARK *)
+      inversion Hfun; subst.
+      {
+        Lemma Substitution : forall Γ x v t1 body t2 p q o p' q' o',
+          ~ In x (fvs Γ) ->
+          TypeOf ((Is x t1)::Γ) body (Res t2 p q o) ->
+          TypeOfVal v t1 ->
+          ((TypeOf Γ (substitute body x v) (Res t2 p' q' o'))
+           /\
+           Subres ((Is x t1)::Γ) (Res t2 p' q' o') (Res t2 p q o)).
+        Proof.
+        Admitted.
+        eapply T_Subsume.
+        eapply Substitution.
+        intros Hx. inversion Hx.
+        applyH.
+          (* BOOKMARK *)
+ 
+      }
+      {
+        
+      }
     }
   }
   { (* T_If *)
