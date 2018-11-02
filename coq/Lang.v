@@ -108,7 +108,7 @@ with
 
 val : Set :=
   vConst : const -> val
-| vAbs : var -> interface -> var -> exp -> val.
+| vAbs : var -> interface -> exp -> val.
   
   
 Hint Constructors exp.
@@ -253,7 +253,7 @@ Definition apply_op (o:op) (arg:val) : option val :=
   | opIsStr  , (vConst (cStr _))      => Some (vConst (cBool true))
   | opIsStr  , _                      => Some (vConst (cBool false))
   | opIsProc , (vConst (cOp _))       => Some (vConst (cBool true))
-  | opIsProc , (vAbs _ _ _ _)         => Some (vConst (cBool true))
+  | opIsProc , (vAbs _ _ _)           => Some (vConst (cBool true))
   | opIsProc , _                      => Some (vConst (cBool false))
   | opIsZero , (vConst (cNat 0))      => Some (vConst (cBool true))
   | opIsZero , (vConst (cNat _))      => Some (vConst (cBool false))
@@ -265,10 +265,9 @@ Fixpoint substitute (e:exp) (x:var) (v:val) : exp :=
   match e with
   | eVar y => if var_dec x y then (eVal v) else e
   | (eVal (vConst c)) => e
-  | (eVal (vAbs f i y e')) =>
-    if var_dec x f then e
-    else if var_dec x y then e
-         else eVal (vAbs f i y (substitute e' x v))
+  | (eVal (vAbs y i e')) =>
+    if var_dec x y then e
+    else eVal (vAbs y i (substitute e' x v))
   | eApp e1 e2 => eApp (substitute e1 x v) (substitute e2 x v)
   | eIf e1 e2 e3 => eIf (substitute e1 x v)
                         (substitute e2 x v)
@@ -289,9 +288,9 @@ Inductive Step : exp -> exp -> Prop :=
 | S_App_Op : forall o v v',
     apply_op o v = Some v' ->
     Step (eApp (eVal (vOp o)) (eVal v)) (eVal v')
-| S_App_Abs : forall f i x body v e',
-    e' = substitute (substitute body x v) f (vAbs f i x body) ->
-    Step (eApp (eVal (vAbs f i x body)) (eVal v)) e'
+| S_App_Abs : forall i x body v e',
+    e' = substitute body x v ->
+    Step (eApp (eVal (vAbs x i body)) (eVal v)) e'
 | S_If_Cong : forall e1 e1' e2 e3,
     Step e1 e1' ->
     Step (eIf e1 e2 e3) (eIf e1' e2 e3)
@@ -393,9 +392,7 @@ Axiom domain_tArrow : forall t1 t2, domain (tArrow t1 t2) = Some t1.
 Axiom codomain_tArrow : forall t1 t2, codomain (tArrow t1 t2) = Some t2.
 
 Lemma Subtype_refl : forall t, Subtype t t.
-Proof.
-  crush.
-Qed.
+Proof. crush. Qed.
 
 Lemma Subtype_trans : forall t1 t2 t3,
     Subtype t1 t2 ->
@@ -1047,18 +1044,6 @@ Proof with crush.
   }
 Qed.  
 
-(*
-Lemma Subres_implies_subtype : forall Γ t1 p1 q1 o1 t2 p2 q2 o2,
-    ~ Proves (isa o1 (tAnd t1 (tNot tFalse)) :: p1 :: Γ) Absurd
-    \/ ~ Proves (isa o1 (tAnd t1 tFalse) :: q1 :: Γ) Absurd ->
-    Subres Γ (Res t1 p1 q1 o1) (Res t2 p2 q2 o2) ->
-    Subtype t1 t2.
-Proof with crush.
-  intros Γ t1 p1 q1 o1 t2 p2 q2 o2 Hp Hsubres.
-  inversion Hsubres...
-  apply Subtype_L_tAnd.
-Qed.
-*)
 
 (**********************************************************)
 (* Type System                                            *)
@@ -1177,20 +1162,16 @@ Inductive TypeOf : gamma -> exp -> tres -> Prop :=
     Subres Γ (const_tres c) R ->
     WellFormedRes Γ R ->
     TypeOf Γ (eVal (vConst c)) R
-| T_Abs : forall Γ f i i' x e t R,
-    x <> f ->
+| T_Abs : forall Γ x i i' e t R,
     ~ In x (fvs Γ) ->
-    ~ In f (fvs Γ) ->
     t = (tAnd (interface_ty i) (neg_interface_ty i')) ->
     ~ IsEmpty t ->
     (forall t1 t2,
         InInterface t1 t2 i ->
-        TypeOf ((Is x t1)::(Is f t)::Γ)
-               e
-               (Res t2 Trivial Trivial oTop)) ->
+        TypeOf ((Is x t1)::Γ) e (Res t2 Trivial Trivial oTop)) ->
     Subres Γ (Res t Trivial Absurd oTop) R ->
     WellFormedRes Γ R ->
-    TypeOf Γ (eVal (vAbs f i x e)) R
+    TypeOf Γ (eVal (vAbs x i e)) R
 | T_App : forall Γ e1 e2 t1 t2 o2 t tpos tneg R,
     TypeOf Γ e1 (Res t1 Trivial Trivial oTop) ->
     TypeOf Γ e2 (Res t2 Trivial Trivial o2) ->
@@ -1296,7 +1277,7 @@ Lemma TypeOf_arrow_val : forall v t t1 t2,
     TypeOf [] (eVal v) (Res t Trivial Trivial oTop) ->
     Subtype t (tArrow t1 t2) ->
     (exists o, v = (vOp o))
-    \/ (exists f i x e, v = (vAbs f i x e)).
+    \/ (exists x i e, v = (vAbs x i e)).
 Proof.
 Admitted.
 
@@ -1542,7 +1523,7 @@ Proof with crush.
     left. exists (vConst c). reflexivity.
   }
   {
-    left. exists (vAbs f i x e). reflexivity.
+    left. exists (vAbs x i e). reflexivity.
   }
   {
     right. intuition.
@@ -1555,20 +1536,19 @@ Proof with crush.
       end.
       subst.
       assert ((exists o : op, v1 = (vOp o))
-              \/ (exists f i x e, v1 = vAbs f i x e))
+              \/ (exists x i e, v1 = vAbs x i e))
         as Hv1opts.
       {
         eapply TypeOf_arrow_val. eassumption. eassumption.
       }
-      destruct Hv1opts as [[o Ho] | [f [i [x [e Habs]]]]]; subst.
+      destruct Hv1opts as [[o Ho] | [x [i [e Habs]]]]; subst.
       { 
         eapply Progress_App_op; eauto.
         eapply Subtype_trans.
         eapply TypeOf_Op_Subtype. eassumption. assumption.
       }
-      { (* (vAbs f i x e) *)
-        exists (substitute (substitute e x v2) f (vAbs f i x e)).
-        constructor. reflexivity.
+      { (* (vAbs x i e) *)
+        exists (substitute e x v2). crush.
       }
     }
     {
@@ -1607,8 +1587,7 @@ Proof with crush.
     subst.
     destruct (val_dec v1 (vBool false)) as [Htrue | Hfalse].
     {
-      subst.
-      right. exists e3. apply S_If_False.
+      subst. right. exists e3. apply S_If_False.
     }
     {
       right. exists e2. apply S_If_NonFalse...
@@ -1682,7 +1661,7 @@ Proof with crush.
              => inversion H; crush
            end.
     eapply T_Abs...
-    applyH. assumption.
+    applyH. eassumption.
     eapply Subres_trans... eassumption.
     apply SR_Sub...
   }
@@ -1791,27 +1770,25 @@ Admitted.
 Lemma some_Proc_dec : forall v,
     (exists o, v = (vConst (cOp o)))
     \/
-    (exists f i x e, v = (vAbs f i x e))
+    (exists x i e, v = (vAbs x i e))
     \/
     ((forall o, v <> (vConst (cOp o)))
-     /\ (forall f i x e, v <> (vAbs f i x e))).
+     /\ (forall x i e, v <> (vAbs x i e))).
 Proof.
 Admitted.
 
   
 Lemma Preservation : forall e e' R,
     TypeOf [] e R ->
-    SimpleRes R ->
     Step e e' ->
     exists R', TypeOf [] e' R'
-               /\ SimpleRes R'
                /\ Subres [] R' R.
 Proof with crush.
   intros e e' R Htype.  
   generalize dependent e'.
   remember [] as Γ.
   induction Htype;
-    intros e' Hsimp Hstep;
+    intros e' Hstep;
     try solve[inversion Hstep].
   { (* T_App *)
     subst.
@@ -1822,10 +1799,9 @@ Proof with crush.
     { (* (e1 e2) --> (e1' e2) *)
       assert (exists R' : tres,
                  TypeOf [] e1' R'
-                 /\ SimpleRes R'
                  /\ Subres [] R' (Res t1 Trivial Trivial oTop))
         as IH1 by crush.
-      destruct IH1 as [[t1' p1' q1' o1'] [Htype1' [Hsimp1' HSR1']]].
+      destruct IH1 as [[t1' p1' q1' o1'] [Htype1' HSR1']].
       subst.
       eapply T_App. eapply T_Subsume. eassumption. eassumption.
       eassumption. eassumption. eassumption. apply Subres_refl.
@@ -1836,10 +1812,9 @@ Proof with crush.
     { (* (v e2) --> (v e2') *)
       assert (exists R' : tres,
                  TypeOf [] e2' R'
-                 /\ SimpleRes R'
                  /\ Subres [] R' (Res t2 Trivial Trivial oTop))
         as IH2 by crush.
-      destruct IH2 as [[t2' p2' q2' o2'] [Htype2' [Hsimp2' HSR2']]].
+      destruct IH2 as [[t2' p2' q2' o2'] [Htype2' HSR2']].
       eapply T_App. eassumption.
       eapply T_Subsume. eassumption. eassumption.
       eassumption. eassumption. apply Subres_refl.
@@ -2380,6 +2355,7 @@ Proof with crush.
       }
     }
     { (* vAbs *)
+      
       (* BOOKMARK *)
     }
   }
