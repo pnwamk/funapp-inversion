@@ -1777,6 +1777,49 @@ Lemma some_Proc_dec : forall v,
 Proof.
 Admitted.
 
+(* BOOKMARK which pred_inv_subtype? if any? *)
+Lemma pred_inv_subtype1 : forall fty t1 t2 tpos tneg,
+    pred_inv fty t1 = (tpos, tneg) ->
+    Subtype fty (tArrow t1 t2) ->
+    ((IsEmpty tpos -> IsEmpty (tAnd t2 (tNot tFalse)))
+     /\
+     (IsEmpty tneg -> IsEmpty (tAnd t2 tFalse))).
+Proof.
+Admitted.
+
+
+Lemma pred_inv_subtype2 : forall fty t1 t2 tpos tneg,
+    pred_inv fty t1 = (tpos, tneg) ->
+    Subtype fty (tArrow t1 t2) ->
+    ((IsEmpty (tAnd t2 (tNot tFalse)) -> IsEmpty tpos)
+     /\
+     (IsEmpty (tAnd t2 tFalse) -> IsEmpty tneg)).
+Proof.
+Admitted.
+
+Lemma empty_tAnd_L : forall t1 t2,
+    IsEmpty t1 ->
+    IsEmpty (tAnd t1 t2).
+Proof.
+Admitted.
+
+Lemma TypeOf_tArrow_body : forall Γ x i body t1 t2 p q o,
+    TypeOf Γ (eVal (vAbs x i body)) (Res (tArrow t1 t2) p q o) ->
+    TypeOf ((Is x t1)::Γ) body (Res t2 p q o).
+Proof.
+Admitted.
+
+
+Lemma Substitution : forall Γ x v t1 body t2 p q o p' q' o',
+    ~ In x (fvs Γ) ->
+    TypeOf ((Is x t1)::Γ) body (Res t2 p q o) ->
+    TypeOfVal v t1 ->
+    ((TypeOf Γ (substitute body x v) (Res t2 p' q' o'))
+     /\
+     Subres ((Is x t1)::Γ) (Res t2 p' q' o') (Res t2 p q o)).
+Proof.
+Admitted.
+
   
 Lemma Preservation : forall e e' R,
     TypeOf [] e R ->
@@ -2362,18 +2405,38 @@ Proof with crush.
       clear Htype1.
       assert (TypeOf [] (eVal v) (Res t2 Trivial Trivial oTop))
         as Harg by assumption. clear Htype2.
+
+      assert (TypeOf [Is x t2] body (Res t Trivial Trivial oTop))
+        as Hbody by (eapply TypeOf_tArrow_body; eauto).
+      assert ((TypeOf [] (substitute body x v)
+                      (Res t (isa oTop tpos) (isa oTop tneg) oTop))
+              /\
+              (Subres [Is x t2]
+                      (Res t (isa oTop tpos) (isa oTop tneg) oTop)
+                      (Res t (isa oTop tpos) (isa oTop tneg) oTop)))
+        as Hsub.
+      apply Substitution.
+      crush.
+      destruct (empty_dec t).
+      { (* IsEmpty t -> SR_Absurd *)
+        eapply T_Subsume. eassumption.
+        apply SR_Absurd. crush.
+        assert (IsEmpty (tAnd t (tNot tFalse))) as Hmt
+            by (eapply empty_tAnd_L; eassumption).
+        unfold isa. ifcase...
+        assert (IsEmpty (tAnd t tFalse)) as Hmt
+            by (eapply empty_tAnd_L; eassumption).        
+        unfold isa. ifcase...
+        crush. repeat ifcase...          
+      }
+      { (* ~ IsEmpty t *)
+        unfold isa.
+        (* is t ∩ ¬False empty? *)
+        (* is t ∩ False empty? *)
+      }
       
       inversion Hfun; subst.
       {
-        Lemma Substitution : forall Γ x v t1 body t2 p q o p' q' o',
-          ~ In x (fvs Γ) ->
-          TypeOf ((Is x t1)::Γ) body (Res t2 p q o) ->
-          TypeOfVal v t1 ->
-          ((TypeOf Γ (substitute body x v) (Res t2 p' q' o'))
-           /\
-           Subres ((Is x t1)::Γ) (Res t2 p' q' o') (Res t2 p q o)).
-        Proof.
-        Admitted.
         eapply T_Subsume.
         eapply Substitution.
         intros Hx. inversion Hx.
