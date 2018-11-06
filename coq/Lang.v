@@ -1777,8 +1777,9 @@ Lemma some_Proc_dec : forall v,
 Proof.
 Admitted.
 
-(* BOOKMARK which pred_inv_subtype? if any? *)
-Lemma pred_inv_subtype1 : forall fty t1 t2 tpos tneg,
+
+
+Lemma pred_inv_supertype : forall fty t1 t2 tpos tneg,
     pred_inv fty t1 = (tpos, tneg) ->
     Subtype fty (tArrow t1 t2) ->
     ((IsEmpty tpos -> IsEmpty (tAnd t2 (tNot tFalse)))
@@ -1786,16 +1787,38 @@ Lemma pred_inv_subtype1 : forall fty t1 t2 tpos tneg,
      (IsEmpty tneg -> IsEmpty (tAnd t2 tFalse))).
 Proof.
 Admitted.
+(* Proof:
 
+  f ∈ fty
+  v ∈ t1
 
-Lemma pred_inv_subtype2 : forall fty t1 t2 tpos tneg,
-    pred_inv fty t1 = (tpos, tneg) ->
-    Subtype fty (tArrow t1 t2) ->
-    ((IsEmpty (tAnd t2 (tNot tFalse)) -> IsEmpty tpos)
-     /\
-     (IsEmpty (tAnd t2 tFalse) -> IsEmpty tneg)).
-Proof.
-Admitted.
+  and (pred_inv fty t1) = (tpos, tneg)
+
+  then
+  if (f v) = v' and v' ≠ false then v ∈ tpos
+  if (f v) = false             then v ∈ tneg
+
+  - - - - - - - - - - - - - - - -
+
+  if fty ≤ t1 → t2, then (f v) ∈ t2
+
+  - - - - - - - - - - - - - - - -
+
+  (Conclusion 1)
+  if tpos = ∅, can there ∃b ∈ (t2 ∩ ¬False)? if so then
+  there exists a g ∈ t1 → t2 s.t. for some v ∈ t1,
+  (g v) = b, but b ∈ tpos then (since it is in (t2 ∩ ¬False))
+  which is impossible, so (t2 ∩ ¬False) = ∅.
+  
+
+  (Conclusion 2)
+  if tneg = ∅, can there ∃b ∈ (t2 ∩ False)? if so then
+  there exists a g ∈ t1 → t2 s.t. for some v ∈ t1,
+  (g v) = b, but b ∈ tneg then (since it is in (t2 ∩ False))
+  which is impossible, so (t2 ∩ False) = ∅.
+
+ *)
+
 
 Lemma empty_tAnd_L : forall t1 t2,
     IsEmpty t1 ->
@@ -2417,40 +2440,44 @@ Proof with crush.
         as Hsub.
       apply Substitution.
       crush.
-      destruct (empty_dec t).
-      { (* IsEmpty t -> SR_Absurd *)
-        eapply T_Subsume. eassumption.
-        apply SR_Absurd. crush.
-        assert (IsEmpty (tAnd t (tNot tFalse))) as Hmt
-            by (eapply empty_tAnd_L; eassumption).
-        unfold isa. ifcase...
-        assert (IsEmpty (tAnd t tFalse)) as Hmt
-            by (eapply empty_tAnd_L; eassumption).        
-        unfold isa. ifcase...
-        crush. repeat ifcase...          
+      assert (((IsEmpty tpos -> IsEmpty (tAnd t (tNot tFalse)))
+               /\
+               (IsEmpty tneg -> IsEmpty (tAnd t tFalse))))
+        as Hinv by (eapply pred_inv_supertype; eassumption).
+      destruct Hinv as [Hinvp Hinvn].
+      eapply T_Subsume. eassumption. apply SR_Sub; crush.
+      { (* then proposition *)
+        destruct (empty_dec tpos).
+        { (* IsEmpty tpos *)
+          assert (IsEmpty (tAnd t (tNot tFalse))) by auto.
+          ifcase; crush.
+        }
+        { (* ~ IsEmpty tpos *)
+          crush.
+        }
       }
-      { (* ~ IsEmpty t *)
-        unfold isa.
-        (* is t ∩ ¬False empty? *)
-        (* is t ∩ False empty? *)
+      { (* else proposition *)
+        destruct (empty_dec tneg).
+        { (* IsEmpty tneg *)
+          assert (IsEmpty (tAnd t tFalse)) by auto.
+          ifcase; crush.
+        }
+        { (* ~ IsEmpty tpos *)
+          crush.
+        }
       }
-      
-      inversion Hfun; subst.
-      {
-        eapply T_Subsume.
-        eapply Substitution.
-        intros Hx. inversion Hx.
-        applyH.
-          (* BOOKMARK *)
- 
-      }
-      {
-        
-      }
+      repeat ifcase...
+      crush.
+      destruct Hsub as [Hsub Hres].
+      eapply T_Subsume.
+      eassumption.
+      apply Subres_refl.
+      crush. repeat ifcase...
     }
+    assumption. 
   }
   { (* T_If *)
-    
+    (* BOOKMARK *)
   }
   { (* T_Let *)
     
