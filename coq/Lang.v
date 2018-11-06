@@ -1736,6 +1736,12 @@ Lemma SimpleRes_WellFormedRes : forall Γ R,
 Proof.
 Admitted.
 
+Lemma TypeOf_WellFormedRes : forall Γ e R,
+    TypeOf Γ e R ->
+    WellFormedRes Γ R.
+Proof.
+Admitted.
+
 Lemma TypeOfVal_lower_bound : forall c t p q o t',
     TypeOf [] (eVal (vConst c)) (Res t p q o) ->
     const_type c = t' ->
@@ -1833,16 +1839,82 @@ Proof.
 Admitted.
 
 
-Lemma Substitution : forall Γ x v t1 body t2 p q o p' q' o',
+Lemma Subres_weakening : forall Γ R1 R2 x t,
+    Subres (Is x t :: Γ) R1 R2 ->
     ~ In x (fvs Γ) ->
-    TypeOf ((Is x t1)::Γ) body (Res t2 p q o) ->
-    TypeOfVal v t1 ->
-    ((TypeOf Γ (substitute body x v) (Res t2 p' q' o'))
-     /\
-     Subres ((Is x t1)::Γ) (Res t2 p' q' o') (Res t2 p q o)).
+    WellFormedRes Γ R1 ->
+    WellFormedRes Γ R2 ->
+    Subres Γ R1 R2.
 Proof.
 Admitted.
 
+Lemma Proves_Eq_NoFree_Refl : forall Γ x y t,
+    ~ In x (fvs Γ) ->
+    Proves (Is x t :: Γ) (Eq x y) ->
+    x = y.
+Proof.
+Admitted.
+
+Lemma Proves_not_free_sub : forall x Γ t t',
+    ~ In x (fvs Γ) ->
+    Proves (Is x t :: Γ) (Is x t') ->
+    Subtype t t'.
+Proof.
+Admitted.
+
+Lemma Substitution : forall Γ z v t1 body t2 p q o,
+    ~ In z (fvs Γ) ->
+    TypeOf ((Is z t1)::Γ) body (Res t2 p q o) ->
+    TypeOfVal v t1 ->
+    (exists t2' p' q' o',
+        TypeOf Γ (substitute body z v) (Res t2' p' q' o')
+        /\ Subtype t2' t2
+        /\ Proves ((Is z t1)::(isa o' (tAnd t2' (tNot tFalse)))::p'::Γ) p
+        /\ Proves ((Is z t1)::(isa o' (tAnd t2' tFalse))::q'::Γ) q
+        /\ ((o = (oVar z) /\ o' = oTop) \/ (o <> (oVar z) /\ Subobj Γ o' o))).
+Proof.
+Admitted.
+(*
+  intros Γ z v t1 body t2 p q o Hin Hbody Hv.
+  remember ((Is z t1)::Γ) as Γ'.
+  remember (Res t2 p q o) as R.
+  induction Hbody; subst.
+  { (* T_Var *)
+    destruct (var_dec x z).
+    { (* x = z *)
+      subst. simpl.
+      destruct (var_dec z z).
+      assert (z = y) as Heq
+          by (eapply Proves_Eq_NoFree_Refl; eauto); subst.
+      assert (Subtype t1 t) as Hsub
+          by (eapply Proves_not_free_sub; eassumption).
+      
+        
+      exists
+      
+    }
+    { (* x ≠ z *)
+      
+    }
+  }
+  { (* T_Const *)
+    
+  }
+  { (* T_Abs *)
+    
+  }
+  { (* T_App *)
+    
+  }
+  { (* T_If *)
+    
+  }
+  { (* T_Let *)
+    
+  }
+  { (* T_Absurd *)
+  }
+ *)
   
 Lemma Preservation : forall e e' R,
     TypeOf [] e R ->
@@ -2428,53 +2500,59 @@ Proof with crush.
       clear Htype1.
       assert (TypeOf [] (eVal v) (Res t2 Trivial Trivial oTop))
         as Harg by assumption. clear Htype2.
-
       assert (TypeOf [Is x t2] body (Res t Trivial Trivial oTop))
         as Hbody by (eapply TypeOf_tArrow_body; eauto).
-      assert ((TypeOf [] (substitute body x v)
-                      (Res t (isa oTop tpos) (isa oTop tneg) oTop))
-              /\
-              (Subres [Is x t2]
-                      (Res t (isa oTop tpos) (isa oTop tneg) oTop)
-                      (Res t (isa oTop tpos) (isa oTop tneg) oTop)))
+      assert (exists p' q' o',
+                 (TypeOf [] (substitute body x v) (Res t p' q' o'))
+                 /\
+                 (Subres [Is x t2]
+                         (Res t p' q' o')
+                         (Res t
+                              (isa oTop tpos)
+                              (isa oTop tneg)
+                              oTop)))
         as Hsub.
-      apply Substitution.
-      crush.
-      assert (((IsEmpty tpos -> IsEmpty (tAnd t (tNot tFalse)))
-               /\
-               (IsEmpty tneg -> IsEmpty (tAnd t tFalse))))
-        as Hinv by (eapply pred_inv_supertype; eassumption).
-      destruct Hinv as [Hinvp Hinvn].
-      eapply T_Subsume. eassumption. apply SR_Sub; crush.
-      { (* then proposition *)
-        destruct (empty_dec tpos).
-        { (* IsEmpty tpos *)
-          assert (IsEmpty (tAnd t (tNot tFalse))) by auto.
-          ifcase; crush.
+      {
+        (* BOOKMARK -- fix to use with new Substitution *)
+        apply Substitution.
+        crush.
+        assert (((IsEmpty tpos -> IsEmpty (tAnd t (tNot tFalse)))
+                 /\
+                 (IsEmpty tneg -> IsEmpty (tAnd t tFalse))))
+          as Hinv by (eapply pred_inv_supertype; eassumption).
+        destruct Hinv as [Hinvp Hinvn].
+        eapply T_Subsume. eassumption. apply SR_Sub; crush.
+        { (* then proposition *)
+          destruct (empty_dec tpos).
+          { (* IsEmpty tpos *)
+            assert (IsEmpty (tAnd t (tNot tFalse))) by auto.
+            ifcase; crush.
+          }
+          { (* ~ IsEmpty tpos *)
+            crush.
+          }
         }
-        { (* ~ IsEmpty tpos *)
-          crush.
+        { (* else proposition *)
+          destruct (empty_dec tneg).
+          { (* IsEmpty tneg *)
+            assert (IsEmpty (tAnd t tFalse)) by auto.
+            ifcase; crush.
+          }
+          { (* ~ IsEmpty tpos *)
+            crush.
+          }
         }
+        repeat ifcase...
+        crush.
       }
-      { (* else proposition *)
-        destruct (empty_dec tneg).
-        { (* IsEmpty tneg *)
-          assert (IsEmpty (tAnd t tFalse)) by auto.
-          ifcase; crush.
-        }
-        { (* ~ IsEmpty tpos *)
-          crush.
-        }
-      }
-      repeat ifcase...
-      crush.
-      destruct Hsub as [Hsub Hres].
+      destruct Hsub as [p' [q' [o' [Hsub Hres]]]].
       eapply T_Subsume.
       eassumption.
-      apply Subres_refl.
-      crush. repeat ifcase...
+      eapply Subres_weakening.
+      eassumption. crush. eapply TypeOf_WellFormedRes. eassumption.
+      unfold isa. repeat ifcase...
     }
-    assumption. 
+    assumption.
   }
   { (* T_If *)
     (* BOOKMARK *)
