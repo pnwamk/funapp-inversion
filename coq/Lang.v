@@ -1753,7 +1753,25 @@ Lemma Not_In_Perm : forall Γ Γ' x,
     ~ In x (fvs Γ').
 Proof.
 Admitted.
-  
+
+Lemma eraseP_isa : forall o t x v,
+    eraseP (isa o t) x v = (isa (eraseO o x) t).
+Proof.
+Admitted.
+
+Lemma WellFormedRes_weakening : forall p Γ R,
+    WellFormedRes Γ R ->
+    WellFormedRes (p::Γ) R.
+Proof.
+Admitted.
+
+Inductive MinimalValType : val -> ty -> Prop :=
+| MVT : forall v t,
+    TypeOfVal v t ->
+    (forall t', TypeOfVal v t' ->
+                Subtype t t') ->
+    MinimalValType v t.
+
 Lemma Substitution : forall Γ' body R,
     TypeOf Γ' body R ->
     forall Γ z v t1,
@@ -1943,15 +1961,76 @@ Proof with crush.
     simpl. auto.
   }
   { (* T_App *)
+    assert (exists R' : tres,
+               TypeOf Γ' (substitute e1 z v) R' /\
+               Subres Γ' R' (eraseR (Res t1 Trivial Trivial oTop) z v))
+      as Hlhs by (eapplyH; crush).
+    destruct Hlhs as [Rl [Hltype Hlsub]].
+    assert (exists R' : tres,
+               TypeOf Γ' (substitute e2 z v) R' /\
+               Subres Γ' R' (eraseR (Res t2 Trivial Trivial o2) z v))
+      as Hrhs by (eapplyH; crush).
+    destruct Hrhs as [Rr [Hrtype Hrsub]].
+    exists (eraseR (Res t (isa o2 tpos) (isa o2 tneg) oTop) z v).
+    simpl in *.
+    split.
+    eapply T_App.
+    eapply T_Subsume; eassumption.
+    eapply T_Subsume; eassumption.
+    eassumption. eassumption.
+    repeat rewrite eraseP_isa. apply Subres_refl.
+    assert (WellFormedRes Γ' (eraseR (Res t (isa o2 tpos) (isa o2 tneg) oTop) z v)).
+    {
+      eapply WellFormedRes_eraseR.
+      eapply WellFormedRes_Perm.
+      match goal with
+      | [ H : Subres Γ _ R |- _] => inversion H
+      end.
+      eassumption. eassumption.
+    }
+    simpl in *.
+    repeat rewrite eraseP_isa in *.
+    crush.
+    assert (WellFormedRes Γ' (eraseR (Res t (isa o2 tpos) (isa o2 tneg) oTop) z v)).
+    {
+      eapply WellFormedRes_eraseR.
+      eapply WellFormedRes_Perm.
+      match goal with
+      | [ H : Subres Γ _ R |- _] => inversion H
+      end.
+      eassumption. eassumption.
+    }
+    simpl in *.
+    repeat rewrite eraseP_isa in *.
+    crush.
+    assert (Subres (Is z tv :: Γ')
+                   (Res t (isa o2 tpos) (isa o2 tneg) oTop)
+                   R)
+      as Hsub' by (eapply Subres_Perm; eauto).
+    eapply eraseR_Subres; try eassumption.
+    inversion Hsub'; subst.
+    apply SR_Sub.
+    apply WellFormedRes_weakening.
+    assert (WellFormedRes Γ'
+                          (eraseR (Res t (isa o2 tpos) (isa o2 tneg) oTop) z v)).
+    {
+      eapply WellFormedRes_eraseR.
+      eapply WellFormedRes_Perm.
+      eassumption. apply Permutation_refl.
+    }
+    crush.
+    assumption.
+    assumption.
+    (* TODO lemma about how, since z is not free in Γ', then Is z tv
+       and possible Is z tpos/tneg are the most specific things
+       we could have used about z to prove p2/q2 respectively, and therefore
+       after the erasure we can still prove p2/q2... right? 
+       NOTE: it seems like maybe we should be erasing z in p2/q2 as well
+             in order to prove this... did we make a wrong turn getting here?*)
     
   }
   { (* T_If *)
     
-  }
-  { (* T_Let *)
-    
-  }
-  { (* T_Absurd *)
   }
   
   
