@@ -1730,7 +1730,8 @@ Lemma Substitution : forall Γ z v t1 body R,
 Proof with crush.
   intros Γ z v t1 body R Hin Hbody Hv.
   remember ((Is z t1)::Γ) as Γ'.
-  induction Hbody; subst.
+  generalize dependent Γ.
+  induction Hbody; intros Γ' Hfree HΓ'.
   { (* T_Var *)
     simpl.      
     destruct (var_dec z x); subst.
@@ -1764,7 +1765,7 @@ Proof with crush.
         ifcase...
         simpl. crush.
         apply P_Absurd. crush. crush.
-        assert (incl (fvsP p) (fvs (Is x (tAnd t (tNot tFalse)) :: Is x t1 :: Γ)))
+        assert (incl (fvsP p) (fvs (Is x (tAnd t (tNot tFalse))::(Is x t1)::Γ')))
           as Hp by (eapply Proves_fvs_incl; assumption).
         simpl in Hp.
         apply incl_dedup_cons in Hp.
@@ -1775,14 +1776,14 @@ Proof with crush.
           eapply TypeOfVal_lower_bound. eassumption.
           crush.
         }          
-        assert (Proves (Is x (tAnd t1 tFalse) :: Γ) p0) as Hp0
+        assert (Proves (Is x (tAnd t1 tFalse) :: Γ') p0) as Hp0
             by (eapply Proves_combine_Is_tAnd; eauto).
         eapply eraseP_false.
         apply Proves_swap_head.
         apply Proves_weakening_cons. eassumption.
-        assert (WellFormedRes Γ (eraseR (Res t0 p p0 o)
-                                        x
-                                        (vConst (cBool false)))).
+        assert (WellFormedRes Γ' (eraseR (Res t0 p p0 o)
+                                         x
+                                         (vConst (cBool false)))).
         {
           eapply WellFormedRes_eraseR. eassumption.
         }
@@ -1805,17 +1806,17 @@ Proof with crush.
         ifcase...
         simpl. crush.
         apply Proves_weakening_cons.
-        assert (Proves ((Is x (tAnd t1 (tNot tFalse)))::Γ) p) as Hp
+        assert (Proves ((Is x (tAnd t1 (tNot tFalse)))::Γ') p) as Hp
             by (eapply Proves_combine_Is_tAnd; eauto).
         eapply eraseP_nonfalse; eauto.
         apply P_Absurd. crush.
         simpl.
-        assert (incl (fvsP p0) (fvs (Is x (tAnd t tFalse) :: Is x t1 :: Γ)))
+        assert (incl (fvsP p0) (fvs (Is x (tAnd t tFalse)::(Is x t1)::Γ')))
           as Hp0 by (eapply Proves_fvs_incl; assumption).
         simpl in Hp0.
         apply incl_dedup_cons in Hp0.
         apply incl_eraseP. assumption.
-        assert (WellFormedRes Γ (eraseR (Res t0 p p0 o) x v)).
+        assert (WellFormedRes Γ' (eraseR (Res t0 p p0 o) x v)).
         {
           eapply WellFormedRes_eraseR. eassumption.
         }
@@ -1824,9 +1825,9 @@ Proof with crush.
     }
     { (* z <> x *)
       exists (Res t (Is x (tAnd t (tNot tFalse))) (Is x (tAnd t tFalse)) (oVar x)).
-      assert (Proves Γ (Is x t)) as Hy
+      assert (Proves Γ' (Is x t)) as Hy
           by (eapply Proves_neq_cons; eauto).
-      assert (incl (fvsP (Is x t)) (fvs Γ)) as Hincl by
+      assert (incl (fvsP (Is x t)) (fvs Γ')) as Hincl by
             (eapply Proves_fvs_incl; crush).
       split.
       eapply T_Var. eapply Proves_neq_cons. eassumption. assumption.
@@ -1839,12 +1840,14 @@ Proof with crush.
   { (* T_Const *)
     simpl.
     exists (const_tres c). split. constructor. apply Subres_refl.
-    apply WellFormedRes_const. apply WellFormedRes_const.
-    eapply eraseR_Subres; eauto. simpl. intros contra.
+    apply WellFormedRes_const. apply WellFormedRes_const. subst.
+    eapply eraseR_Subres; eauto. intros contra.
     destruct c; crush.
     repeat ifcaseH...
   }
   { (* T_Abs *)
+    subst.
+    (* BOOKMARK *)
     assert (x <> z) as Hneq.
     {
       intros contra. simpl in *. apply H. left; crush.
@@ -1872,7 +1875,7 @@ Proof with crush.
   }
   { (* T_Absurd *)
   }
-  *)
+  
   
   Lemma Proves_lemma1 : forall t2 tpos tneg t' o' p' q' x t,
     ~ IsEmpty t2 ->
