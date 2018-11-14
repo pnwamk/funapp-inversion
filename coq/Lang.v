@@ -548,6 +548,13 @@ Inductive Proves : gamma -> prop -> Prop :=
     Proves Γ (Or p1 p2).
 Hint Constructors Proves.
 
+Inductive Entails : list prop -> list prop -> Prop :=
+| Ent : forall Γ Γ',
+    Forall (Proves Γ) Γ' ->
+    incl (fvs Γ') (fvs Γ) ->
+    Entails Γ Γ'.
+Hint Constructors Entails.
+
 Lemma Proves_dec : forall Γ p,
     Proves Γ p \/ ~ Proves Γ p.
 Proof.
@@ -1630,6 +1637,12 @@ Definition eraseR (R:tres) (x:var) (v:val) : tres :=
   | Res t p q o => Res t (eraseP p x v) (eraseP q x v) (eraseO o x v)
   end.
 
+Fixpoint eraseΓ (Γ:list prop) (x:var) (v:val) : list prop :=
+  match Γ with
+  | [] => []
+  | p::ps => (eraseP p x v)::(eraseΓ ps x v)
+  end.
+
 Lemma incl_dedup_cons : forall A (x:A) l1 l2,
     incl l1 (x :: x :: l2) ->
     incl l1 (x :: l2).
@@ -1813,24 +1826,106 @@ Lemma not_In_lemma1 : forall o x t Γ,
 Proof.
 Admitted.
 
+Lemma Proves_type_entails : forall Γ Γ' x v p,
+    Proves Γ p ->
+    Entails (eraseΓ Γ' x v) (eraseΓ Γ x v) ->
+    Proves Γ' p.
+Proof.
+Admitted.
+
+Lemma Entails_erase_head_member : forall Γ1 Γ2 p x v,
+    Entails (eraseΓ (p::Γ1) x v) (eraseΓ Γ2 x v) ->
+    Entails (eraseΓ (p::Γ1) x v) (eraseΓ (p::Γ2) x v).
+Proof.
+Admitted.
+
+Lemma Entails_erase_weaken : forall Γ1 Γ2 p x v,
+    Entails (eraseΓ Γ1 x v) (eraseΓ Γ2 x v) ->
+    Entails (eraseΓ (p::Γ1) x v) (eraseΓ Γ2 x v).
+Proof.
+Admitted.
+
+Lemma WellFormedRes_erase_entails : forall Γ Γ' R x v t,
+    WellFormedRes Γ R ->
+    Entails (eraseΓ (Is (pVar x) t :: Γ') x v)
+            (eraseΓ Γ x v) ->
+    WellFormedRes (Is (pVar x) t :: Γ') R.
+Proof.
+Admitted.
+
+Lemma Subres_erase_entails : forall Γ Γ' R1 R2 x v t,
+    Subres Γ R1 R2 ->
+    Entails (eraseΓ (Is (pVar x) t :: Γ') x v)
+            (eraseΓ Γ x v) ->
+    Subres (Is (pVar x) t :: Γ') R1 R2.
+Proof.
+Admitted.
+
+Lemma Proves_Entails_lemma1 : forall z tv v Γ Γ' p1 p1',
+    Entails (eraseΓ (Is (pVar z) tv :: Γ') z v) (eraseΓ Γ z v) ->
+    Proves (p1' :: Γ') (eraseP p1 z v) ->
+    Entails (eraseΓ (Is (pVar z) tv :: p1' :: Γ') z v)
+            (eraseΓ (p1 :: Γ) z v).
+Proof.
+Admitted.
+
+Lemma not_In_Wf_then : forall z Γ' t p q o,
+    ~ In z (fvs Γ') ->
+    WellFormedRes Γ' (Res t p q o) ->
+    ~ In z (fvs (p::Γ')).
+Proof.
+Admitted.
+
+Lemma not_In_Wf_else : forall z Γ' t p q o,
+    ~ In z (fvs Γ') ->
+    WellFormedRes Γ' (Res t p q o) ->
+    ~ In z (fvs (q::Γ')).
+Proof.
+Admitted.
+
+Lemma TypeOf_Entails_body : forall x Γ Γ' v tv t1 e t2,
+    TypeOfVal v tv ->
+    TypeOf (Is (pVar x) t1 :: Γ) e (Res t2 Trivial Trivial oTop) ->
+    Entails (eraseΓ (Is (pVar x) tv :: Γ') x v) (eraseΓ Γ x v) ->
+    ~ In x (fvs Γ) ->
+    ~ In x (fvs Γ') ->
+    TypeOf (Is (pVar x) t1 :: Γ') e (Res t2 Trivial Trivial oTop).
+Proof.
+Admitted.
+
+Lemma Subres_entails_eraseR : forall Γ Γ' x i i' e R v tv,
+    Subres Γ
+           (Res (tAnd (interface_ty i) (neg_interface_ty i'))
+                Trivial Absurd
+                (oPath (pVal (vAbs x i e))))
+           R ->
+    Entails (eraseΓ (Is (pVar x) tv :: Γ') x v) (eraseΓ Γ x v) ->
+    ~ In x (fvs Γ) ->
+    ~ In x (fvs Γ') ->
+    Subres Γ'
+           (Res (tAnd (interface_ty i) (neg_interface_ty i')) Trivial Absurd
+                (oPath (pVal (vAbs x i e)))) (eraseR R x v).
+Proof.
+Admitted.
+
 Lemma Substitution : forall Γ' body R,
     TypeOf Γ' body R ->
     forall Γ z v t1,
-    ~ In z (fvs Γ) ->
-    Permutation Γ' ((Is (pVar z) t1)::Γ) ->
+      ~ In z (fvs Γ) ->
+      Entails (eraseΓ ((Is (pVar z) t1)::Γ) z v) (eraseΓ Γ' z v) -> 
     TypeOfVal v t1 ->
     (exists R',
         TypeOf Γ (substitute body z v) R'
         /\ Subres Γ R' (eraseR R z v)).
 Proof with crush.
   intros Γ body R Hbody.
-  induction Hbody; intros Γ' z v tv Hfree HPerm Hv.
+  induction Hbody; intros Γ' z v tv Hfree Hproves Hv.
   { (* T_Var *)
     simpl.      
     destruct (var_dec z x); subst.
     { (* z = x *)
       assert (Proves (Is (pVar x) tv :: Γ') (Is (pVar x) t)) as Hp
-          by (eapply Proves_Perm; eauto).
+          by (eapply Proves_type_entails; eauto).
       assert (Subtype tv t) as Hsub
           by (eapply Proves_not_free_sub; eassumption).      
       destruct (val_dec v (vConst (cBool false))) as [Heq | Hneq].
@@ -1838,7 +1933,7 @@ Proof with crush.
         exists (Res tv Absurd Trivial (oPath (pVal (vConst (cBool false)))));
           split.
         inversion Hv; subst.
-        constructor... constructor...
+        constructor. constructor. crush.
         match goal with
         | [ H : TypeOf _ (eVal (vConst (cBool false))) _ |- _]
           => inversion H
@@ -1847,12 +1942,12 @@ Proof with crush.
         | [ H : Subres _ (const_tres (cBool false)) _ |- _]
           => inversion H
         end; subst.
-        all: crush.
+        all: try solve[crush].
         destruct R.
         match goal with
         | [ H : Subres _ _ _ |- _] => inversion H
         end; subst.
-        constructor...
+        constructor. crush.
         eapply Subtype_trans; eassumption.
         match goal with
         | [ H : Subobj _ _ _ |- _] => inversion H
@@ -1860,14 +1955,16 @@ Proof with crush.
         simpl.
         ifcase...
         simpl. crush.
-        apply P_Absurd. crush. crush.
+        apply P_Absurd. crush. simpl.
         assert (incl (fvsP p) (fvs (Is (pVar x) (tAnd t (tNot tFalse))
                                        ::(Is (pVar x) tv)
                                        ::Γ')))
           as Hincl.
         {
           eapply Proves_fvs_incl.
-          eapply Proves_Perm. eassumption. crush.
+          eapply Proves_type_entails. eassumption.
+          apply Entails_erase_head_member. apply Entails_erase_weaken.
+          eassumption.
         }
         simpl in Hincl.
         apply incl_dedup_cons in Hincl.
@@ -1881,7 +1978,9 @@ Proof with crush.
         assert (Proves (Is (pVar x) (tAnd tv tFalse) :: Γ') p0) as Hp0.
         {
           eapply Proves_combine_Is_tAnd. eassumption.
-          eapply Proves_Perm. eassumption. crush.
+          eapply Proves_type_entails. eassumption.
+          apply Entails_erase_head_member. apply Entails_erase_weaken.
+          eassumption.
         }
         eapply eraseP_false.
         apply Proves_swap_head.
@@ -1891,7 +1990,7 @@ Proof with crush.
                                          (vConst (cBool false)))).
         {
           eapply WellFormedRes_eraseR.
-          eapply WellFormedRes_Perm; eassumption.
+          eapply WellFormedRes_erase_entails; eassumption.
         }
         crush.
       }
@@ -1904,7 +2003,7 @@ Proof with crush.
         match goal with
         | [ H : Subres _ _ _ |- _] => inversion H
         end; subst.
-        constructor...
+        constructor. crush.
         eapply Subtype_trans; eassumption.
         match goal with
         | [ H : Subobj _ _ _ |- _] => inversion H
@@ -1913,10 +2012,12 @@ Proof with crush.
         ifcase...
         simpl. crush.
         apply Proves_weakening_cons.
-        assert (Proves ((Is (pVar x) (tAnd tv (tNot tFalse)))::Γ') p) as Hproves.
+        assert (Proves ((Is (pVar x) (tAnd tv (tNot tFalse)))::Γ') p) as Hp'.
         {
           eapply Proves_combine_Is_tAnd. eassumption.
-          eapply Proves_Perm. eassumption. crush.
+          eapply Proves_type_entails. eassumption.
+          apply Entails_erase_head_member. apply Entails_erase_weaken.
+          eassumption.
         }
         eapply eraseP_nonfalse; eauto.
         apply P_Absurd. crush.
@@ -1927,15 +2028,19 @@ Proof with crush.
           as Hincl.
         {
           eapply Proves_fvs_incl.
-          eapply Proves_Perm. eassumption. crush.
+          eapply Proves_type_entails. eassumption.
+          apply Entails_erase_head_member. apply Entails_erase_weaken.
+          eassumption.
         }
         simpl in Hincl.
         apply incl_dedup_cons in Hincl.
         apply incl_eraseP. assumption.
-        assert (WellFormedRes Γ' (eraseR (Res t0 p p0 o) x v)).
+        assert (WellFormedRes Γ' (eraseR (Res t0 p p0 o)
+                                         x
+                                         v)).
         {
           eapply WellFormedRes_eraseR.
-          eapply WellFormedRes_Perm; eassumption.
+          eapply WellFormedRes_erase_entails; eassumption.
         }
         crush.
       }
@@ -1948,7 +2053,8 @@ Proof with crush.
       assert (Proves Γ' (Is (pVar x) t)) as Hy.
       {
         eapply Proves_neq_cons. eassumption.
-        eapply Proves_Perm; eassumption. assumption.
+        eapply Proves_type_entails. eassumption.
+        eassumption. assumption.
       }
       assert (incl (fvsP (Is (pVar x) t)) (fvs Γ')) as Hincl by
             (eapply Proves_fvs_incl; crush).
@@ -1957,8 +2063,7 @@ Proof with crush.
       apply Subres_refl.
       constructor... constructor...
       eapply eraseR_Subres; eauto.
-      eapply Subres_Perm. eassumption.
-      assumption. intros contra.
+      eapply Subres_erase_entails. eassumption. eassumption.
       crush.
     }
   }
@@ -1967,64 +2072,76 @@ Proof with crush.
     exists (const_tres c). split. constructor. apply Subres_refl.
     apply WellFormedRes_const. apply WellFormedRes_const.
     eapply eraseR_Subres; eauto.
-    eapply Subres_Perm. eassumption. assumption.
+    eapply Subres_erase_entails. eassumption. eassumption.
     intros contra.
     destruct c; crush.
     repeat ifcaseH...
   }
   { (* T_Abs *)
-    simpl in *. subst.
-    assert (~ In x (fvs (Is (pVar z) tv :: Γ'))) as Hfree'
-        by (eapply Not_In_Perm; eauto).
-    assert (z <> x) as Hneq by crush.
-    ifcase...
-    exists (Res (tAnd (interface_ty i) (neg_interface_ty i'))
-                Trivial Absurd (oPath (pVal (vAbs x i (substitute e z v))))).
-    split.
-    eapply T_Abs.
-    assumption.
-    apply (eq_refl (tAnd (interface_ty i) (neg_interface_ty i'))).
-    assumption.
-    intros dom cdom HInt.
-    assert (exists R' : tres,
-               TypeOf ((Is (pVar x) dom)::Γ') (substitute e z v) R' /\
-               Subres ((Is (pVar x) dom)::Γ') R' (Res cdom Trivial Trivial oTop))
-      as Hex.
-    {
-      eapplyH. eassumption. crush.
-      rewrite HPerm. apply perm_swap. 
+    simpl.
+    destruct (var_dec z x) as [Heq | Hneq].
+    { (* z <> x *)
+      exists (Res t Trivial Absurd (oPath (pVal (vAbs x i e)))); split.
+      subst.
+      eapply T_Abs; auto. eassumption.
+      intros t1 t2 Hin.
+      eapply TypeOf_Entails_body. eauto.
+      applyH. assumption. assumption. assumption. assumption.
+      apply Subres_refl.
+      crush. crush. subst.
+      eapply Subres_entails_eraseR; eauto.
+    }
+    { (* z = x *)
+      exists (Res (tAnd (interface_ty i) (neg_interface_ty i'))
+                  Trivial Absurd (oPath (pVal (vAbs x i (substitute e z v))))).
+      split.
+      eapply T_Abs.
+      inversion Hproves; subst.
+      (* BOOKMARK *)
       assumption.
+      apply (eq_refl (tAnd (interface_ty i) (neg_interface_ty i'))).
+      assumption.
+      intros dom cdom HInt.
+      assert (exists R' : tres,
+                 TypeOf ((Is (pVar x) dom)::Γ') (substitute e z v) R' /\
+                 Subres ((Is (pVar x) dom)::Γ') R' (Res cdom Trivial Trivial oTop))
+        as Hex.
+      {
+        eapplyH. eassumption. crush.
+        rewrite HPerm. apply perm_swap. 
+        assumption.
+      }
+      destruct Hex as [R' [Htype Hsres]].
+      eapply T_Subsume; eassumption.
+      apply Subres_refl. crush. crush.
+      assert (Subres (Is (pVar z) tv :: Γ')
+                     (Res (tAnd (interface_ty i) (neg_interface_ty i'))
+                          Trivial
+                          Absurd
+                          (oPath (pVal (vAbs x i (substitute e z v)))))
+                     (Res (tAnd (interface_ty i) (neg_interface_ty i'))
+                          Trivial
+                          Absurd
+                          (oPath (pVal (vAbs x i e))))) as Hsres.
+      {
+        eapply Subres_Perm; eauto.
+        constructor...
+      }
+      assert (Subres (Is (pVar z) tv :: Γ')
+                     (Res (tAnd (interface_ty i) (neg_interface_ty i'))
+                          Trivial
+                          Absurd
+                          (oPath (pVal (vAbs x i (substitute e z v)))))
+                     R)
+        as Hsres'.
+      {
+        eapply Subres_trans. eassumption.
+        eapply Subres_Perm; eauto.
+      }
+      eapply eraseR_Subres. eassumption.
+      assumption. assumption.
+      simpl. auto. 
     }
-    destruct Hex as [R' [Htype Hsres]].
-    eapply T_Subsume; eassumption.
-    apply Subres_refl. crush. crush.
-    assert (Subres (Is (pVar z) tv :: Γ')
-                   (Res (tAnd (interface_ty i) (neg_interface_ty i'))
-                        Trivial
-                        Absurd
-                        (oPath (pVal (vAbs x i (substitute e z v)))))
-                   (Res (tAnd (interface_ty i) (neg_interface_ty i'))
-                        Trivial
-                        Absurd
-                        (oPath (pVal (vAbs x i e))))) as Hsres.
-    {
-      eapply Subres_Perm; eauto.
-      constructor...
-    }
-    assert (Subres (Is (pVar z) tv :: Γ')
-                   (Res (tAnd (interface_ty i) (neg_interface_ty i'))
-                        Trivial
-                        Absurd
-                        (oPath (pVal (vAbs x i (substitute e z v)))))
-                   R)
-      as Hsres'.
-    {
-      eapply Subres_trans. eassumption.
-      eapply Subres_Perm; eauto.
-    }
-    eapply eraseR_Subres. eassumption.
-    assumption. assumption.
-    simpl. auto.
   }
   { (* T_App *)
     assert (exists R' : tres,
@@ -2145,7 +2262,55 @@ Proof with crush.
     eapply WellFormedRes_Perm; eassumption.    
   }
   { (* T_If *)
-    (* BOOKMARK *)
+    assert (exists R' : tres,
+               TypeOf Γ' (substitute e1 z v) R' /\
+               Subres Γ' R' (eraseR (Res t1 p1 q1 o1) z v))
+      as IH1 by (eapply IHHbody1; eauto).
+    destruct IH1 as [[t1' p1' q1' o1'] [Ht1 Hsub1]].
+    simpl in Hsub1.
+    inversion Hsub1; subst.
+    assert (Entails (eraseΓ (Is (pVar z) tv::p1'::Γ') z v)
+                    (eraseΓ (p1 :: Γ) z v))
+      as Hp by (eapply Proves_Entails_lemma1; eauto).
+    assert (exists R' : tres,
+               TypeOf (p1'::Γ') (substitute e2 z v) R' /\
+               Subres (p1'::Γ') R' (eraseR R z v))
+      as IH2.
+    {
+      eapply IHHbody2; eauto.
+      eapply not_In_Wf_then; eauto.
+    }
+    destruct IH2 as [R2' [Ht2 Hsub2]].
+    assert (TypeOf (p1' :: Γ') (substitute e2 z v) (eraseR R z v))
+      as Ht2'.
+    {
+      eapply T_Subsume; eassumption.
+    }
+    assert (Entails (eraseΓ (Is (pVar z) tv::q1'::Γ') z v)
+                    (eraseΓ (q1 :: Γ) z v))
+      as Hq by (eapply Proves_Entails_lemma1; eauto).
+    assert (exists R' : tres,
+               TypeOf (q1'::Γ') (substitute e3 z v) R' /\
+               Subres (q1'::Γ') R' (eraseR R z v))
+      as IH3.
+    {
+      eapply IHHbody3; eauto.
+      eapply not_In_Wf_else; eauto.
+    }
+    destruct IH3 as [R3' [Ht3 Hsub3]].
+    assert (TypeOf (q1' :: Γ') (substitute e3 z v) (eraseR R z v))
+      as Ht3'.
+    {
+      eapply T_Subsume; eassumption.
+    }
+    exists (eraseR R z v); split.
+    simpl.
+    eapply T_If; try eassumption.
+    eapply WellFormedRes_eraseR.
+    eapply WellFormedRes_erase_entails; eassumption.
+    apply Subres_refl.
+    eapply WellFormedRes_eraseR.
+    eapply WellFormedRes_erase_entails; eassumption.
   }
   
   
