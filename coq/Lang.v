@@ -695,8 +695,8 @@ Inductive Subres : gamma -> tres -> tres -> Prop :=
     WellFormedRes Γ (Res t1 p1 q1 o1) ->
     Subtype t1 t2 ->
     Subobj Γ o1 o2 ->
-    Proves (p1::Γ) p2 ->
-    Proves (q1::Γ) q2 ->
+    Proves ((isa o1 (tAnd t1 (tNot tFalse)))::p1::Γ) p2 ->
+    Proves ((isa o1 (tAnd t1 tFalse))::q1::Γ) q2 ->
     WellFormedRes Γ (Res t2 p2 q2 o2) ->
     Subres Γ (Res t1 p1 q1 o1) (Res t2 p2 q2 o2).
 Hint Constructors Subres.
@@ -737,38 +737,8 @@ Lemma Subres_trans : forall Γ R1 R2 R3,
     Subres Γ R1 R2 ->
     Subres Γ R2 R3 ->
     Subres Γ R1 R3.
-Proof with crush.
-  intros Γ R1 R2 R3 H12.
-  generalize dependent R3.
-  inversion H12; intros R3 H23.  
-  assert (Forall (Proves (p1 :: Γ)) (p2 :: Γ))
-    as Hp1.
-  {
-    constructor. assumption.
-    apply Proves_incl...
-  }
-  assert (Forall (Proves (q1 :: Γ)) (q2 :: Γ))
-    as Hp2.
-  {
-    constructor. assumption.
-    apply Proves_incl...        
-  }
-  inversion H23; subst.
-  apply SR_Sub...
-  {
-    eapply Subtype_trans; eassumption.        
-  }
-  {
-    eapply Subobj_trans; eassumption.        
-  }
-  {
-    eapply P_Env_Cut; try eassumption.
-  }
-  {
-    eapply P_Env_Cut; try eassumption.
-  }
-Qed.
-
+Proof.
+Admitted.
 
 (**********************************************************)
 (* Type System                                            *)
@@ -1753,6 +1723,13 @@ Lemma Proves_weaken_triv : forall Γ p,
 Proof.
 Admitted.
 
+Lemma Proves_strengthen_triv : forall Γ p,
+    Proves (Trivial :: Γ) p ->
+    Proves Γ p.
+Proof.
+Admitted.
+
+
 Lemma Proves_tAnd_L : forall π t1 t2 Γ p,
     Proves (Is π t1 :: Is π t2 :: Γ) p ->
     Proves (Is π (tAnd t1 t2) :: Γ) p.
@@ -1912,6 +1889,20 @@ Lemma Proves_Entails1 : forall z t1 v tv q Γ Γ',
 Proof.
 Admitted.
 
+Lemma incl_fvsP_eraseP1 : forall x v t1 t2 Γ' Γ p,
+    Entails (eraseΓ (Is (pVar x) t1 :: Γ') x v) (eraseΓ Γ x v) ->
+    Proves (Absurd :: Is (pVar x) t2 :: Γ) p ->
+    incl (fvsP (eraseP p x v)) (fvs Γ').
+Proof.
+Admitted.
+
+
+Lemma Proves_swap : forall p q Γ r,
+    Proves (p::q::Γ) r ->
+    Proves (q::p::Γ) r.
+Proof.
+Admitted.
+  
 Lemma Substitution : forall Γ' body R,
     TypeOf Γ' body R ->
     forall Γ z v t1,
@@ -1967,7 +1958,9 @@ Proof with crush.
         {
           eapply Proves_fvs_incl.
           eapply Proves_type_entails. eassumption.
-          apply Entails_erase_head_member. apply Entails_erase_weaken.
+          apply Entails_erase_head_member.
+          apply Entails_erase_head_member.
+          apply Entails_erase_weaken.
           eassumption.
         }
         simpl in Hincl.
@@ -1983,12 +1976,16 @@ Proof with crush.
         {
           eapply Proves_combine_Is_tAnd. eassumption.
           eapply Proves_type_entails. eassumption.
-          apply Entails_erase_head_member. apply Entails_erase_weaken.
+          apply Entails_erase_head_member.
+          apply Entails_erase_head_member.
+          apply Entails_erase_weaken.
           eassumption.
         }
         eapply eraseP_false.
         apply Proves_swap_head.
-        apply Proves_weakening_cons. eassumption.
+        apply Proves_weakening_cons.
+        apply Proves_swap. apply Proves_weakening_cons.
+        eassumption.
         assert (WellFormedRes Γ' (eraseR (Res t0 p p0 o)
                                          x
                                          (vConst (cBool false)))).
@@ -2020,10 +2017,13 @@ Proof with crush.
         {
           eapply Proves_combine_Is_tAnd. eassumption.
           eapply Proves_type_entails. eassumption.
-          apply Entails_erase_head_member. apply Entails_erase_weaken.
+          apply Entails_erase_head_member.
+          apply Entails_erase_head_member.
+          apply Entails_erase_weaken.
           eassumption.
         }
         eapply eraseP_nonfalse; eauto.
+        apply Proves_swap. apply Proves_weakening_cons. eassumption.
         apply P_Absurd. crush.
         simpl.
         assert (incl (fvsP p0) (fvs (Is (pVar x) (tAnd t tFalse)
@@ -2033,7 +2033,9 @@ Proof with crush.
         {
           eapply Proves_fvs_incl.
           eapply Proves_type_entails. eassumption.
-          apply Entails_erase_head_member. apply Entails_erase_weaken.
+          apply Entails_erase_head_member.
+          apply Entails_erase_head_member.
+          apply Entails_erase_weaken.
           eassumption.
         }
         simpl in Hincl.
@@ -2181,47 +2183,104 @@ Proof with crush.
         => inversion H; subst
       end.
       simpl.
-      assert (Proves (Is (pVar z) tneg :: Is (pVar z) tv :: Γ') q2)
-        as Hq2 by (eapply Proves_Entails1; eauto).
-      assert (Proves (Is (pVar z) tpos :: Is (pVar z) tv :: Γ') p2)
-        as Hp2 by (eapply Proves_Entails1; eauto).
-      apply Proves_tAnd_L in Hp2.
-      apply Proves_tAnd_L in Hq2.
       constructor. crush. assumption. crush.
-      eapply (Proves_eraseP_val2); eassumption.
-      eapply (Proves_eraseP_val2); eassumption.
-      assert (WellFormedRes Γ' (eraseR (Res t3 p2 q2 oTop) z v)).
-      {
-        eapply WellFormedRes_eraseR.
-        eapply WellFormedRes_erase_entails; eauto.
+      { (* Proves (isa oTop (tAnd t (tNot tFalse)) :: Is (pVal v) tpos :: Γ')
+                  (eraseP p2 z v)*)
+        unfold isa in *.
+        destruct (empty_dec (tAnd t (tNot tFalse))).
+        {
+          apply P_Absurd. crush. simpl.
+          eapply incl_fvsP_eraseP1; eauto.
+        }
+        {
+          apply Proves_weaken_triv.
+          assert (Proves (Is (pVar z) tpos :: Is (pVar z) tv :: Γ') p2)
+            as Hp2.
+          {
+            eapply Proves_Entails1.
+            apply Proves_strengthen_triv. eassumption. eassumption.
+            assumption. assumption.
+          }
+          apply Proves_tAnd_L in Hp2.
+          eapply (Proves_eraseP_val2); eassumption.
+        }
       }
-      crush.
-      simpl.
-      constructor. crush. assumption. crush.
-      assert (Proves (Is (pVar z) tpos :: Is (pVar z) tv :: Γ') p2) as Hp2.
-      {
-        eapply Proves_type_entails; eauto.
-        eapply Entails_erase_head_member.
-        eapply Entails_erase_weaken.
-        eassumption.
+      { (* Proves (isa oTop (tAnd t tFalse) :: Is (pVal v) tneg :: Γ') 
+                  (eraseP q2 z v) *) 
+        unfold isa in *.
+        destruct (empty_dec (tAnd t tFalse)).
+        {
+          apply P_Absurd. crush. simpl.
+          eapply incl_fvsP_eraseP1; eauto.
+        }
+        {
+          apply Proves_weaken_triv.
+          assert (Proves (Is (pVar z) tneg :: Is (pVar z) tv :: Γ') q2)
+            as Hq2.
+          {
+            eapply Proves_Entails1.
+            apply Proves_strengthen_triv. eassumption. eassumption.
+            assumption. assumption.
+          }
+          apply Proves_tAnd_L in Hq2.
+          eapply (Proves_eraseP_val2); eassumption.
+        }
       }
-      apply Proves_tAnd_L in Hp2.
-      eapply (Proves_eraseP_val2); eassumption.
-      assert (Proves (Is (pVar z) tneg :: Is (pVar z) tv :: Γ') q2) as Hq2.
-      {
-        eapply Proves_type_entails; eauto.
-        eapply Entails_erase_head_member.
-        eapply Entails_erase_weaken.
-        eassumption.
+      { (* WellFormedRes Γ' (Res t3 (eraseP p2 z v) (eraseP q2 z v) oTop) *)
+        assert (WellFormedRes Γ' (eraseR (Res t3 p2 q2 oTop) z v)).
+        {
+          eapply WellFormedRes_eraseR.
+          eapply WellFormedRes_erase_entails; eauto.
+        }
+        crush.
       }
-      apply Proves_tAnd_L in Hq2.
-      eapply (Proves_eraseP_val2); eassumption.
-      assert (WellFormedRes Γ' (eraseR (Res t3 p2 q2 oTop) z v)).
-      {
-        eapply WellFormedRes_eraseR.
-        eapply WellFormedRes_erase_entails; eauto.
+      { (* Subres Γ' (Res t (Is (pVal v) tpos) (Is (pVal v) tneg) oTop)
+                     (eraseR (Res t3 p2 q2 oTop) z v) *)
+        simpl.
+        constructor. crush. assumption. crush.
+        unfold isa in *.
+        destruct (empty_dec (tAnd t (tNot tFalse))).
+        {
+          apply P_Absurd. crush. simpl.
+          eapply incl_fvsP_eraseP1; eauto.
+        }
+        {
+          apply Proves_weaken_triv.
+          assert (Proves (Is (pVar z) tpos :: Is (pVar z) tv :: Γ') p2)
+            as Hp2.
+          {
+            eapply Proves_Entails1.
+            apply Proves_strengthen_triv. eassumption. eassumption.
+            assumption. assumption.
+          }
+          apply Proves_tAnd_L in Hp2.
+          eapply (Proves_eraseP_val2); eassumption.
+        }
+        unfold isa in *.
+        destruct (empty_dec (tAnd t tFalse)).
+        {
+          apply P_Absurd. crush. simpl.
+          eapply incl_fvsP_eraseP1; eauto.
+        }
+        {
+          apply Proves_weaken_triv.
+          assert (Proves (Is (pVar z) tneg :: Is (pVar z) tv :: Γ') q2)
+            as Hq2.
+          {
+            eapply Proves_Entails1.
+            apply Proves_strengthen_triv. eassumption. eassumption.
+            assumption. assumption.
+          }
+          apply Proves_tAnd_L in Hq2.
+          eapply (Proves_eraseP_val2); eassumption.
+        }
+        assert (WellFormedRes Γ' (eraseR (Res t3 p2 q2 oTop) z v)).
+        {
+          eapply WellFormedRes_eraseR.
+          eapply WellFormedRes_erase_entails; eauto.
+        }
+        crush.
       }
-      crush.
     }
     { (* o2 <> (oVar z) *)
       constructor.
@@ -2238,6 +2297,7 @@ Proof with crush.
       end; subst.
       simpl. crush. crush.
       erewrite eraseO_neq; try eassumption.
+      (* BOOKMARK *)
       assert (Proves (Is (pVar z) tv :: isa o2 tpos :: Γ') p2) as Hp2.
       {
         eapply Proves_type_entails; eauto.
@@ -2329,7 +2389,7 @@ Proof with crush.
   }
 Qed.  
   
-  Lemma Proves_lemma1 : forall t2 tpos tneg t' o' p' q' x t,
+Lemma Proves_lemma1 : forall t2 tpos tneg t' o' p' q' x t,
     ~ IsEmpty t2 ->
     (IsEmpty tpos -> IsEmpty (tAnd t (tNot tFalse))) ->
     (IsEmpty tneg -> IsEmpty (tAnd t tFalse)) ->
