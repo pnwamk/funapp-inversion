@@ -7,6 +7,7 @@ Require Import Ensembles.
 Require Import Classical_sets.
 Require Import List.
 Require Import Permutation.
+Require Import ClassicalFacts.
 Import ListNotations.
 
 Set Implicit Arguments.
@@ -1908,6 +1909,23 @@ Lemma Subres_entails_eraseR : forall Γ Γ' x i i' e R v tv,
 Proof.
 Admitted.
 
+Lemma Entails_erase_swap_left : forall p q Γ x v Γ',
+    Entails (eraseΓ (q::p::Γ) x v)
+            (eraseΓ Γ' x v) ->
+    Entails (eraseΓ (p::q::Γ) x v)
+            (eraseΓ Γ' x v).
+Proof.
+Admitted.
+
+Lemma not_In_erase_incl : forall Γ Γ' x z v t,
+    ~ In x (fvs Γ) ->
+    z <> x ->
+    incl (fvs (eraseΓ Γ z v)) (fvs (eraseΓ (Is (pVar z) t :: Γ') z v)) ->
+    ~ In x (fvs Γ').
+Proof.
+Admitted.
+
+
 Lemma Substitution : forall Γ' body R,
     TypeOf Γ' body R ->
     forall Γ z v t1,
@@ -2097,9 +2115,8 @@ Proof with crush.
       split.
       eapply T_Abs.
       inversion Hproves; subst.
-      (* BOOKMARK *)
-      assumption.
-      apply (eq_refl (tAnd (interface_ty i) (neg_interface_ty i'))).
+      eapply not_In_erase_incl; eauto.
+      eassumption.
       assumption.
       intros dom cdom HInt.
       assert (exists R' : tres,
@@ -2107,12 +2124,18 @@ Proof with crush.
                  Subres ((Is (pVar x) dom)::Γ') R' (Res cdom Trivial Trivial oTop))
         as Hex.
       {
-        eapplyH. eassumption. crush.
-        rewrite HPerm. apply perm_swap. 
+        eapplyH. eassumption.
+        simpl.
+        apply and_not_or; split. crush. assumption.
+        apply Entails_erase_swap_left.
+        apply Entails_erase_head_member.
+        apply Entails_erase_weaken.
+        eassumption.
         assumption.
       }
       destruct Hex as [R' [Htype Hsres]].
       eapply T_Subsume; eassumption.
+      subst.
       apply Subres_refl. crush. crush.
       assert (Subres (Is (pVar z) tv :: Γ')
                      (Res (tAnd (interface_ty i) (neg_interface_ty i'))
@@ -2124,7 +2147,6 @@ Proof with crush.
                           Absurd
                           (oPath (pVal (vAbs x i e))))) as Hsres.
       {
-        eapply Subres_Perm; eauto.
         constructor...
       }
       assert (Subres (Is (pVar z) tv :: Γ')
@@ -2135,15 +2157,15 @@ Proof with crush.
                      R)
         as Hsres'.
       {
-        eapply Subres_trans. eassumption.
-        eapply Subres_Perm; eauto.
+        eapply Subres_trans. eassumption. subst.
+        eapply Subres_erase_entails. eassumption. eassumption.
       }
       eapply eraseR_Subres. eassumption.
-      assumption. assumption.
-      simpl. auto. 
+      assumption. assumption. crush.
     }
   }
   { (* T_App *)
+    (* BOOKMARK *)
     assert (exists R' : tres,
                TypeOf Γ' (substitute e1 z v) R' /\
                Subres Γ' R' (eraseR (Res t1 Trivial Trivial oTop) z v))
