@@ -1489,6 +1489,12 @@ Lemma Subres_weakening : forall Γ R1 R2 x t,
 Proof.
 Admitted.
 
+Lemma Subres_weaken : forall Γ p R1 R2,
+    Subres Γ R1 R2 ->
+    Subres (p::Γ) R1 R2.
+Proof.
+Admitted.
+
 Lemma Proves_not_free_sub : forall x Γ t t',
     ~ In x (fvs Γ) ->
     Proves (Is (pVar x) t :: Γ) (Is (pVar x) t') ->
@@ -2335,7 +2341,7 @@ Qed.
 Proof.
 Admitted.
 
-(* BOOKMARK *)
+
 Lemma Preservation : forall e e' R,
     TypeOf [] e R ->
     Step e e' ->
@@ -2422,10 +2428,10 @@ Proof with crush.
           eapply T_Subsume. apply T_Const. simpl. apply Subres_refl.
           crush. crush.
           apply SR_Sub...
-          ifcase. apply P_Absurd... ifcase; crush.
+          ifcase. contradiction. apply P_Trivial. apply P_Absurd...
+          ifcase; crush.
           ifcase...
-          assert (IsEmpty (tAnd tNat tFalse)) by (apply Empty_neq_tBase; crush).
-          repeat ifcase... repeat ifcase...
+          repeat ifcase...
         }
         {
           inversion Heq.
@@ -2471,10 +2477,10 @@ Proof with crush.
           eapply T_Subsume. apply T_Const. simpl. apply Subres_refl.
           crush. crush.
           apply SR_Sub...
-          ifcase. apply P_Absurd... ifcase; crush.
+          ifcase. contradiction. apply P_Trivial.
+          apply P_Absurd... ifcase; crush.
           ifcase...
-          assert (IsEmpty (tAnd tNat tFalse)) by (apply Empty_neq_tBase; crush).
-          repeat ifcase... repeat ifcase...
+          repeat ifcase...
         }
         {
           inversion Heq.
@@ -2522,10 +2528,10 @@ Proof with crush.
           eapply T_Subsume. apply T_Const. simpl. apply Subres_refl.
           crush. crush.
           apply SR_Sub...
-          ifcase. apply P_Absurd... ifcase; crush.
+          ifcase. contradiction. apply P_Trivial. apply P_Absurd...
+          ifcase; crush.
           ifcase...
-          assert (IsEmpty (tAnd tNat tFalse)) by (apply Empty_neq_tBase; crush).
-          repeat ifcase... repeat ifcase...
+          repeat ifcase...
         }
         {
           inversion Heq.
@@ -2584,7 +2590,7 @@ Proof with crush.
             destruct (empty_dec tpos)...
             assert (IsEmpty (tAnd tTrue tFalse)) as Hmt
                 by (apply Empty_neq_tBase; crush).
-            ifcase... apply P_Absurd... ifcase; crush.
+            ifcase... ifcase; crush.
             repeat ifcase...
           }
           {
@@ -2663,7 +2669,7 @@ Proof with crush.
             destruct (empty_dec tpos)...
             assert (IsEmpty (tAnd tTrue tFalse)) as Hmt
                 by (apply Empty_neq_tBase; crush).
-            ifcase... apply P_Absurd... ifcase; crush.
+            ifcase... ifcase; crush.
             repeat ifcase...
           }
           {
@@ -2725,8 +2731,7 @@ Proof with crush.
           as Hres.
         {
           eapply pred_inv_props. eassumption. eassumption.
-          eassumption.
-          eapply S_Cons. eassumption. apply S_Null.
+          eassumption. eapply S_Cons. eassumption. apply S_Null.
         }
         destruct Hvoptions; subst.
         { (* v' = vConst (cBool true) *)
@@ -2741,7 +2746,7 @@ Proof with crush.
             destruct (empty_dec tpos)...
             assert (IsEmpty (tAnd tTrue tFalse)) as Hmt
                 by (apply Empty_neq_tBase; crush).
-            ifcase... apply P_Absurd... ifcase; crush.
+            ifcase... ifcase; crush.
             repeat ifcase...
           }
           {
@@ -2819,7 +2824,7 @@ Proof with crush.
             destruct (empty_dec tpos)...
             assert (IsEmpty (tAnd tTrue tFalse)) as Hmt
                 by (apply Empty_neq_tBase; crush).
-            ifcase... apply P_Absurd... ifcase; crush.
+            ifcase... ifcase; crush.
             repeat ifcase...
           }
           {
@@ -2891,10 +2896,9 @@ Proof with crush.
           apply SR_Sub...
           assert (Subtype tTrue tBool) as Hsubb by (unfold Subtype; crush).
           eapply Subtype_trans; eauto.
-          ifcase. apply P_Absurd... ifcase; crush.
+          ifcase. apply P_Absurd... apply P_Trivial.
           ifcase...
-          assert (IsEmpty (tAnd tTrue tFalse)) by (apply Empty_neq_tBase; crush).
-          repeat ifcase... repeat ifcase...
+          repeat ifcase...
         }
         {
           inversion Heq; subst.
@@ -2905,9 +2909,8 @@ Proof with crush.
           apply SR_Sub...
           assert (Subtype tFalse tBool) as Hsubb by (unfold Subtype; crush).
           eapply Subtype_trans; eauto.
-          ifcase. apply P_Absurd... ifcase; crush.
+          ifcase. apply P_Absurd... apply P_Absurd... ifcase; crush.
           ifcase...
-          assert (IsEmpty (tAnd tTrue tFalse)) by (apply Empty_neq_tBase; crush).
           repeat ifcase... repeat ifcase...
         }
       }
@@ -2920,22 +2923,48 @@ Proof with crush.
       clear Htype1.
       assert (TypeOf [] (eVal v) (Res t2 Trivial Trivial oTop))
         as Harg by assumption. clear Htype2.
-      assert (TypeOf [Is x t2] body (Res t Trivial Trivial oTop))
+      assert (TypeOf [Is (pVar x) t2] body (Res t Trivial Trivial oTop))
         as Hbody by (eapply TypeOf_tArrow_body; eauto).
       assert (((IsEmpty tpos -> IsEmpty (tAnd t (tNot tFalse)))
                /\
                (IsEmpty tneg -> IsEmpty (tAnd t tFalse))))
         as Hinv by (eapply pred_inv_supertype; eassumption).
       destruct Hinv as [Hinvp Hinvn].
+      assert (exists R',
+                 TypeOf [] (substitute body x v) R'
+                 /\ Subres [] R' (eraseR R x v))
+        as Hsub.
+      {
+        inversion Hfun; subst.
+        eapply Substitution.
+        eapply T_Subsume.
+        eauto.
+        assert (Subres [Is (pVar x) t2]
+                       (Res t (isa oTop tpos) (isa oTop tneg) oTop)
+                       R)
+          as Hsub1 by (apply Subres_weaken; auto).
+        assert (Subres [Is (pVar x) t2]
+                       (Res t Trivial Trivial oTop)
+                       (Res t (isa oTop tpos) (isa oTop tneg) oTop))
+          as Hsub2.
+        {
+          constructor. crush. apply Subtype_refl. crush.
+          (* BOOKMARK -- Subres needs to include an `isa` about the
+             object's type in the then and else prop *)
+        }
+        eapply Subres_trans; try eassumption.
+      }
       assert (exists t' p' q' o',
                  TypeOf [] (substitute body x v) (Res t' p' q' o')
                  /\ Subtype t' t
-                 /\ Proves [(Is x t2) ; (isa o' (tAnd t' (tNot tFalse))) ; p']
+                 /\ Proves [(Is (pVar x) t2) ;
+                            (isa o' (tAnd t' (tNot tFalse))) ;
+                            p']
                            (isa oTop tpos)
-                 /\ Proves [(Is x t2) ; (isa o' (tAnd t' tFalse)) ; q']
+                 /\ Proves [(Is (pVar x) t2) ; (isa o' (tAnd t' tFalse)) ; q']
                            (isa oTop tneg)
-                 /\ ((oTop = (oVar x) /\ o' = oTop)
-                     \/ (oTop <> (oVar x) /\ Subobj [] o' oTop)))
+                 /\ ((oTop = (oPath (pVar x)) /\ o' = oTop)
+                     \/ (oTop <> (oPath (pVar x)) /\ Subobj [] o' oTop)))
         as Hsub.
       {
         apply Substitution.
