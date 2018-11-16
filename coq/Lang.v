@@ -846,8 +846,8 @@ Inductive TypeOf : gamma -> exp -> tres -> Prop :=
     TypeOf Γ (eApp e1 e2) R
 | T_If : forall Γ e1 e2 e3 t1 p1 q1 o1 R,
     TypeOf Γ e1 (Res t1 p1 q1 o1) ->
-    TypeOf (p1::Γ) e2 R ->
-    TypeOf (q1::Γ) e3 R ->
+    TypeOf ((isa o1 (tAnd t1 (tNot tFalse)))::p1::Γ) e2 R ->
+    TypeOf ((isa o1 (tAnd t1 tFalse))::q1::Γ) e3 R ->
     WellFormedRes Γ R ->
     TypeOf Γ (eIf e1 e2 e3) R.
 Hint Constructors TypeOf.
@@ -1914,6 +1914,19 @@ Lemma incl_fvsP_eraseP2 : forall z v tv Γ Γ' t p o,
 Proof.
 Admitted.
 
+Lemma not_In_then : forall Γ' t1' p1' q1' o1' z,
+    WellFormedRes Γ' (Res t1' p1' q1' o1') ->
+    ~ In z (fvs Γ') ->
+    ~ In z (fvs (isa o1' (tAnd t1' (tNot tFalse)) :: p1' :: Γ')).
+Proof.
+Admitted.
+Lemma not_In_else : forall Γ' t1' p1' q1' o1' z,
+    WellFormedRes Γ' (Res t1' p1' q1' o1') ->
+    ~ In z (fvs Γ') ->
+    ~ In z (fvs (isa o1' (tAnd t1' tFalse) :: q1' :: Γ')).
+Proof.
+Admitted.
+
 Lemma Proves_Entails_lemma2 : forall z tv v o1 o1' t1' Γ Γ' p1 p1',
     Entails (eraseΓ (Is (pVar z) tv :: Γ') z v) (eraseΓ Γ z v) ->
     Subobj Γ' o1' (eraseO o1 z v) ->
@@ -1921,6 +1934,41 @@ Lemma Proves_Entails_lemma2 : forall z tv v o1 o1' t1' Γ Γ' p1 p1',
            (eraseP p1 z v) ->
     Entails (eraseΓ (Is (pVar z) tv :: p1' :: Γ') z v)
             (eraseΓ (p1 :: Γ) z v).
+Proof.
+Admitted.
+
+Lemma Entails_then : forall o1 o1' t1' p1' Γ' p1 z v tv t1 Γ,
+    Proves (isa o1' (tAnd t1' (tNot tFalse)) :: p1' :: Γ')
+           (eraseP p1 z v) ->
+    Entails (eraseΓ (Is (pVar z) tv :: p1' :: Γ') z v)
+            (eraseΓ (p1 :: Γ) z v) ->
+    Subobj Γ' o1' (eraseO o1 z v) ->
+    ~ In z (fvs Γ') ->
+    Entails
+      (eraseΓ
+         (Is (pVar z) tv
+             :: isa o1' (tAnd t1' (tNot tFalse))
+             :: p1'
+             :: Γ')
+         z v)
+      (eraseΓ (isa o1 (tAnd t1 (tNot tFalse)) :: p1 :: Γ) z v).
+Proof.
+Admitted.
+Lemma Entails_else : forall o1 o1' t1' q1' Γ' q1 z v tv t1 Γ,
+    Proves (isa o1' (tAnd t1' tFalse) :: q1' :: Γ')
+           (eraseP q1 z v) ->
+    Entails (eraseΓ (Is (pVar z) tv :: q1' :: Γ') z v)
+            (eraseΓ (q1 :: Γ) z v) ->
+    Subobj Γ' o1' (eraseO o1 z v) ->
+    ~ In z (fvs Γ') ->
+    Entails
+      (eraseΓ
+         (Is (pVar z) tv
+             :: isa o1' (tAnd t1' tFalse)
+             :: q1'
+             :: Γ')
+         z v)
+      (eraseΓ (isa o1 (tAnd t1 tFalse) :: q1 :: Γ) z v).
 Proof.
 Admitted.
 
@@ -2399,15 +2447,21 @@ Proof with crush.
                     (eraseΓ (p1 :: Γ) z v))
       as Hp by (eapply Proves_Entails_lemma2; eauto).
     assert (exists R' : tres,
-               TypeOf (p1'::Γ') (substitute e2 z v) R' /\
-               Subres (p1'::Γ') R' (eraseR R z v))
+               TypeOf ((isa o1' (tAnd t1' (tNot tFalse)))::p1'::Γ')
+                      (substitute e2 z v) R' /\
+               Subres ((isa o1' (tAnd t1' (tNot tFalse)))::p1'::Γ')
+                      R'
+                      (eraseR R z v))
       as IH2.
     {
       eapply IHHbody2; eauto.
-      eapply not_In_Wf_then; eauto.
+      eapply not_In_then; eauto.
+      eapply Entails_then; eauto.
     }
     destruct IH2 as [R2' [Ht2 Hsub2]].
-    assert (TypeOf (p1' :: Γ') (substitute e2 z v) (eraseR R z v))
+    assert (TypeOf ((isa o1' (tAnd t1' (tNot tFalse)))::p1'::Γ')
+                   (substitute e2 z v)
+                   (eraseR R z v))
       as Ht2'.
     {
       eapply T_Subsume; eassumption.
@@ -2416,15 +2470,22 @@ Proof with crush.
                     (eraseΓ (q1 :: Γ) z v))
       as Hq by (eapply Proves_Entails_lemma2; eauto).
     assert (exists R' : tres,
-               TypeOf (q1'::Γ') (substitute e3 z v) R' /\
-               Subres (q1'::Γ') R' (eraseR R z v))
+               TypeOf ((isa o1' (tAnd t1' tFalse))::q1'::Γ')
+                      (substitute e3 z v)
+                      R' /\
+               Subres ((isa o1' (tAnd t1' tFalse))::q1'::Γ')
+                      R'
+                      (eraseR R z v))
       as IH3.
     {
       eapply IHHbody3; eauto.
-      eapply not_In_Wf_else; eauto.
+      eapply not_In_else; eauto.
+      eapply Entails_else; eauto.
     }
     destruct IH3 as [R3' [Ht3 Hsub3]].
-    assert (TypeOf (q1' :: Γ') (substitute e3 z v) (eraseR R z v))
+    assert (TypeOf ((isa o1' (tAnd t1' tFalse))::q1'::Γ')
+                   (substitute e3 z v)
+                   (eraseR R z v))
       as Ht3'.
     {
       eapply T_Subsume; eassumption.
@@ -2449,6 +2510,42 @@ Lemma Proves_lemma1 : forall t2 tpos tneg t' o' p' q' x t,
     ((Proves [isa o' (tAnd t' (tNot tFalse)); p'] (isa oTop tpos))
      /\
      (Proves [isa o' (tAnd t' tFalse); q'] (isa oTop tneg))).
+Proof.
+Admitted.
+
+
+Lemma Entails_refl : forall Γ,
+    Entails Γ Γ.
+Proof.
+Admitted.
+
+
+Lemma If_then_impl : forall o1 t1 e2 R o1' t1' p1 p1',
+    TypeOf [isa o1 (tAnd t1 (tNot tFalse)); p1] e2 R ->
+    Subobj [] o1' o1 ->
+    Proves [isa o1' (tAnd t1' (tNot tFalse)); p1'] p1 ->
+    TypeOf [isa o1' (tAnd t1' (tNot tFalse)); p1'] e2 R.
+Proof.
+Admitted.
+Lemma If_else_impl : forall o1 t1 e3 R o1' t1' q1 q1',
+    TypeOf [isa o1 (tAnd t1 tFalse); q1] e3 R ->
+    Subobj [] o1' o1 ->
+    Proves [isa o1' (tAnd t1' tFalse); q1'] q1 ->
+    TypeOf [isa o1' (tAnd t1' tFalse); q1'] e3 R.
+Proof.
+Admitted.
+
+Lemma If_else_TypeOf : forall t1 p1 q1 o1 e' R,
+    TypeOf [] (eVal (vBool false)) (Res t1 p1 q1 o1) ->
+    TypeOf [isa o1 (tAnd t1 tFalse); q1] e' R ->
+    TypeOf [] e' R.
+Proof.
+Admitted.
+Lemma If_then_TypeOf : forall t1 p1 q1 o1 e' R v,
+    TypeOf [] (eVal v) (Res t1 p1 q1 o1) ->
+    v <> (vBool false) ->
+    TypeOf [isa o1 (tAnd t1 (tNot tFalse)); p1] e' R ->
+    TypeOf [] e' R.
 Proof.
 Admitted.
 
@@ -3043,7 +3140,12 @@ Proof with crush.
       destruct Hinv as [Hinvp Hinvn].
       assert (exists R',
                  TypeOf [] (substitute body x v) R'
-                 /\ Subres [] R' (eraseR R x v))
+                 /\ Subres [] R' (eraseR (Res t
+                                              (isa oTop tpos)
+                                              (isa oTop tneg)
+                                              oTop)
+                                         x
+                                         v))
         as Hsub.
       {
         inversion Hfun; subst.
@@ -3060,83 +3162,83 @@ Proof with crush.
           as Hsub2.
         {
           constructor. crush. apply Subtype_refl. crush.
-          (* BOOKMARK -- Subres needs to include an `isa` about the
-             object's type in the then and else prop *)
-        }
-        eapply Subres_trans; try eassumption.
-      }
-      assert (exists t' p' q' o',
-                 TypeOf [] (substitute body x v) (Res t' p' q' o')
-                 /\ Subtype t' t
-                 /\ Proves [(Is (pVar x) t2) ;
-                            (isa o' (tAnd t' (tNot tFalse))) ;
-                            p']
-                           (isa oTop tpos)
-                 /\ Proves [(Is (pVar x) t2) ; (isa o' (tAnd t' tFalse)) ; q']
-                           (isa oTop tneg)
-                 /\ ((oTop = (oPath (pVar x)) /\ o' = oTop)
-                     \/ (oTop <> (oPath (pVar x)) /\ Subobj [] o' oTop)))
-        as Hsub.
-      {
-        apply Substitution.
-        crush.
-        eapply T_Subsume. eassumption. apply SR_Sub; crush.
-        { (* then proposition *)
+          unfold isa.
           destruct (empty_dec tpos).
-          { (* IsEmpty tpos *)
-            assert (IsEmpty (tAnd t (tNot tFalse))) by auto.
-            ifcase; crush.
+          {
+            intuition.
+            destruct (empty_dec (tAnd t (tNot tFalse))).
+            {
+              apply P_Absurd...
+            }
+            {
+              contradiction.
+            }
           }
-          { (* ~ IsEmpty tpos *)
-            crush.
+          {
+            apply P_Trivial.
           }
-        }
-        { (* else proposition *)
+          unfold isa.
           destruct (empty_dec tneg).
-          { (* IsEmpty tneg *)
-            assert (IsEmpty (tAnd t tFalse)) by auto.
-            ifcase; crush.
+          {
+            intuition.
+            destruct (empty_dec (tAnd t tFalse)).
+            {
+              apply P_Absurd...
+            }
+            {
+              contradiction.
+            }
           }
-          { (* ~ IsEmpty tpos *)
-            crush.
+          {
+            apply P_Trivial.
           }
+          crush. ifcase...
+          crush. repeat ifcase...
+          ifcase...
         }
-        repeat ifcase...
+        assumption.
         crush.
+        apply Entails_refl.
+        constructor; crush.
       }
-      destruct Hsub as [t' [p' [q' [o' [Htype [Hsub [Hp [Hq Ho]]]]]]]].
-      assert (Subobj [] o' oTop) as Ho' by (destruct Ho; crush). clear Ho.
-      eapply T_Subsume.
-      eassumption.
-      assert ((Proves [isa o' (tAnd t' (tNot tFalse)); p'] (isa oTop tpos))
-              /\ Proves [isa o' (tAnd t' tFalse); q'] (isa oTop tneg))
-        as Hproves.
-      {
-        assert (TypeOfVal v t2) by crush.
-        eapply Proves_lemma1.
-        eapply TypeOfVal_NonEmpty; try eassumption.
-        eassumption. eassumption.
-        eassumption. assumption.
-      }
-      destruct Hproves as [Hp' Hq'].
-      eapply SR_Sub.
-      eapply TypeOf_WellFormedRes. eassumption.
-      assumption. assumption.
-      assumption. assumption.
-      crush. repeat ifcase...
+      destruct Hsub as [R' [Htype Hsub]].
+      eapply T_Subsume. eassumption.
+      crush.
+      repeat ifcase...
     }
     assumption.
   }
   { (* T_If *)
-    (* BOOKMARK *)
+    clear IHHtype2. clear IHHtype3.
+    inversion Hstep; subst.
+    { (* e1 --> e1' *)
+      exists R; split.
+      assert (exists R' : tres,
+                 TypeOf [] e1' R'
+                 /\ Subres [] R' (Res t1 p1 q1 o1))
+        as H1 by (eapply IHHtype1; eauto).
+      destruct H1 as [[t1' p1' q1' o1'] [Htype1' Hsub1']].
+      inversion Hsub1'; subst.
+      eapply T_If.
+      eassumption.
+      eapply If_then_impl; eauto.
+      eapply If_else_impl; eauto.
+      assumption.
+      apply Subres_refl.
+      assumption.
+    }
+    { (* (eIf false e2 e3) --> e3 *)
+      exists R; split.
+      eapply If_else_TypeOf; eauto.
+      apply Subres_refl.
+      assumption.
+    }
+    { (* (eIf non-false e2 e3) --> e2 *)
+      exists R; split.
+      eapply If_then_TypeOf; eauto.
+      apply Subres_refl.
+      assumption.      
+    }
   }
-  { (* T_Let *)
-    
-  }
-  { (* T_ExFalso *)
-    
-  }
-  
+Qed.
 
-
-(* ARCHIVE // OLD *)
