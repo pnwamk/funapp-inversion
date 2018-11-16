@@ -1902,7 +1902,18 @@ Lemma Proves_swap : forall p q Γ r,
     Proves (q::p::Γ) r.
 Proof.
 Admitted.
-  
+
+Lemma isa_oTop_options : forall t,
+    (isa oTop t = Trivial) \/ (isa oTop t = Absurd).
+Proof.
+Admitted.
+Lemma incl_fvsP_eraseP2 : forall z v tv Γ Γ' t p o,
+    Entails (eraseΓ (Is (pVar z) tv :: Γ') z v) (eraseΓ Γ z v) ->
+    o <> oPath (pVar z) ->
+    incl (fvsP (eraseP p z v)) (fvsP (isa o t) ++ fvs Γ').
+Proof.
+Admitted.
+
 Lemma Substitution : forall Γ' body R,
     TypeOf Γ' body R ->
     forall Γ z v t1,
@@ -2297,32 +2308,61 @@ Proof with crush.
       end; subst.
       simpl. crush. crush.
       erewrite eraseO_neq; try eassumption.
-      (* BOOKMARK *)
-      assert (Proves (Is (pVar z) tv :: isa o2 tpos :: Γ') p2) as Hp2.
-      {
-        eapply Proves_type_entails; eauto.
-        eapply Entails_erase_swap_left.
-        eapply Entails_erase_head_member.
-        eapply Entails_erase_weaken.
+      assert (isa oTop (tAnd t (tNot tFalse)) = Trivial
+              \/ isa oTop (tAnd t (tNot tFalse)) = Absurd)
+        as Hopts by apply isa_oTop_options.
+      destruct Hopts as [Heq | Heq]; rewrite Heq in *.
+      { (* isa oTop (tAnd t (tNot tFalse)) = Trivial *)
+        apply Proves_weaken_triv.
+        match goal with
+          [ H : Proves (Trivial :: _ :: Γ) p2 |- _]
+          => apply Proves_strengthen_triv in H
+        end.
+        assert (Proves (Is (pVar z) tv :: isa o2 tpos :: Γ') p2) as Hp2'.
+        {
+          eapply Proves_type_entails; eauto.
+          eapply Entails_erase_swap_left.
+          eapply Entails_erase_head_member.
+          eapply Entails_erase_weaken.
+          eassumption.
+        }
+        eapply Proves_eraseP. simpl. 
+        eapply not_In_lemma1; eauto.
         eassumption.
+        assumption.
       }
-      eapply Proves_eraseP. simpl. 
-      eapply not_In_lemma1; eauto.
-      eassumption.
-      assumption.
-      assert (Proves (Is (pVar z) tv :: isa o2 tneg :: Γ') q2) as Hq2.
-      {
-        eapply Proves_type_entails; eauto.
-        eapply Entails_erase_swap_left.
-        eapply Entails_erase_head_member.
-        eapply Entails_erase_weaken.
+      { (* isa oTop (tAnd t (tNot tFalse)) = Absurd *)
+        apply P_Absurd. crush. simpl.
+        eapply incl_fvsP_eraseP2; eauto.
+      }
+      erewrite eraseO_neq; try eassumption.
+      assert (isa oTop (tAnd t tFalse) = Trivial
+              \/ isa oTop (tAnd t tFalse) = Absurd)
+        as Hopts by apply isa_oTop_options.
+      destruct Hopts as [Heq | Heq]; rewrite Heq in *.
+      { (* isa oTop (tAnd t tFalse) = Trivial *)
+        apply Proves_weaken_triv.
+        match goal with
+          [ H : Proves (Trivial :: _ :: Γ) q2 |- _]
+          => apply Proves_strengthen_triv in H
+        end.
+        assert (Proves (Is (pVar z) tv :: isa o2 tneg :: Γ') q2) as Hq2'.
+        {
+          eapply Proves_type_entails; eauto.
+          eapply Entails_erase_swap_left.
+          eapply Entails_erase_head_member.
+          eapply Entails_erase_weaken.
+          eassumption.
+        }
+        eapply Proves_eraseP. simpl. 
+        eapply not_In_lemma1; eauto.
         eassumption.
+        assumption.
       }
-      eapply Proves_eraseP. erewrite eraseO_neq.
-      eapply not_In_lemma1; eauto.
-      eassumption.
-      eassumption.
-      erewrite eraseO_neq. crush. assumption.
+      { (* isa oTop (tAnd t tFalse) = Absurd *)
+        apply P_Absurd. crush. simpl.
+        eapply incl_fvsP_eraseP2; eauto.
+      }
       assert (WellFormedRes Γ' (eraseR (Res t3 p2 q2 o0) z v)).
       {
         eapply WellFormedRes_eraseR.
@@ -2337,6 +2377,7 @@ Proof with crush.
     eapply WellFormedRes_erase_entails; eauto.
   }
   { (* T_If *)
+    (* BOOKMARK *)
     assert (exists R' : tres,
                TypeOf Γ' (substitute e1 z v) R' /\
                Subres Γ' R' (eraseR (Res t1 p1 q1 o1) z v))
