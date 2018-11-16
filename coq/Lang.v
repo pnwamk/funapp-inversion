@@ -1914,6 +1914,17 @@ Lemma incl_fvsP_eraseP2 : forall z v tv Γ Γ' t p o,
 Proof.
 Admitted.
 
+Lemma Proves_Entails_lemma2 : forall z tv v o1 o1' t1' Γ Γ' p1 p1',
+    Entails (eraseΓ (Is (pVar z) tv :: Γ') z v) (eraseΓ Γ z v) ->
+    Subobj Γ' o1' (eraseO o1 z v) ->
+    Proves (isa o1' t1' :: p1' :: Γ')
+           (eraseP p1 z v) ->
+    Entails (eraseΓ (Is (pVar z) tv :: p1' :: Γ') z v)
+            (eraseΓ (p1 :: Γ) z v).
+Proof.
+Admitted.
+
+
 Lemma Substitution : forall Γ' body R,
     TypeOf Γ' body R ->
     forall Γ z v t1,
@@ -2377,7 +2388,6 @@ Proof with crush.
     eapply WellFormedRes_erase_entails; eauto.
   }
   { (* T_If *)
-    (* BOOKMARK *)
     assert (exists R' : tres,
                TypeOf Γ' (substitute e1 z v) R' /\
                Subres Γ' R' (eraseR (Res t1 p1 q1 o1) z v))
@@ -2387,7 +2397,7 @@ Proof with crush.
     inversion Hsub1; subst.
     assert (Entails (eraseΓ (Is (pVar z) tv::p1'::Γ') z v)
                     (eraseΓ (p1 :: Γ) z v))
-      as Hp by (eapply Proves_Entails_lemma1; eauto).
+      as Hp by (eapply Proves_Entails_lemma2; eauto).
     assert (exists R' : tres,
                TypeOf (p1'::Γ') (substitute e2 z v) R' /\
                Subres (p1'::Γ') R' (eraseR R z v))
@@ -2404,7 +2414,7 @@ Proof with crush.
     }
     assert (Entails (eraseΓ (Is (pVar z) tv::q1'::Γ') z v)
                     (eraseΓ (q1 :: Γ) z v))
-      as Hq by (eapply Proves_Entails_lemma1; eauto).
+      as Hq by (eapply Proves_Entails_lemma2; eauto).
     assert (exists R' : tres,
                TypeOf (q1'::Γ') (substitute e3 z v) R' /\
                Subres (q1'::Γ') R' (eraseR R z v))
