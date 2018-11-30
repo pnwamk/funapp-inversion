@@ -109,7 +109,6 @@ Inductive exp : Set :=
 | eVal   : val -> exp 
 | eApp   : exp -> exp -> exp
 | eIf    : exp -> exp -> exp -> exp
-| eLet   : var -> exp -> exp -> exp
 
 with
 
@@ -284,10 +283,6 @@ Fixpoint substitute (e:exp) (x:var) (v:val) : exp :=
   | eIf e1 e2 e3 => eIf (substitute e1 x v)
                         (substitute e2 x v)
                         (substitute e3 x v)
-  | eLet y e1 e2 =>
-    let e1' := (substitute e1 x v) in
-    let e2' := if var_dec x y then e2 else (substitute e2 x v) in
-    eLet y e1' e2'
   end.
 
 Inductive Step : exp -> exp -> Prop :=
@@ -310,12 +305,7 @@ Inductive Step : exp -> exp -> Prop :=
     Step (eIf (eVal (vBool false)) e e') e'
 | S_If_NonFalse : forall v e e',
     v <> (vBool false) ->
-    Step (eIf (eVal v) e e') e
-| S_Let_Cong : forall x e1 e1' e2,
-    Step e1 e1' ->
-    Step (eLet x e1 e2) (eLet x e1' e2)
-| S_Let : forall x v e,
-    Step (eLet x (eVal v) e) (substitute e x v).
+    Step (eIf (eVal v) e e') e.
 Hint Constructors Step.
 
 
