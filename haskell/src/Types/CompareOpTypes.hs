@@ -345,9 +345,12 @@ compareUnOps ts1 rngTy1 ts2 rngTy2 description = do
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   forM_ unOps $ \(opName, opDom) -> do
     let applyFun1 = (rngTy1 (getUnOpType opName ts1))
+        size1     = length $ (getUnOpType opName ts1)
         applyFun2 = (rngTy2 (getUnOpType opName ts2))
-    startTime <- getCurrentTime
+        size2     = length $ (getUnOpType opName ts2)
     putStr opName
+    putStrLn $ "(size change " ++ (show size2) ++ " ==> " ++ (show size1) ++ ")"
+    startTime <- getCurrentTime
     forM_ numericTypes $ \(argName, argTy) -> do
       putStr (if (compareUnOpRes
                   applyFun1
@@ -381,9 +384,12 @@ compareBinOps ts1 rngTy1 ts2 rngTy2 description = do
   putStrLn ("Comparing BinOps (" ++ description ++ ")")
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   forM_ binOps $ \(opName, opDom1, opDom2) -> do
-    let applyFun1 = (rngTy1 (getBinOpType opName ts1))
-        applyFun2 = (rngTy2 (getBinOpType opName ts2))
+    let applyFun1 = rngTy1 $ getBinOpType opName ts1
+        size1     = length $ getBinOpType opName ts1
+        applyFun2 = rngTy2 $ getBinOpType opName ts2
+        size2     = length $ getBinOpType opName ts2
     putStr opName
+    putStrLn $ "(size change " ++ (show size2) ++ " ==> " ++ (show size1) ++ ")"
     startTime <- getCurrentTime
     forM_ numericTypes $ \(argName1, argTy1) -> do
       putStr "."
@@ -414,18 +420,23 @@ getSynCompOpType name table =
 compareCompOps ::
   (String -> a) ->
   (a -> Ty -> Ty -> Maybe (Ty, Ty, Ty, Ty)) ->
+  (String -> Int) ->
   (String -> b) ->
   (b -> Ty -> Ty -> Maybe (Ty, Ty, Ty, Ty)) ->
+  (String -> Int) ->
   String ->
   IO ()
-compareCompOps getType1 rngTy1 getType2 rngTy2 description = do
+compareCompOps getType1 rngTy1 getSize1 getType2 rngTy2 getSize2 description = do
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   putStrLn ("Comparing CompOps (" ++ description ++ ")")
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   forM_ compOps $ \(opName, opDom1, opDom2) -> do
-    let applyFun1 = rngTy1 (getType1 opName)
+    let applyFun1 = rngTy1 $ getType1 opName
+        size1     = getSize1 opName
         applyFun2 = rngTy2 (getType2 opName)
+        size2     = getSize2 opName
     putStr opName
+    putStrLn $ "(size change " ++ (show size2) ++ " ==> " ++ (show size1) ++ ")"
     startTime <- getCurrentTime
     forM_ numericTypes $ \(argName1, argTy1) -> do
       putStr "."
@@ -467,10 +478,12 @@ compareSyntacticBinOps descr =
 compareSyntacticCompOps :: String -> IO ()
 compareSyntacticCompOps descr = 
   (compareCompOps
-    (\name -> (getSynCompOpType name SynP.opTypes))
+    (\name -> getSynCompOpType name SynP.opTypes)
     allSynCompOpTypes
+    (\name -> length $ getSynCompOpType name SynP.opTypes)
     (\name -> (getSynCompOpType name Syn.opTypes))
     firstSynCompOpTypes
+    (\name -> length $ getSynCompOpType name Syn.opTypes)
     descr)
 
 compareSemanticUnOps :: String -> IO ()
@@ -494,9 +507,11 @@ compareSemanticBinOps descr =
 compareSemanticCompOps :: (Ty -> Ty -> Ty -> Maybe Ty) -> String -> IO ()
 compareSemanticCompOps inputTy descr = 
   (compareCompOps
-    (\name -> (getBinOpType name Sem.opTypes))
+    (\name -> getBinOpType name Sem.opTypes)
     (semCompOpTypes inputTy)
+    (\name -> length $ getBinOpType name Sem.opTypes)
     (\name -> (getSynCompOpType name Syn.opTypes))
     firstSynCompOpTypes
+    (\name -> length $ getSynCompOpType name Syn.opTypes)
     descr)
   
