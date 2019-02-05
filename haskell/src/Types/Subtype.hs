@@ -3,6 +3,7 @@ module Types.Subtype
   , subtype
   , equiv
   , isEmpty
+  , compareTy
   ) where
 
 import           Types.LazyBDD
@@ -15,6 +16,17 @@ import           Data.Foldable
 -- Is this type equivalent to ∅?
 isEmpty :: Ty -> Bool
 isEmpty t = isJust $ mtTy t Set.empty
+
+
+-- compare t1 and t2 via the subtyping partial order,
+-- GT means simply that t1 ≰ t2 (so GT is sort of a misnomer, but whatever)
+-- EQ means that t1 = t2 (literally they represent the same set of values)
+-- LT means that t1 < t2 (t1 is a strict subset of t2)
+compareTy :: Ty -> Ty -> Ordering
+compareTy t1 t2
+  | not $ subtype t1 t2    = GT
+  | isEmpty $ tyDiff t2 t1 = LT
+  | otherwise              = EQ
 
 type Seen = Set FiniteTy
 

@@ -6,7 +6,6 @@ module Types.Metafunctions
   , domTy
   , rngTy
   , inTy
-  , cInTy
   ) where
 
 import Types.LazyBDD
@@ -157,32 +156,3 @@ inTy funty arg out =
                             then dom'
                             else go dom' rng' p
                 neg2 = go dom rng p
-
-
--- conservative version, linear instead of exponential search
-cInTy :: Ty -> Ty -> Ty -> Maybe Ty
-cInTy funty arg out =
-  case (domTy funty) of
-    (Just dom) | (subtype arg dom) -> Just $ input (tyArrows funty) []
-    _ -> Nothing
-  where input :: (BDD Arrow) -> [Arrow] -> Ty
-        input Bot p = emptyTy
-        input Top p = tyDiff arg (go arg out p)
-        input (Node a l m r) p = tyOr lty $ tyOr mty rty
-          where lty = input l $ a:p
-                mty = input m p
-                rty = input r p
-        go :: Ty -> Ty -> [Arrow] -> Ty
-        go dom rng []
-          | (isEmpty rng) = dom
-          | otherwise     = emptyTy
-        go dom rng ((Arrow t1 t2):p) = tyOr neg1 neg2
-          where dom' = (tyAnd t1 dom)
-                rng' = (tyAnd t2 rng)
-                neg1 = if isEmpty dom'
-                       then emptyTy
-                       else if isEmpty rng'
-                            then dom'
-                            else emptyTy
-                neg2 = go dom rng p
-

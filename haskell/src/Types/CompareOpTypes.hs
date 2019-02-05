@@ -6,11 +6,11 @@ import Types.Subtype
 import Types.Metafunctions
 import Types.BaseEnv
 import qualified Types.SyntacticOpTypes as Syn
-import qualified Types.SyntacticOpTypesPlus as SynP
 import qualified Types.SemanticOpTypes as Sem
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import Control.Monad
 
+groupOn f = groupBy (\x y -> (f x) == (f y))
 
 mTyAnd :: Ty -> Maybe Ty -> Ty
 mTyAnd t Nothing = t
@@ -21,91 +21,23 @@ firstSynUnOpRng :: [(Ty, Ty)] -> Ty -> Maybe Ty
 firstSynUnOpRng syn arg =
   case (find (\(d,r) -> subtype arg d) syn) of
     Nothing -> Nothing
-    Just (d,r) -> Just r
-    
+    Just (d,r) -> Just r          
 
--- return type using _all_ applicable arrows
-allSynUnOpRng :: [(Ty, Ty)] -> Ty -> Maybe Ty
-allSynUnOpRng [] argTy = Nothing
-allSynUnOpRng ((s1,s2):rst) arg
-  | (subtype arg s1) = Just $ mTyAnd s2 (allSynUnOpRng rst arg)
-  | otherwise = allSynUnOpRng rst arg
-
--- return type using _all_ applicable arrows
-semUnOpRng :: [(Ty, Ty)] -> Ty -> Maybe Ty
-semUnOpRng ts arg = rngTy fun arg
-  where fun = parseUnOpToSemantic ts
-          
--- verifies both function types work on the
--- same input types, and that the result for
--- fTy1 is a subtype of the result for fTy2
-compareUnOpRes ::
-  (Ty -> Maybe Ty)
-  -> (Ty -> Maybe Ty)
-  -> Ty
-  -> Ty
-  -> Bool
-compareUnOpRes applyFun1 applyFun2 dom arg =
-  case (res1, res2) of
-    (Just t1, Just t2) -> (subtype t1 t2) &&
-                          (((isEmpty t1) && (isEmpty t2)) || (overlap t1 t2))
-    (_,_) -> not $ subtype arg dom
-  where res1 = applyFun1 arg
-        res2 = applyFun2 arg
-
--- identify duplicate cases in case-> if we were
--- to simply apply all possible arrows (returning
--- a list of the indices of the unnecessary arrows)
-simplifySynUnOp :: [(Ty, Ty)] -> [Integer]
-simplifySynUnOp orig = [x | Just x <- rawDups]
-  where rawDups = (map (\(a,i) -> if dup a
-                                 then Just i
-                                 else Nothing)
-                   $ zip orig [0..])
-        dup (t1,t2) =
-          case (allSynUnOpRng (delete (t1,t2) orig) t1) of
-            Just t -> subtype t t2
-            Nothing -> False
-
--- like simplifyUnOp
-simplifySynBinOp :: [(Ty, Ty, Ty)] -> [Integer]
-simplifySynBinOp orig = [x | Just x <- rawDups]
-  where rawDups = (map (\(a,i) -> if dup a
-                                 then Just i
-                                 else Nothing)
-                   $ zip orig [0..])
-        dup (t1,t2,r) =
-          case (allSynBinOpRng (delete (t1,t2,r) orig) t1 t2) of
-            Just t -> subtype t r
-            Nothing -> False
 
 
 firstSynBinOpRng ::
   [(Ty, Ty, Ty)] ->
   Ty ->
-  Ty ->
   Maybe Ty
-firstSynBinOpRng syn arg1 arg2 =
-  case (find (\(d1,d2,r) -> (subtype arg1 d1) && (subtype arg2 d2)) syn) of
+firstSynBinOpRng syn arg =
+  case (find (\(dom1,dom2,c) -> (subtype arg (prodTy dom1 dom2))) syn) of
     Nothing -> Nothing
-    Just (d1,d2,r) -> Just r
-
-
-allSynBinOpRng ::
-  [(Ty, Ty, Ty)] ->
-  Ty ->
-  Ty ->
-  Maybe Ty
-allSynBinOpRng [] argTy1 argTy2 = Nothing
-allSynBinOpRng ((d1,d2,r):rst) arg1 arg2
-  | (subtype arg1 d1)
-    && (subtype arg2 d2) = Just $ mTyAnd r (allSynBinOpRng rst arg1 arg2)
-  | otherwise = allSynBinOpRng rst arg1 arg2
+    Just (d1,d2,c) -> Just c
 
 
 -- return type using _all_ applicable arrows
-semBinOpRng :: [(Ty, Ty, Ty)] -> Ty -> Ty -> Maybe Ty
-semBinOpRng ts arg1 arg2 = (rngTy fun (prodTy arg1 arg2))
+semBinOpRng :: [(Ty, Ty, Ty)] -> Ty ->  Maybe Ty
+semBinOpRng ts arg = (rngTy fun arg)
   where fun = parseBinOpToSemantic ts
 
 compareBinOpRes ::
@@ -140,96 +72,20 @@ argType d o1 (Conj p1 p2) = tyAnd t1 t2
 firstSynCompOpTypes ::
   [(Ty, Ty, Prop, Prop)] ->
   Ty ->
-  Ty ->
   Maybe (Ty, Ty, Ty, Ty)
-firstSynCompOpTypes syn arg1 arg2 =
-  case (find (\(d1,d2,pos,neg) -> (subtype arg1 d1) && (subtype arg2 d2)) syn) of
-    Nothing -> Nothing
-    Just (d1,d2, pos, neg) -> Just ((argType arg1 ArgZero pos),
-                                    (argType arg2 ArgOne pos),
-                                    (argType arg1 ArgZero neg),
-                                    (argType arg2 ArgOne neg))
-
-
-allSynCompOpTypes ::
-  [(Ty, Ty, Prop, Prop)] ->
-  Ty ->
-  Ty ->
-  Maybe (Ty, Ty, Ty, Ty)
-allSynCompOpTypes [] argTy1 argTy2 = Nothing
-allSynCompOpTypes ((d1,d2,pos,neg):rst) arg1 arg2
-  | (subtype arg1 d1)
-    && (subtype arg2 d2) =
-    case (allSynCompOpTypes rst arg1 arg2) of
-      Just (pos1, pos2, neg1, neg2) ->
-        Just (tyAnd pos1 (argType arg1 ArgZero pos),
-              tyAnd pos2 (argType arg2 ArgOne pos),
-              tyAnd neg1 (argType arg1 ArgZero neg),
-              tyAnd neg2 (argType arg2 ArgOne neg)) 
-      Nothing -> Just ((argType arg1 ArgZero pos),
-                       (argType arg2 ArgOne pos),
-                       (argType arg1 ArgZero neg),
-                       (argType arg2 ArgOne neg))
-  | otherwise = allSynCompOpTypes rst arg1 arg2
+firstSynCompOpTypes syn arg =
+  let (Just arg1) = fstProj arg
+      (Just arg2) = sndProj arg in
+    case (find (\(d1,d2,pos,neg) -> (subtype arg1 d1) && (subtype arg2 d2)) syn) of
+      Nothing -> Nothing
+      Just (d1,d2, pos, neg) -> Just ( (argType arg1 ArgZero pos)
+                                     , (argType arg2 ArgOne pos)
+                                     , (argType arg1 ArgZero neg)
+                                     , (argType arg2 ArgOne neg))
 
   
-compareCompOpRes ::
-  (Ty -> Ty -> Maybe (Ty, Ty, Ty, Ty)) ->
-  (Ty -> Ty -> Maybe (Ty, Ty, Ty, Ty)) ->
-  Ty ->
-  Ty ->
-  Ty ->
-  Ty ->
-  Bool
-compareCompOpRes applyFun1 applyFun2 dom1 dom2 arg1 arg2 =
-  case (res1, res2) of
-    (Just (pos1, pos2, neg1, neg2), Just (pos1', pos2', neg1', neg2')) ->
-      if not (subtype pos1 pos1')
-      then error $ "prediction not a subtype for "
-           ++ (readBackTy arg1) ++ " " ++ (readBackTy arg2)
-           ++ "(pos1): "
-           ++ (readBackTy pos1) ++ " </: "
-           ++ (readBackTy pos1')
-      else if not (subtype pos2 pos2')
-      then error $ "prediction not a subtype for "
-           ++ (readBackTy arg1) ++ " " ++ (readBackTy arg2)
-           ++ "(pos2): "
-           ++ (readBackTy pos2) ++ " </: "
-           ++ (readBackTy pos2')
-      else if not (subtype neg1 neg1')
-      then error $ "prediction not a subtype for "
-           ++ (readBackTy arg1) ++ " " ++ (readBackTy arg2)
-           ++ "(neg1): "
-           ++ (readBackTy neg1) ++ " </: "
-           ++ (readBackTy neg1')
-      else if not (subtype neg2 neg2')
-      then error $ "prediction not a subtype for "
-           ++ (readBackTy arg1) ++ " " ++ (readBackTy arg2)
-           ++ "(neg2): "
-           ++ (readBackTy neg2) ++ " </: "
-           ++ (readBackTy neg2')
-      else True
-    (_,_) -> ((not (subtype arg1 dom1))
-              || (not (subtype arg2 dom2)))
-  where res1 = applyFun1 arg1 arg2
-        res2 = applyFun2 arg1 arg2
 
 
-
-simplifySynCompOp :: [(Ty, Ty, Prop, Prop)] -> [Integer]
-simplifySynCompOp orig = [x | Just x <- rawDups]
-  where rawDups = (map (\(a,i) -> if dup a
-                                 then Just i
-                                 else Nothing)
-                   $ zip orig [0..])
-        dup (t1,t2,pos,neg) =
-          case (allSynCompOpTypes (delete (t1,t2,pos,neg) orig) t1 t2) of
-            Just (pos1, pos2, neg1, neg2) ->
-              (subtype pos1 (argType t1 ArgZero pos))
-              && (subtype pos2 (argType t2 ArgOne pos))
-              && (subtype neg1 (argType t1 ArgZero neg))
-              && (subtype neg2 (argType t2 ArgOne neg))
-            Nothing -> False
 
 
 parseUnOpToSemantic :: [(Ty, Ty)] -> Ty
@@ -255,8 +111,8 @@ simplifySemUnOp orig = [x | Just x <- rawDups]
 
 parseBinOpToSemantic :: [(Ty, Ty, Ty)] -> Ty
 parseBinOpToSemantic [] = anyTy
-parseBinOpToSemantic ((d1,d2,r):ts) =
-  tyAnd (arrowTy (prodTy d1 d2) r) $ parseBinOpToSemantic ts
+parseBinOpToSemantic ((d1,d2,c):ts) =
+  tyAnd (arrowTy (prodTy d1 d2) c) $ parseBinOpToSemantic ts
 
 
 simplifySemBinOp :: [(Ty, Ty, Ty)] -> [Integer]
@@ -265,11 +121,11 @@ simplifySemBinOp orig = [x | Just x <- rawDups]
                                  then Just i
                                  else Nothing)
                    $ zip orig [0..])
-        dup (t1,t2,r) =
+        dup (d1,d2,c) =
           case (rngTy
-                (parseBinOpToSemantic (delete (t1,t2,r) orig))
-                (prodTy t1 t2)) of
-            Just t -> subtype t r
+                (parseBinOpToSemantic (delete (d1,d2,c) orig))
+                (prodTy d1 d2)) of
+            Just t -> subtype t c
             Nothing -> False
 
 
@@ -277,17 +133,15 @@ semCompOpTypes ::
   (Ty -> Ty -> Ty -> Maybe Ty) ->
   [(Ty, Ty, Ty)] ->
   Ty ->
-  Ty ->
   Maybe (Ty, Ty, Ty, Ty)
-semCompOpTypes inputTy ts arg1 arg2 =
+semCompOpTypes inputTy ts argTy =
   case (pos1,pos2,neg1,neg2) of
     (Just posTy1,
      Just posTy2,
      Just negTy1,
      Just negTy2) -> Just (posTy1, posTy2, negTy1, negTy2)
     (_,_,_,_) -> Nothing
-    where argTy = prodTy arg1 arg2
-          semTy = parseBinOpToSemantic ts
+    where semTy = parseBinOpToSemantic ts
           pos = inputTy semTy argTy $ tyNot falseTy
           (pos1,pos2) =
             case pos of
@@ -309,28 +163,50 @@ unOps = [ ("add1", number)
         , ("abs", real)
         , ("sqr", number)
         , ("sqrt", number)]
-
-binOps :: [(String, Ty, Ty)]
-binOps = [("+", number, number)
-         , ("-", number, number)
-         , ("*", number, number)
-         , ("/", number, number)
-         , ("max", real, real)
-         , ("min", real, real)
-         , ("expt", number, number)
-         , ("modulo", integer, integer)
-         , ("quotient", integer, integer)]
-
-compOps :: [(String, Ty, Ty)]
-compOps = [ ("<", real, real)
-          , ("<=", real, real)
-          , ("=", number, number)]
+binOps :: [(String, Ty)]
+binOps = [("+", number)
+         , ("-", number)
+         , ("*", number)
+         , ("/", number)
+         , ("max", real)
+         , ("min", real)
+         , ("expt", number)
+         , ("modulo", integer)
+         , ("quotient", integer)]
+compOps :: [(String, Ty)]
+compOps = [ ("<", real)
+          , ("<=", real)
+          , ("=", number)]
 
 getUnOpType :: String -> [(String, OpSpec)] -> [(Ty, Ty)]
 getUnOpType name table =
   case (lookup name table)  of
     Just (UnOp s) -> s
     Nothing -> error ("missing UnOp spec for " ++ name)
+
+
+goCompareOps ::
+  String ->
+  (Ty -> Maybe Ty) ->
+  (Ty -> Maybe Ty) ->
+  [(String, Ty)] ->
+  IO ()
+goCompareOps opName f g validArgs = go validArgs 0 0
+  where go :: [(String, Ty)] -> Int -> Int -> IO ()
+        go [] lts eqs = do
+          putStrLn $
+            "smaller:    " ++ (show lts)
+            ++ "\nequivalent: " ++ (show eqs)
+            ++ "\nsmaller/(smaller + equivalent): " ++ (show $ (fromIntegral lts) / (fromIntegral (lts + eqs)))
+        go ((argName, t):rst) lts eqs =
+          case ((f t), (g t)) of
+            (Just res1, Just res2) ->
+              case (compareTy res1 res2) of
+                LT -> go rst (1 + lts) eqs
+                EQ -> go rst lts (1 + eqs)
+                GT -> error ("test failed for (" ++ opName ++ " " ++ argName ++ ")")
+            (_,_) -> error ("test failed for (" ++ opName ++ " " ++ argName ++ ")")
+        
   
 compareUnOps ::
   [(String, OpSpec)] ->
@@ -340,7 +216,7 @@ compareUnOps ::
   String ->
   IO ()
 compareUnOps ts1 rngTy1 ts2 rngTy2 description = do
-  putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
+  putStrLn "\n* * * * * * * * * * * * * * * * * * * * * * * * * *"
   putStrLn ("Comparing UnOps (" ++ description ++ ")")
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
   forM_ unOps $ \(opName, opDom) -> do
@@ -348,22 +224,16 @@ compareUnOps ts1 rngTy1 ts2 rngTy2 description = do
         size1     = length $ (getUnOpType opName ts1)
         applyFun2 = (rngTy2 (getUnOpType opName ts2))
         size2     = length $ (getUnOpType opName ts2)
-    putStr opName
-    putStrLn $ "(size change " ++ (show size2) ++ " ==> " ++ (show size1) ++ ")"
+    putStrLn $ "\n" ++ opName
+    putStrLn $ "size change "
+      ++ (show size2) ++ " ==> " ++ (show size1) ++ " "
+      ++ (show $ (fromIntegral size1) / (fromIntegral size2))
     startTime <- getCurrentTime
-    forM_ numericTypes $ \(argName, argTy) -> do
-      putStr (if (compareUnOpRes
-                  applyFun1
-                  applyFun2 
-                  opDom
-                  argTy)
-              then "."
-              else error ("test failed for ("
-                          ++ opName ++ " " ++ argName ++ ")"))
+    let validArgs = filter (\(_,t) -> subtype t opDom) numericTypes
+    goCompareOps opName applyFun1 applyFun2 validArgs
     endTime <- getCurrentTime
     putStrLn $ "(" ++ (show (diffUTCTime endTime startTime)) ++ ")"
-          
-  putStrLn "\nComplete!"
+    putStrLn "Complete!"
 
 
 getBinOpType :: String -> [(String, OpSpec)] -> [(Ty, Ty, Ty)]
@@ -374,42 +244,31 @@ getBinOpType name table =
   
 compareBinOps ::
   [(String, OpSpec)] ->
-  ([(Ty, Ty, Ty)] -> Ty -> Ty -> Maybe Ty) ->
+  ([(Ty, Ty, Ty)] -> Ty -> Maybe Ty) ->
   [(String, OpSpec)] ->
-  ([(Ty, Ty, Ty)] -> Ty -> Ty -> Maybe Ty) ->
+  ([(Ty, Ty, Ty)] -> Ty -> Maybe Ty) ->
   String ->
   IO ()
 compareBinOps ts1 rngTy1 ts2 rngTy2 description = do
-  putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
+  putStrLn "\n* * * * * * * * * * * * * * * * * * * * * * * * * *"
   putStrLn ("Comparing BinOps (" ++ description ++ ")")
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
-  forM_ binOps $ \(opName, opDom1, opDom2) -> do
+  forM_ binOps $ \(opName, opDom) -> do
     let applyFun1 = rngTy1 $ getBinOpType opName ts1
         size1     = length $ getBinOpType opName ts1
         applyFun2 = rngTy2 $ getBinOpType opName ts2
         size2     = length $ getBinOpType opName ts2
-    putStr opName
-    putStrLn $ "(size change " ++ (show size2) ++ " ==> " ++ (show size1) ++ ")"
+    putStrLn $ "\n" ++ opName
+    putStrLn $ "size change "
+      ++ (show size2) ++ " ==> " ++ (show size1) ++ " "
+      ++ (show $ (fromIntegral size1) / (fromIntegral size2))
     startTime <- getCurrentTime
-    forM_ numericTypes $ \(argName1, argTy1) -> do
-      putStr "."
-      forM_ numericTypes $ \(argName2, argTy2) -> do
-        putStr (if (compareBinOpRes
-                    applyFun1
-                    applyFun2
-                    opDom1
-                    opDom2
-                    argTy1
-                    argTy2)
-                then ""
-                else error ("test failed for ("
-                            ++ opName ++ " "
-                            ++ argName1 ++ " "
-                            ++ argName2 ++ ")"))
-    
+    let validTys  = filter (\(_,t) -> subtype t opDom) numericTypes
+        validArgs = [(n1 ++ " × " ++ n2, (prodTy t1 t2)) | (n1,t1) <- validTys , (n2, t2) <- validTys]
+    goCompareOps opName applyFun1 applyFun2 validArgs
     endTime <- getCurrentTime
     putStrLn $ "(" ++ (show (diffUTCTime endTime startTime)) ++ ")"
-  putStrLn "\nComplete!"
+    putStrLn "Complete!"
 
 getSynCompOpType :: String -> [(String, OpSpec)] -> [(Ty, Ty, Prop, Prop)]
 getSynCompOpType name table =
@@ -417,82 +276,105 @@ getSynCompOpType name table =
     Just (CompOp s) -> s
     Nothing -> error ("missing CompOp spec for " ++ name)
 
+
+
+  
+goCompareCompOps ::
+  String ->
+  (Ty ->  Maybe (Ty, Ty, Ty, Ty)) ->
+  (Ty ->  Maybe (Ty, Ty, Ty, Ty)) ->
+  [(String, Ty)] ->
+  IO ()
+goCompareCompOps opName f g validArgs = go validArgs 0 0
+  where go :: [(String, Ty)] -> Int -> Int -> IO ()
+        go [] lts eqs = do
+          putStrLn $
+            "smaller predictions:    " ++ (show lts)
+            ++ "\nequivalent predictions: " ++ (show eqs)
+            ++ "\nsmaller/(smaller + equivalent): " ++ (show $ (fromIntegral lts) / (fromIntegral (lts + eqs)))
+        go ((argName, arg):rst) lts eqs =
+          case (f arg, g arg) of
+            (Just (pos1, pos2, neg1, neg2), Just (pos1', pos2', neg1', neg2')) ->
+              case (compareTy pos1 pos1', compareTy pos2 pos2', compareTy neg1 neg1', compareTy neg2 neg2') of
+                (GT, _, _, _) -> error $
+                                 opName
+                                 ++ "prediction not a subtype for "
+                                 ++ argName
+                                 ++ "(pos1): "
+                                 ++ (readBackTy pos1) ++ " </: "
+                                 ++ (readBackTy pos1')
+                (_, GT, _, _) -> error $
+                                 opName
+                                 ++ "prediction not a subtype for "
+                                 ++ argName 
+                                 ++ "(pos2): "
+                                 ++ (readBackTy pos2) ++ " </: "
+                                 ++ (readBackTy pos2')
+                (_, _, GT, _) -> error $
+                                 opName
+                                 ++ "prediction not a subtype for "
+                                 ++ argName 
+                                 ++ "(neg1): "
+                                 ++ (readBackTy neg1) ++ " </: "
+                                 ++ (readBackTy neg1')
+                (_, _, _, GT) -> error $
+                                 opName
+                                 ++ "prediction not a subtype for "
+                                 ++ argName 
+                                 ++ "(neg2): "
+                                 ++ (readBackTy neg2) ++ " </: "
+                                 ++ (readBackTy neg2')
+                (a, b, c, d)  -> go rst lts' eqs'
+                  where lts' = lts + (ltVal a) + (ltVal b) + (ltVal c) + (ltVal d)
+                        eqs' = eqs + (eqVal a) + (eqVal b) + (eqVal c) + (eqVal d)
+                        ltVal x = if x == LT then 1 else 0
+                        eqVal x = if x == EQ then 1 else 0 
+            (_,_) -> error ("test failed for (" ++ opName ++ " " ++ argName ++ ")")
+
+
 compareCompOps ::
   (String -> a) ->
-  (a -> Ty -> Ty -> Maybe (Ty, Ty, Ty, Ty)) ->
+  (a -> Ty -> Maybe (Ty, Ty, Ty, Ty)) ->
   (String -> Int) ->
   (String -> b) ->
-  (b -> Ty -> Ty -> Maybe (Ty, Ty, Ty, Ty)) ->
+  (b -> Ty -> Maybe (Ty, Ty, Ty, Ty)) ->
   (String -> Int) ->
   String ->
   IO ()
 compareCompOps getType1 rngTy1 getSize1 getType2 rngTy2 getSize2 description = do
-  putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
+  putStrLn "\n* * * * * * * * * * * * * * * * * * * * * * * * * *"
   putStrLn ("Comparing CompOps (" ++ description ++ ")")
   putStrLn "* * * * * * * * * * * * * * * * * * * * * * * * * *"
-  forM_ compOps $ \(opName, opDom1, opDom2) -> do
+  forM_ compOps $ \(opName, opDom) -> do
     let applyFun1 = rngTy1 $ getType1 opName
         size1     = getSize1 opName
         applyFun2 = rngTy2 (getType2 opName)
         size2     = getSize2 opName
-    putStr opName
-    putStrLn $ "(size change " ++ (show size2) ++ " ==> " ++ (show size1) ++ ")"
+    putStrLn $ "\n" ++ opName
+    putStrLn $ "size change "
+      ++ (show size2) ++ " ==> " ++ (show size1) ++ " "
+      ++ (show $ (fromIntegral size1) / (fromIntegral size2))
     startTime <- getCurrentTime
-    forM_ numericTypes $ \(argName1, argTy1) -> do
-      putStr "."
-      forM_ numericTypes $ \(argName2, argTy2) -> do
-        putStr (if (compareCompOpRes
-                    applyFun1
-                    applyFun2
-                    opDom1
-                    opDom2
-                    argTy1
-                    argTy2)
-                then ""
-                else error ("test failed for ("
-                            ++ opName ++ " "
-                            ++ argName1 ++ " "
-                            ++ argName2 ++ ")"))
+    let validTys  = filter (\(_,t) -> subtype t opDom) numericTypes
+        validArgs = [(n1 ++ " × " ++ n2, (prodTy t1 t2)) | (n1,t1) <- validTys , (n2, t2) <- validTys]
+    goCompareCompOps opName applyFun1 applyFun2 validArgs
     endTime <- getCurrentTime
     putStrLn $ "(" ++ (show (diffUTCTime endTime startTime)) ++ ")"
-  putStrLn "\nComplete!"
+    putStrLn "\nComplete!"
 
-compareSyntacticUnOps :: String -> IO ()
-compareSyntacticUnOps descr =
-  (compareUnOps
-   SynP.opTypes
-   allSynUnOpRng
-   Syn.opTypes
-   firstSynUnOpRng
-   descr)
 
-compareSyntacticBinOps :: String -> IO ()
-compareSyntacticBinOps descr =
-  (compareBinOps
-   SynP.opTypes
-   allSynBinOpRng
-   Syn.opTypes
-   firstSynBinOpRng
-   "Syntactic/Syntactic+")
-
-compareSyntacticCompOps :: String -> IO ()
-compareSyntacticCompOps descr = 
-  (compareCompOps
-    (\name -> getSynCompOpType name SynP.opTypes)
-    allSynCompOpTypes
-    (\name -> length $ getSynCompOpType name SynP.opTypes)
-    (\name -> (getSynCompOpType name Syn.opTypes))
-    firstSynCompOpTypes
-    (\name -> length $ getSynCompOpType name Syn.opTypes)
-    descr)
+-- return type using the semantic approach
+semUnOpRng :: [(Ty, Ty)] -> Ty -> Maybe Ty
+semUnOpRng ts arg = rngTy fun arg
+  where fun = parseUnOpToSemantic ts
 
 compareSemanticUnOps :: String -> IO ()
 compareSemanticUnOps descr =
   (compareUnOps
    Sem.opTypes
    semUnOpRng
-   SynP.opTypes
-   allSynUnOpRng
+   Syn.opTypes
+   firstSynUnOpRng
    descr)
 
 compareSemanticBinOps :: String -> IO ()
@@ -500,8 +382,8 @@ compareSemanticBinOps descr =
   (compareBinOps
    Sem.opTypes
    semBinOpRng
-   SynP.opTypes
-   allSynBinOpRng
+   Syn.opTypes
+   firstSynBinOpRng
    descr)
 
 compareSemanticCompOps :: (Ty -> Ty -> Ty -> Maybe Ty) -> String -> IO ()

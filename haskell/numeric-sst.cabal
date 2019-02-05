@@ -57,7 +57,6 @@ executable numeric-sst
                , Types.Metafunctions
                , Types.SemanticOpTypes
                , Types.SyntacticOpTypes
-               , Types.SyntacticOpTypesPlus
                , Repl.Commands
                , Repl.Parse
 

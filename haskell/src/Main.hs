@@ -7,7 +7,6 @@ import qualified Types.LazyBDD as BDD
 import Types.Subtype
 import Types.Metafunctions
 import qualified Types.SyntacticOpTypes as Syn
-import qualified Types.SyntacticOpTypesPlus as SynP
 import qualified Types.SemanticOpTypes as Sem
 import Types.CompareOpTypes
 import Types.BaseEnv
@@ -19,13 +18,9 @@ import Repl.Commands
 
 runComparisonTests :: IO ()
 runComparisonTests = do
-  compareSyntacticUnOps "Syntactic/Syntactic+"
-  compareSyntacticBinOps "Syntactic/Syntactic+"
-  compareSyntacticCompOps "Syntactic/Syntactic+"
   compareSemanticUnOps "Syntactic/Semantic"
   compareSemanticBinOps "Syntactic/Semantic"
   compareSemanticCompOps inTy "Syntactic/Semantic (inTy)"
-  compareSemanticCompOps cInTy "Syntactic/Semantic (cInTy)"
 
 
 flushStr :: String -> IO ()
