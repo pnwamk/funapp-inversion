@@ -162,7 +162,10 @@ unOps = [ ("add1", number)
         , ("sub1", number)
         , ("abs", real)
         , ("sqr", number)
-        , ("sqrt", number)]
+        , ("sqrt", number)
+        , ("real->double-flonum", real)
+        , ("real->single-flonum", real)
+        , ("inexact->exact", number)]
 binOps :: [(String, Ty)]
 binOps = [("+", number)
          , ("-", number)
