@@ -53,7 +53,7 @@
                   (begin
                     #,(if print-line-numbers
                           (quasisyntax/loc tst
-                            (printf "type check test ~a...\n"
+                            (printf "type check test line ~a...\n"
                                     #,(syntax-line tst)))
                           #'(void))
                     (test-equal (judgment-holds
@@ -67,7 +67,7 @@
                   (begin
                     #,(if print-line-numbers
                           (quasisyntax/loc tst
-                            (printf "type check test ~a...\n"
+                            (printf "type check test line ~a...\n"
                                     #,(syntax-line tst)))
                           #'(void))
                     (test-equal (judgment-holds
@@ -79,7 +79,7 @@
                   (begin
                     #,(if print-line-numbers
                           (quasisyntax/loc tst
-                            (printf "type check test ~a...\n"
+                            (printf "type check test line ~a...\n"
                                     #,(syntax-line tst)))
                           #'(void))
                     (match (judgment-holds
@@ -98,7 +98,7 @@
                   (begin
                     #,(if print-line-numbers
                           (quasisyntax/loc tst
-                            (printf "type check test ~a...\n"
+                            (printf "type check test line ~a...\n"
                                     #,(syntax-line tst)))
                           #'(void))
                     (match (judgment-holds

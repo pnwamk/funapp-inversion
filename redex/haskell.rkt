@@ -10,8 +10,13 @@
          Apply
          Inversion)
 
+(define path-to-numeric-sst
+  (string-append "../haskell/.stack-work/"
+                 "install/x86_64-osx/lts-10.4/8.2.2/bin/"
+                 "numeric-sst"))
+
 (match-define (list in out pid err control)
-  (process "numeric-sst pipe"))
+  (process (format "~a pipe" path-to-numeric-sst)))
 
 (define (Inhabited type)
   (unless (τ? type)

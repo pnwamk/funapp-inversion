@@ -1,7 +1,6 @@
 #lang racket/base
 
-(require redex/reduction-semantics
-         racket/match)
+(require redex/reduction-semantics)
 
 (provide (all-defined-out))
 
@@ -11,7 +10,10 @@
   ;; - - - - - - - - - - - -
   [x y z f ::= variable-not-otherwise-mentioned]
   ;; constants
-  [nop1 ::= add1 sub1 abs sqr sqrt]
+  [nop1 ::= add1 sub1 abs sqr sqrt
+        real->double-flonum
+        real->single-flonum
+        inexact->exact]
   [nop2 ::= + - * / min max < <= = expt quotient modulo]
   ;; primitive ops
   [prim ::= string-length not exact-integer? string? pair? procedure?
