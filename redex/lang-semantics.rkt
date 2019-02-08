@@ -58,6 +58,7 @@
   [(δ1 sqrt number) (eval (sqrt number))]
   [(δ1 _ _) STUCK])
 
+
 (define-metafunction sot
   δ2 : nop2 v v -> RESULT
   [(δ2 + number_1 number_2) (eval (+ number_1 number_2))]
