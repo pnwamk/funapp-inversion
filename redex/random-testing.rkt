@@ -3,6 +3,7 @@
 ;; Random testing of the numeric primitive ops
 
 (require redex/reduction-semantics
+         math/base
          (rename-in racket [eval racket/base:eval])
          "lang-semantics.rkt"
          "haskell.rkt"
@@ -11,108 +12,113 @@
 
 (caching-enabled? #f)
 
-;; at least one ineger value for each integer base type
+(define (rand-I)
+  (match (random 26)
+    ;; Zero
+    [(or 0 1 2) 0]
+    ;; One
+    [(or 3 4 5) 1]
+    ;; ByteLargerThanOne
+    [6 2]
+    [7 255]
+    [(or 8 9) (random 2 256)]
+    ;; PosIndexNotByte
+    [10 256]
+    [11 1152921504606846975]
+    [(or 12 13) (random-integer 256 1152921504606846976)]
+    ;; PosFixnumNotIndex
+    [14 1152921504606846976]
+    [15 4611686018427387903]
+    [(or 16 17) (random-integer 1152921504606846976
+                                4611686018427387904)]
+    ;; PosIntegerNotFixnum
+    [(or 18 19) (random-integer 4611686018427387903
+                                9999999999999999999)]
+    ;; NegFixnum
+    [20 -1]
+    [21 -4611686018427387904]
+    [(or 22 23) (random-integer -4611686018427387904
+                                0)]
+    ;; NegIntegerNotFixnum
+    [(or 24 25) (random-integer -9999999999999999999
+                                -4611686018427387905)]))
+
+(define (rand-R)
+  (if (zero? (random 2))
+      (random-integer->random-real
+       (random-integer -9999999999999999999
+                       9999999999999999999))
+      (random-integer->random-real
+       (random 4294967087))))
+
+(define (rand-N)
+  (match (random 9)
+    [(or 0 1 2) (rand-I)]
+    [(or 3 4 5) (rand-R)]
+    [6 (+ (sqrt (rand-R))
+          (sqrt (rand-R)))]
+    [7 (- (sqrt (rand-R))
+          (sqrt (rand-R)))]
+    [8 (* (sqrt (rand-R))
+          (sqrt (rand-R)))]))
+
+(define numeric-base-type-symbols
+  '(Zero
+    One
+    ByteLargerThanOne
+    PosIndexNotByte
+    PosFixnumNotIndex
+    NegFixnum
+    PosIntegerNotFixnum
+    NegIntegerNotFixnum
+    PosRationalNotInteger
+    NegRationalNotInteger
+    FloatNaN
+    FloatPosZero
+    FloatNegZero
+    PosFloatNumber
+    PosFloatInfinity
+    NegFloatNumber
+    NegFloatInfinity
+    SingleFloatNaN
+    SingleFloatPosZero
+    SingleFloatNegZero
+    PosSingleFloatNumber
+    PosSingleFloatInfinity
+    NegSingleFloatNumber
+    NegSingleFloatInfinity
+    ExactImaginary
+    ExactComplex
+    FloatImaginary
+    SingleFloatImaginary
+    FloatComplex
+    SingleFloatComplex))
+(define numeric-base-type-count
+  (length numeric-base-type-symbols))
+(define (random-ann num)
+  (define num-type (term (const-type ,num)))
+  (term (ann ,num ,(foldl (λ (t t*) (term (Or ,t ,t*)))
+                          num-type
+                          (take (shuffle numeric-base-type-symbols)
+                                (random (add1 numeric-base-type-count)))))))
+
+;; at least one value for each integer base type
 (define int-values
   '(0 1 42 255 256 999 1999999999999999998 -1 -42
       9999999999999999999 -9999999999999999999))
-
-;; at least one ineger value for each real base type
+;; at least one value for each real base type
 (define real-values
   (append int-values
           '(1/2 -1/2 +nan.0 +0.0 -0.0 1.0 2.0 +inf.0
                 -1.0 -2.0 -inf.0 +nan.f +0.0f0 -0.0f0
                 1.0f0 +inf.f -1.0f0 -inf.f)))
-
-;; at least one ineger value for each number base type
+;; at least one value for each number base type
 (define num-values
   (append real-values
           '(0+123i 123+456i 0+123.456i 0+456.789f0i
                    789+123.456i 981.0f0+456.789f0i)))
 
-(define-language random-numbers
-  ;; more likely to be integers
-  [I* (exact-round real) I]
-  [I ::=
-     (* I* I* ...)
-     (+ I* I* ...)
-     (- I* I* ...)
-     (bitwise-and I* ...)
-     (bitwise-ior I* ...)
-     (bitwise-xor I* ...)
-     (bitwise-not I*)
-     0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20
-     110 111 112 113 114 115 116 117 118 119 1110 1111
-     1112 1113 1114 1115 1116 1117 1118 1119 1120
-     42
-     999   
-     -1
-     9999999999999999999
-     -9999999999999999999]
-  ;; more likely to be floats
-  [F* (real->double-flonum real) F]
-  [F (* F* F* ...)
-     (+ F* F* ...)
-     (- F* F* ...)
-     (/ F* F* ...)
-     (cos F*)
-     (sin F*)
-     (tan F*)
-     (sqr F*)
-     0.115 1.44 2.3 3.2 4.243 5.543 6.33 7.123 8.543
-     9.1234 10.5436
-     11.324 12.543 13.0 14.5 15.99 16.12 17.544 18.13
-     19.132 20.432
-     110.0 111.0 112.0 113.0 114.0 115.0 116.0
-     117.0 118.0 119.0 1110.0 1111.0
-     1112.04322 1113.043252 1114.0432 1115.4324
-     1116.423 1117.0234
-     1118.04233 1119.0423432 1120.32123
-     +nan.0
-     +0.0
-     -0.0
-     1.0
-     42.0
-     +inf.0
-     -1.0
-     -42.0
-     -inf.0
-     +nan.f
-     +0.0f0
-     -0.0f0
-     1.0f0
-     420.0f0
-     +inf.f
-     -1.0f0
-     -420.0f0
-     -inf.f]
-  [R ::= I F
-     1/2 5/9 123/456
-     1111/22222222
-     4247834/3982489
-     -1/2
-     -13/44
-     -1111/2222222
-     -99812379/2222222]
-  [N* real R N F S
-      0+123i
-      123+456i
-      0+123.456i
-      0+456.789f0i
-      789+123.456i
-      981.0f0+456.789f0i]
-  [N (* N* N* ...)
-     (+ N* N* ...)
-     (- N* N* ...)
-     (sqrt N*)]
-  ;; not many single-flonum-specific ops, so will mostly be used in E context
-  [S (real->single-flonum real)
-     (inexact->exact S)
-     (real->double-flonum S)]
-  [COMP < <= =]
-  [C (let [x R] (let [y R] (if (COMP x y) x  #f)))
-     (let [x R] (let [y R] (if (COMP x y) #f x)))
-     (let [x R] (let [y R] (if (COMP x y) y #f)))
-     (let [x R] (let [y R] (if (COMP x y) #f y)))])
+
 
 
 ;; Redex allegedly can't generate reals, so we convert ints to reals.
@@ -156,6 +162,8 @@
 ;; - produce a trapped error
 ;; - produce a value of the predicted type
 (define (check-big-step-soundness exp)
+  (inc! tries)
+  (inc! total-random-tests)
   ;; type check the expression
   (define type-check-result
     (judgment-holds (synth EnvNull ⊢ ,exp : (Res τ _ _ _)) τ))
@@ -188,7 +196,9 @@
        [(list val-type)
         (cond
           [(Subtype val-type type) #true]
-          [else (inc! total-failed-random-tests) #false])])])
+          [else
+           (inc! total-failed-random-tests)
+           (printf "counterexample: ~a\n" exp)])])])
   )
 
 
@@ -199,17 +209,21 @@
     [else (term (num-type ,n))]))
 
 (define (unary-fn-simple-tests fun args)
+  (define (do-check arg)
+    (printf ".") (flush-output)
+    (check-big-step-soundness (list fun arg)))
   (printf "\n~a simple tests...\n" fun)
   (for ([arg (in-list args)])
-    (printf ".") (flush-output)
-    (inc! tries)
-    (inc! total-random-tests)
-    (check-big-step-soundness (list fun arg)))
+    (do-check arg)
+    (do-check (random-ann arg)))
   (printf "\n")
   (print-and-reset-individual-counters!))
 
 
 (define (binary-fn-simple-tests fun args)
+  (define (do-check arg1 arg2)
+    (printf ".") (flush-output)
+    (check-big-step-soundness (list fun arg1 arg2)))
   (printf "\n~a simple tests...\n" fun)
   (for* ([arg1 (in-list args)]
          [arg2 (in-list args)]
@@ -221,100 +235,74 @@
                                 (and (< -1000 (real-part x) 1000)
                                      (< -1000 (imag-part x) 1000))))
                      (list arg1 arg2))))
-    (printf ".") (flush-output)
-    (inc! tries)
-    (inc! total-random-tests)
-    (check-big-step-soundness (list fun arg1 arg2)))
+    (do-check arg1 arg2)
+    (do-check (random-ann arg1)
+              (random-ann arg2)))
   (printf "\n")
   (print-and-reset-individual-counters!))
 
 
 (define (comp-simple-tests comp-fn)
+  (define (do-check arg1 arg2)
+    (printf ".") (flush-output)
+    (check-big-step-soundness
+     (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) x  #f)))))
+    (check-big-step-soundness
+     (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) #f x)))))
+    (check-big-step-soundness
+     (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) y #f)))))
+    (check-big-step-soundness
+     (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) #f y))))))
   (printf "\n~a simple tests...\n" comp-fn)
   (for* ([arg1 (in-list real-values)]
          [arg2 (in-list real-values)])
-    (printf ".") (flush-output)
-    (inc! tries)
-    (inc! total-random-tests)
-    (check-big-step-soundness
-     (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) x  #f)))))
-    (inc! tries)
-    (inc! total-random-tests)
-    (check-big-step-soundness
-     (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) #f x)))))
-    (inc! tries)
-    (inc! total-random-tests)
-    (check-big-step-soundness
-     (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) y #f)))))
-    (inc! tries)
-    (inc! total-random-tests)
-    (check-big-step-soundness
-     (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) #f y))))))
+    (do-check arg1 arg2))
+  (for* ([arg1 (in-list real-values)]
+         [arg2 (in-list real-values)]
+         [arg1 (in-value (random-ann arg1))]
+         [arg2 (in-value (random-ann arg2))])
+    (do-check arg1 arg2))
   (printf "\n")
   (print-and-reset-individual-counters!))
 
 
 (define (run-random-tests! n-attempts seed)
-  (define-syntax-rule (random-fn-soundness-check! function arg-list-pattern)
-    (begin
-      (define-syntax-rule (fn-redex-check mode-kw)
-        (redex-check
-         random-numbers arg-list-pattern mode-kw
-         (let* ([args (evaluate (cons 'list (term arg-list-pattern)))]
-                [expr (cons 'function args)])
-           (inc! tries)
-           (inc! total-random-tests)
-           (printf ".") (flush-output)
-           (or (not args)
-               ;; um... lets just not do exponentiation with big numbers...
-               ;; it takes... a little while...
-               (and (eq? 'function 'expt) (not (andmap (λ (x) (or (and (real? x) (or (infinite? x) (nan? x)))
-                                                                  (and (< -1000 (real-part x) 1000)
-                                                                       (< -1000 (imag-part x) 1000))))
-                                                       args)))
-               (check-big-step-soundness expr)))
-         #:attempts n-attempts
-         #:prepare exp->real-exp
-         #:keep-going? #true
-         #:print? #true))
-      (printf "\n~a in-order testing...\n" 'function)
-      (fn-redex-check #:in-order)
-      (printf "\n")
-      (print-and-reset-individual-counters!)
-      (printf "\n~a ad-hoc testing...\n" 'function)
-      (fn-redex-check #:ad-hoc)
-      (printf "\n")
-      (print-and-reset-individual-counters!)))
-  (define (random-comp-check! comp-fn)
-    (define-syntax-rule (comp-redex-check mode-kw)
-      (redex-check
-       random-numbers (R_1 R_2) mode-kw
-       (let ([arg1 (evaluate (term R_1))]
-             [arg2 (evaluate (term R_2))])
-         (inc! tries)
-         (inc! total-random-tests)
-         (printf ".") (flush-output)
-         (or (not (real? arg1))
-             (not (real? arg2))
-             (match (random 4)
-               [0 (check-big-step-soundness
-                   (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) x  #f)))))]
-               [1 (check-big-step-soundness
-                   (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) #f x)))))]
-               [2 (check-big-step-soundness
-                   (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) y  #f)))))]
-               [3 (check-big-step-soundness
-                   (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) #f y)))))])))
-       #:attempts n-attempts
-       #:prepare exp->real-exp
-       #:keep-going? #true
-       #:print? #true))
-    (printf "\n~a in-order testing...\n" comp-fn)
-    (comp-redex-check #:in-order)
+  (define (random-fn-soundness-check! function gen-args)
+    (printf "\n~a random testing...\n" function)
+    (for* ([_ (in-range n-attempts)]
+           [args (in-value (gen-args))])
+      (let* ([expr (cons function args)]
+             [ann-expr (cons function (map random-ann args))])
+        (printf ".") (flush-output)
+        (unless (and (eq? function 'expt)
+                     (not (andmap (λ (x) (or (and (real? x) (or (infinite? x) (nan? x)))
+                                             (and (< -1000 (real-part x) 1000)
+                                                  (< -1000 (imag-part x) 1000))))
+                                  args)))
+          (check-big-step-soundness expr)
+          (check-big-step-soundness ann-expr))))
     (printf "\n")
-    (print-and-reset-individual-counters!)
-    (printf "\n~a ad-hoc testing...\n" 'function)
-    (comp-redex-check #:ad-hoc)
+    (print-and-reset-individual-counters!))
+  (define (random-comp-check! comp-fn gen-arg)
+    (printf "\n~a random testing...\n" comp-fn)
+    (for* ([_ (in-range n-attempts)]
+           [arg1 (in-value (gen-arg))]
+           [ann-arg1 (in-value (random-ann arg1))]
+           [arg2 (in-value (gen-arg))]
+           [ann-arg2 (in-value (random-ann arg2))])
+      (define (do-check arg1 arg2)
+        (match (random 4)
+          [0 (check-big-step-soundness
+              (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) x  #f)))))]
+          [1 (check-big-step-soundness
+              (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) #f x)))))]
+          [2 (check-big-step-soundness
+              (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) y  #f)))))]
+          [3 (check-big-step-soundness
+              (term (let [x ,arg1] (let [y ,arg2] (if (,comp-fn x y) #f y)))))]))
+      (printf ".") (flush-output)
+      (do-check arg1 arg2)
+      (do-check ann-arg1 ann-arg2))
     (printf "\n")
     (print-and-reset-individual-counters!))
   ;; testing begins here
@@ -322,40 +310,40 @@
   (printf "random-testing seed: ~s\n" seed)
   (flush-output)
   (clear-counters!)
-  (unary-fn-simple-tests 'add1 num-values)
-  (random-fn-soundness-check! add1 (N))
-  (unary-fn-simple-tests 'sub1 num-values)
-  (random-fn-soundness-check! sub1 (N))
-  (unary-fn-simple-tests 'abs real-values)
-  (random-fn-soundness-check! abs (R))
-  (unary-fn-simple-tests 'sqr num-values)
-  (random-fn-soundness-check! sqr (N))
-  (unary-fn-simple-tests 'sqrt num-values)
-  (random-fn-soundness-check! sqrt (N))
-  (binary-fn-simple-tests '+ num-values)
-  (random-fn-soundness-check! + (N_1 N_2))
-  (binary-fn-simple-tests '- num-values)
-  (random-fn-soundness-check! - (N_1 N_2))
-  (binary-fn-simple-tests '* num-values)
-  (random-fn-soundness-check! * (N_1 N_2))
-  (binary-fn-simple-tests '/ num-values)
-  (random-fn-soundness-check! / (N_1 N_2))
-  (binary-fn-simple-tests 'min real-values)
-  (random-fn-soundness-check! min (R_1 R_2))
-  (binary-fn-simple-tests 'max real-values)
-  (random-fn-soundness-check! max (R_1 R_2))
-  (binary-fn-simple-tests 'expt num-values)
-  (random-fn-soundness-check! expt (N_1 N_2))
-  (binary-fn-simple-tests 'quotient int-values)
-  (random-fn-soundness-check! quotient (I_1 I_2))
-  (binary-fn-simple-tests 'modulo int-values)
-  (random-fn-soundness-check! modulo (I_1 I_2))
-  (comp-simple-tests '<)
-  (random-comp-check! '<)
-  (comp-simple-tests '<=)
-  (random-comp-check! '<=)
+  ;(unary-fn-simple-tests 'add1 num-values)
+  ;(random-fn-soundness-check! 'add1 (λ () (list (rand-N))))
+  ;(unary-fn-simple-tests 'sub1 num-values)
+  ;(random-fn-soundness-check! 'sub1 (λ () (list (rand-N))))
+  ;(unary-fn-simple-tests 'abs real-values)
+  ;(random-fn-soundness-check! 'abs (λ () (list (rand-R))))
+  ;(unary-fn-simple-tests 'sqr num-values)
+  ;(random-fn-soundness-check! 'sqr (λ () (list (rand-N))))
+  ;(unary-fn-simple-tests 'sqrt num-values)
+  ;(random-fn-soundness-check! 'sqrt (λ () (list (rand-N))))
+  ;(binary-fn-simple-tests '+ num-values)
+  ;(random-fn-soundness-check! '+ (λ () (list (rand-N) (rand-N))))
+  ;(binary-fn-simple-tests '- num-values)
+  ;(random-fn-soundness-check! '- (λ () (list (rand-N) (rand-N))))
+  ;(binary-fn-simple-tests '* num-values)
+  ;(random-fn-soundness-check! '* (λ () (list (rand-N) (rand-N))))
+  ;(binary-fn-simple-tests '/ num-values)
+  ;(random-fn-soundness-check! '/ (λ () (list (rand-N) (rand-N))))
+  ;(binary-fn-simple-tests 'min real-values)
+  ;(random-fn-soundness-check! 'min (λ () (list (rand-R) (rand-R))))
+  ;(binary-fn-simple-tests 'max real-values)
+  ;(random-fn-soundness-check! 'max (λ () (list (rand-R) (rand-R))))
+  ;(binary-fn-simple-tests 'expt num-values)
+  ;(random-fn-soundness-check! 'expt (λ () (list (rand-N) (rand-N))))
+  ;(binary-fn-simple-tests 'quotient int-values)
+  ;(random-fn-soundness-check! 'quotient (λ () (list (rand-I) (rand-I))))
+  ;(binary-fn-simple-tests 'modulo int-values)
+  ;(random-fn-soundness-check! 'modulo (λ () (list (rand-I) (rand-I))))
+  ;(comp-simple-tests '<)
+  ;(random-comp-check! '< rand-R)
+  ;(comp-simple-tests '<=)
+  ;(random-comp-check! '<= rand-R)
   (comp-simple-tests '=)
-  (random-comp-check! '=)
+  (random-comp-check! '= rand-R)
   (cond
     [(zero? total-failed-random-tests)
      (printf "\nALL ~a TESTS PASSED!\n" total-random-tests)]
@@ -365,11 +353,11 @@
 
 
 (module+ test
-  (run-random-tests! 1000 (+ 1 (random 1 (expt 2 30)))))
+  (run-random-tests! 100 (+ 1 (random 1 (expt 2 30)))))
 
 
 (module+ main
-  (define n-attempts 1000)
+  (define n-attempts 100)
   (define seed (+ 1 (random 1 (expt 2 30))))
   (command-line
    #:once-each

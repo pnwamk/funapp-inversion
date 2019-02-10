@@ -122,12 +122,17 @@
   (printf "-----------------------\n")
   (type-check-tests
    ;; constants
+   ;; (lower and upper 64-bit bounds for finite ranges)
    [0 Zero]
    [1 One]
-   [42 ByteLargerThanOne]
-   [999 PosIndexNotByte]
-   [1999999999999999998 PosFixnumNotIndex]
+   [2 ByteLargerThanOne]
+   [255 ByteLargerThanOne]
+   [256 PosIndexNotByte]
+   [1152921504606846975 PosIndexNotByte]
+   [1152921504606846976 PosFixnumNotIndex]
+   [4611686018427387903 PosFixnumNotIndex]
    [-1 NegFixnum]
+   [-4611686018427387904 NegFixnum]
    [9999999999999999999 PosIntegerNotFixnum]
    [-9999999999999999999 NegIntegerNotFixnum]
    [1/2 PosRationalNotInteger]
@@ -156,7 +161,8 @@
    [#true True]
    [#false False]
 
-  
+   [(ann 0 Number) Number]
+   
    ;; primitive unary operators
    ;; i.e. add1 sub1 abs
    [zero? (Arrow Number Boolean)]
@@ -972,6 +978,7 @@
   (printf "-----------------------\n")
   (valof-tests
    [() 42 42]
+   [() (ann 42 Number) 42]
    [() "42" "42"]
    [() #true #true]
    [() #false #false]

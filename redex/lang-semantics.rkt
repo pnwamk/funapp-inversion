@@ -136,6 +136,10 @@
   [---------------------- "B-Const"
    (valof (Nat 1(PLUS)N)(;)ρ ⊢ const ⇓ const)]
 
+  [(valof N(;)ρ ⊢ e ⇓ RESULT)
+   ---------------------- "B-Ann"
+   (valof (Nat 1(PLUS)N)(;)ρ ⊢ (ann e τ) ⇓ RESULT)]
+  
   [(valof N(;)ρ ⊢ e_1 ⇓ prim) (valof N(;)ρ ⊢ e_2 ⇓ v_2)
    (where RESULT (δ1 prim v_2))
    ---------------------- "B-AppPrim"
@@ -388,6 +392,10 @@
 (define-judgment-form sot
   #:mode (synth I I I I O)
   #:contract (synth Γ ⊢ e : R)
+
+  [(synth/type Γ ⊢ e : τ_1) (<: τ_1 τ_2)
+   ---------------------- "T-Ann"
+   (synth Γ ⊢ (ann e τ_2) : (Res τ_2 tt tt topO))]
 
   [---------------------- "T-Const"
    (synth Γ ⊢ const : (const-type-result const))]

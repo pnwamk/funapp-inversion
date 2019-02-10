@@ -20,7 +20,8 @@
   ;; expressions
   [I ::= (Set (Arrow τ τ) ... (Arrow τ τ))]
   [e ::= x const (e e) (nop2 e e) (μ(f)I λ(x) e)
-     (proj i e) (pair e e) (if e e e) (let (x e) e)]
+     (proj i e) (pair e e) (if e e e) (let (x e) e)
+     (ann e τ)]
   ;; numeric expressions (for testing):
   
   ;; numeric base types
