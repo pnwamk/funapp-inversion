@@ -215,7 +215,29 @@ genMetafunctionSpec
          (Or [(And [(Arrow t1 t2), (Arrow t3 t4)]),
               (And [(Arrow t5 t6), (Arrow t7 t8)])])
          t9)
-        
+    it "file-stream-port? non-false" $ do
+      (inTyEquiv (And
+                  [ (Arrow (Base T) (Or [(Base T), (Base F)]))
+                  , (Arrow (Not (Base T)) (Base F))])
+       Any (Not (Base F)) (Base T) `shouldBe` True)
+    it "file-stream-port? false" $ do
+      (inTyEquiv (And
+                  [ (Arrow (Or [(Base T), (Base F)]) (Or [(Base T), (Base F)]))
+                  , (Arrow (Not (Or [(Base T), (Base F)])) (Base F))])
+       Any (Base F) Any `shouldBe` True)
+    it "path-string? non-false" $ do
+      (inTyEquiv (And
+                  [ (Arrow (Not (Or [(Base T), (Base F)])) (Base F))
+                  , (Arrow (Base T) (Base T))
+                  , (Arrow (Base F) (Or [(Base T), (Base F)]))])
+       Any (Not (Base F)) (Or [(Base T), (Base F)]) `shouldBe` True)
+    it "path-string? false" $ do
+      (inTyEquiv (And
+                  [ (Arrow (Not (Or [(Base T), (Base F)])) (Base F))
+                  , (Arrow (Base T) (Base T))
+                  , (Arrow (Base F) (Or [(Base T), (Base F)]))])
+       Any (Base F) (Not (Base T)) `shouldBe` True)
+
 
     where fstProjEquiv :: Ty -> Ty -> Bool
           fstProjEquiv rawt1 rawt2 =
